@@ -241,14 +241,18 @@ export function useBillAnalysisStream() {
     })
   }
 
-  function openRevisionStream(message: string, people: string[] = [], options: { pushUserMessage?: boolean, statusMessage?: string } = {}) {
+  function openRevisionStream(
+    message: string,
+    people: string[] = [],
+    options: { displayUserMessage?: string, pushUserMessage?: boolean, statusMessage?: string } = {},
+  ) {
     stop()
     assistantText.value = ''
     error.value = ''
     status.value = 'starting'
 
     if (options.pushUserMessage !== false) {
-      pushFeed('user', message)
+      pushFeed('user', options.displayUserMessage || message)
     }
 
     if (options.statusMessage) {
@@ -293,17 +297,39 @@ export function useBillAnalysisStream() {
     return null
   }
 
-  async function startInitialSplit(people: string[] = []) {
+  async function requestGroupQuestion() {
     if (!chatId.value || !resolveReceipt(result.value || receipt.value)) {
       return null
     }
 
     openRevisionStream(
-      'Use the selected group members and create the first split now. If one short follow-up question is truly necessary, ask it. Otherwise produce the split.',
-      people,
+      'Ask me which group this receipt belongs to before you create any split. Do not guess the group and do not create the split yet.',
+      [],
       {
         pushUserMessage: false,
-        statusMessage: 'Penny is creating the first split...',
+        statusMessage: 'Penny is asking about the group...',
+      },
+    )
+
+    return null
+  }
+
+  async function confirmGroupSelection(groupName: string, people: string[] = [], displayUserMessage = '') {
+    const normalizedGroupName = String(groupName || '').trim()
+    const participantSummary = people.length
+      ? `The participants are ${people.join(', ')}.`
+      : 'Use the participants from that group.'
+
+    if (!normalizedGroupName || !chatId.value || !resolveReceipt(result.value || receipt.value)) {
+      return null
+    }
+
+    openRevisionStream(
+      `The selected group is "${normalizedGroupName}". ${participantSummary} Ask me one short question about how I want to split the receipt before you create the first split.`,
+      people,
+      {
+        displayUserMessage: String(displayUserMessage || normalizedGroupName).trim() || normalizedGroupName,
+        statusMessage: 'Penny is asking how to split it...',
       },
     )
 
@@ -323,9 +349,10 @@ export function useBillAnalysisStream() {
     recentChats,
     reset,
     result,
+    confirmGroupSelection,
     revise,
+    requestGroupQuestion,
     requestSplitQuestion,
-    startInitialSplit,
     start,
     startFromFile,
     status,

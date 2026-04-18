@@ -141,21 +141,21 @@ const visibleAnalysisFeed = computed(() =>
 )
 const analysisSource = computed(() => String(analysis.result.value?.source || '').trim())
 const awaitingSplitAnswer = computed(() => analysisSource.value === 'pi-agent-question' && !splitRows.value.length)
-const shouldStartInitialSplit = computed(() =>
+const shouldRequestGroupQuestion = computed(() =>
   Boolean(
     analysis.chatId.value
-    && selectedGroup.value
     && parsedReceipt.value
+    && !selectedGroup.value
     && !splitRows.value.length
     && !awaitingSplitAnswer.value
     && !isRunning.value
+    && availableGroups.value.length
   ),
 )
 const showGroupPickerPrompt = computed(() =>
   Boolean(
-    parsedReceipt.value
+    awaitingSplitAnswer.value
     && !selectedGroup.value
-    && !isRunning.value
     && availableGroups.value.length,
   ),
 )
@@ -211,7 +211,7 @@ const introMessage = computed(() => {
   if (!selectedGroup.value) {
     return parsedReceipt.value
       ? 'Receipt parsed.'
-      : 'Upload a receipt whenever you are ready.'
+      : 'Ready for a receipt.'
   }
 
   if (analysis.loadingChat.value) {
@@ -384,17 +384,26 @@ function resolveGroupFromMessage(message) {
   return null
 }
 
+function getGroupPeople(group) {
+  if (!group?.memberships?.length) {
+    return []
+  }
+
+  return group.memberships
+    .map((membership) => String(membership?.person?.name || '').trim())
+    .filter(Boolean)
+}
+
 function confirmGroup(group, userText) {
   localGroupId.value = group.id
   composerVisible.value = false
 
-  if (userText) {
-    pushLocalMessage('user', userText)
+  if (parsedReceipt.value) {
+    return
   }
 
-  if (parsedReceipt.value) {
-    pushLocalMessage('assistant', `Using ${group.name}. I can move on to the split now.`)
-    return
+  if (userText) {
+    pushLocalMessage('user', userText)
   }
 
   pushLocalMessage('assistant', `Using ${group.name}. Upload a receipt and I’ll parse just the bill items.`)
@@ -438,7 +447,14 @@ function onFileChange(event) {
   void startFileAnalysis(file)
 }
 
-function onPickGroup(group) {
+async function onPickGroup(group) {
+  if (parsedReceipt.value) {
+    localGroupId.value = group.id
+    composerVisible.value = false
+    await analysis.confirmGroupSelection(group.name, getGroupPeople(group), group.name)
+    return
+  }
+
   confirmGroup(group, group.name)
 }
 
@@ -455,6 +471,13 @@ async function onSend() {
 
   if (!selectedGroup.value) {
     if (matchingGroup) {
+      if (parsedReceipt.value) {
+        localGroupId.value = matchingGroup.id
+        composerVisible.value = false
+        await analysis.confirmGroupSelection(matchingGroup.name, getGroupPeople(matchingGroup), message)
+        return
+      }
+
       confirmGroup(matchingGroup, message)
       return
     }
@@ -508,6 +531,13 @@ async function resetScan() {
 function clearGroup() {
   localGroupId.value = ''
   composerVisible.value = false
+
+  if (parsedReceipt.value) {
+    autoQuestionKey.value = ''
+    void analysis.requestGroupQuestion()
+    return
+  }
+
   pushLocalMessage('assistant', 'Pick the group for this receipt.')
 }
 
@@ -636,22 +666,21 @@ watch(
   [
     () => analysis.chatId.value,
     () => analysis.result.value?.runId,
-    () => shouldStartInitialSplit.value,
-    () => splitPeople.value.join('|'),
+    () => shouldRequestGroupQuestion.value,
   ],
   () => {
-    if (!shouldStartInitialSplit.value) {
+    if (!shouldRequestGroupQuestion.value) {
       return
     }
 
-    const questionKey = `${analysis.chatId.value}:${analysis.result.value?.runId || 'pending'}:${splitPeople.value.join('|')}`
+    const questionKey = `${analysis.chatId.value}:${analysis.result.value?.runId || 'pending'}:group`
 
     if (autoQuestionKey.value === questionKey) {
       return
     }
 
     autoQuestionKey.value = questionKey
-    void analysis.startInitialSplit(splitPeople.value)
+    void analysis.requestGroupQuestion()
   },
 )
 
@@ -813,6 +842,17 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
+          <div v-if="showGroupPickerPrompt" class="scan-choice-row scan-choice-row-inline">
+            <button
+              v-for="group in availableGroups"
+              :key="group.id"
+              class="scan-choice-button"
+              @click="onPickGroup(group)"
+            >
+              {{ group.name }}
+            </button>
+          </div>
+
           <div v-if="analysis.error.value" class="scan-chat-row system">
             <div class="scan-avatar system">
               <IconGlyph name="scan" width="16" height="16" />
@@ -919,35 +959,6 @@ onBeforeUnmount(() => {
               </div>
 
             </div>
-          </div>
-
-          <div v-if="showGroupPickerPrompt" class="scan-chat-row system">
-            <div class="scan-avatar system">
-              <IconGlyph name="scan" width="16" height="16" />
-            </div>
-            <div class="scan-bubble system scan-tool-bubble">
-              Tool: select_group
-            </div>
-          </div>
-
-          <div v-if="showGroupPickerPrompt" class="scan-chat-row">
-            <div class="scan-avatar">
-              <IconGlyph name="sparkle" width="16" height="16" />
-            </div>
-            <div class="scan-bubble assistant">
-              Which group is this for?
-            </div>
-          </div>
-
-          <div v-if="showGroupPickerPrompt" class="scan-choice-row scan-choice-row-inline">
-            <button
-              v-for="group in availableGroups"
-              :key="group.id"
-              class="scan-choice-button"
-              @click="onPickGroup(group)"
-            >
-              {{ group.name }}
-            </button>
           </div>
 
           <div v-if="parsedReceipt && splitRows.length && ledgerSelectedGroup" class="scan-chat-row">
