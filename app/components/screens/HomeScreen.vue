@@ -30,10 +30,10 @@ const emit = defineEmits(['nav', 'open-bill'])
               {{ summary.dateLabel }}
             </div>
             <h1 class="h-display" style="font-size: clamp(40px, 6vw, 68px); line-height: 0.95; margin: 10px 0 0; max-width: 8ch;">
-              Split bills without losing the ledger.
+              Split bills without the spreadsheet energy.
             </h1>
             <p style="max-width: 38rem; margin: 18px 0 0; font-size: 16px; line-height: 1.6; color: var(--muted);">
-              The app now keeps the design flow from home to scan to assignment, while the actual saved state still comes from local groups, bill items, shares, and transfers.
+              Scan a receipt, sort out who owes what, and keep every item, share, and transfer in one local ledger your group can trust.
             </p>
           </div>
 
@@ -61,15 +61,15 @@ const emit = defineEmits(['nav', 'open-bill'])
             {{ summary.openAmountLabel }}
           </div>
           <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;">
-            <div class="chip" style="background: var(--tomato);">
+            <button class="chip chip-action" type="button" style="background: var(--tomato);" @click="emit('nav', 'settlements')">
               {{ summary.pendingPayments }} pending payments
-            </div>
-            <div class="chip" style="background: rgba(255,255,255,0.12);">
+            </button>
+            <button class="chip chip-action" type="button" style="background: rgba(255,255,255,0.12);" @click="emit('nav', 'groups')">
               {{ summary.groupsCount }} groups
-            </div>
-            <div class="chip" style="background: rgba(255,255,255,0.12);">
+            </button>
+            <button class="chip chip-action" type="button" style="background: rgba(255,255,255,0.12);" @click="emit('nav', 'bills')">
               {{ summary.totalBills }} saved bills
-            </div>
+            </button>
           </div>
           <div style="position: absolute; right: 8px; top: -10px; transform: rotate(6deg); background: var(--marigold); color: var(--ink); padding: 4px 14px; font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; box-shadow: 1px 1px 0 rgba(0,0,0,0.15);">
             LOCAL · LEDGER
@@ -88,17 +88,17 @@ const emit = defineEmits(['nav', 'open-bill'])
 
             <div style="flex: 1;">
               <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);">
-                Penny · design shell
+                Penny · quick start
               </div>
               <div style="font-size: 15px; line-height: 1.45; margin-top: 6px;">
-                Create people and groups first, then add an itemized bill or jump into the scan flow. The saved truth still lives in Postgres.
+                Start with a group, add an itemized bill, or jump straight into a receipt scan. Penny keeps the split fast and the ledger honest.
               </div>
               <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;">
                 <button class="btn btn-accent" style="padding: 10px 16px; font-size: 13px;" @click="emit('nav', 'groups')">
                   Open groups
                 </button>
                 <button class="btn btn-ghost" style="padding: 10px 16px; font-size: 13px;" @click="emit('nav', 'scan')">
-                  Try scan flow
+                  Scan a receipt
                 </button>
               </div>
             </div>

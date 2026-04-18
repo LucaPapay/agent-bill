@@ -22,6 +22,11 @@ function handleNav(screen: string) {
 
   if (screen === 'assign') {
     navigateTo(selectedGroupId.value ? `/groups/${selectedGroupId.value}/bills/new` : '/groups')
+    return
+  }
+
+  if (screen === 'settlements' || screen === 'bills') {
+    navigateTo(selectedGroupId.value ? `/groups/${selectedGroupId.value}` : '/groups')
   }
 }
 

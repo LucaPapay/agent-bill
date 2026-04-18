@@ -35,7 +35,7 @@ function goTo(path) {
     <div class="tab-inner">
       <div class="tab-brand">
         <span class="tab-brand-title">agent-bill</span>
-        <span class="tab-brand-subtitle">local-first split assistant</span>
+        <span class="tab-brand-subtitle">scan receipts. settle cleanly.</span>
       </div>
 
       <div class="tab-links">

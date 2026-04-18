@@ -41,6 +41,10 @@ const emit = defineEmits(['select'])
     class="surface-panel"
     :style="{
       padding: '16px 18px',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'stretch',
+      justifyContent: 'flex-start',
       textAlign: 'left',
       borderColor: selected ? 'var(--ink)' : 'rgba(20,18,16,0.08)',
       boxShadow: selected ? '0 0 0 2px rgba(20,18,16,0.06)' : '',
@@ -81,7 +85,7 @@ const emit = defineEmits(['select'])
       </div>
     </div>
 
-    <div style="display: flex; margin-top: 16px; padding-left: 4px;">
+    <div style="display: flex; margin-top: 12px; padding-left: 4px;">
       <div
         v-for="(name, index) in avatarNames.slice(0, 4)"
         :key="name"

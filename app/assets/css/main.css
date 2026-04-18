@@ -235,6 +235,19 @@ input::placeholder {
   font-weight: 600;
 }
 
+.chip-action {
+  transition: transform 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.chip-action:hover {
+  transform: translateY(-1px);
+}
+
+.chip-action:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.72);
+  outline-offset: 2px;
+}
+
 .chip-muted {
   background: rgba(20, 18, 16, 0.08);
   color: var(--ink);
