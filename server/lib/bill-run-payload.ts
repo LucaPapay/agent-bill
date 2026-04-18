@@ -37,6 +37,10 @@ export function normalizeSavedRunPayload(value: unknown) {
     normalizedPayload.billItems = []
   }
 
+  if ((payload as any).rawReceipt === null) {
+    delete normalizedPayload.rawReceipt
+  }
+
   if ((payload as any).receipt !== null) {
     return normalizedPayload
   }

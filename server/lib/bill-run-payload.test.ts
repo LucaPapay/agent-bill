@@ -24,10 +24,50 @@ describe('normalizeSavedRunPayload', () => {
       summary: 'Penny is working on the receipt.',
       title: 'Dinner receipt',
     })).toEqual({
+      billItems: [],
       chatId: 'chat-1',
       people: ['Jojo', 'Sarah'],
       split: [],
       summary: 'Penny is working on the receipt.',
+      title: 'Dinner receipt',
+    })
+  })
+
+  it('drops null raw receipts but keeps non-null ones', () => {
+    expect(normalizeSavedRunPayload({
+      chatId: 'chat-1',
+      rawReceipt: null,
+      receipt: {
+        totalCents: 1200,
+      },
+      title: 'Dinner receipt',
+    })).toEqual({
+      billItems: [],
+      chatId: 'chat-1',
+      receipt: {
+        totalCents: 1200,
+      },
+      title: 'Dinner receipt',
+    })
+
+    expect(normalizeSavedRunPayload({
+      chatId: 'chat-1',
+      rawReceipt: {
+        totalCents: 1300,
+      },
+      receipt: {
+        totalCents: 1200,
+      },
+      title: 'Dinner receipt',
+    })).toEqual({
+      billItems: [],
+      chatId: 'chat-1',
+      rawReceipt: {
+        totalCents: 1300,
+      },
+      receipt: {
+        totalCents: 1200,
+      },
       title: 'Dinner receipt',
     })
   })

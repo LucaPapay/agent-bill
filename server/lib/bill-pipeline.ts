@@ -62,6 +62,7 @@ function buildChatPayload({
   chatId,
   history,
   people,
+  rawReceipt,
   receipt,
   summary,
   title,
@@ -70,6 +71,7 @@ function buildChatPayload({
   chatId: string
   history: any[]
   people: string[]
+  rawReceipt?: any
   receipt?: any
   summary: string
   title: string
@@ -92,6 +94,7 @@ function buildChatPayload({
       model: null,
       used: false,
     },
+    rawReceipt: base?.rawReceipt || rawReceipt,
     receipt,
     source: String(base?.source || 'receipt-pending'),
     split: Array.isArray(base?.split) ? base.split : [],
@@ -146,22 +149,23 @@ export async function runBillAnalysisPipeline(input: any, personId: string, onEv
       rawText: input?.rawText,
       title,
     })
-    : createReceiptAnalysis({
+    : await extractReceiptWithOpenAI({
+      imageBase64: input?.imageBase64,
+      mimeType: input?.mimeType,
+      onEvent: (payload: any) => {
+        history.record(payload)
+        onEvent(payload)
+      },
+      people,
+      rawText: input?.rawText,
+      title,
+    }).then((rawReceipt: any) => createReceiptAnalysis({
       imageProvided: Boolean(input?.imageBase64),
       people,
-      receipt: normalizeExtractedReceipt(await extractReceiptWithOpenAI({
-        imageBase64: input?.imageBase64,
-        mimeType: input?.mimeType,
-        onEvent: (payload: any) => {
-          history.record(payload)
-          onEvent(payload)
-        },
-        people,
-        rawText: input?.rawText,
-        title,
-      })),
+      rawReceipt,
+      receipt: normalizeExtractedReceipt(rawReceipt),
       title,
-    })
+    }))
 
   const payload = {
     ...analysis,
@@ -190,6 +194,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
 
   const current = await getBillChat(personId, String(input?.chatId || ''))
   const title = String(current?.title || 'Untitled bill').trim() || 'Untitled bill'
+  const rawReceipt = current?.rawReceipt || current?.receipt
   const receipt = current?.receipt
   const split = Array.isArray(current?.split) ? current.split : []
   const people = normalizePeople(
@@ -210,15 +215,16 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
   const runSaver = createRunSaver()
   await saveBillRun({
     chatId: current.chatId,
-        payload: buildChatPayload({
-          base: current,
-          chatId: current.chatId,
-          history: history.getHistory(),
-          people: participantHints,
-          receipt,
-          summary: String(current?.summary || 'Penny is revising the split.').trim() || 'Penny is revising the split.',
-          title,
-        }),
+    payload: buildChatPayload({
+      base: current,
+      chatId: current.chatId,
+      history: history.getHistory(),
+      people: participantHints,
+      rawReceipt,
+      receipt,
+      summary: String(current?.summary || 'Penny is revising the split.').trim() || 'Penny is revising the split.',
+      title,
+    }),
     personId,
   })
 
@@ -235,6 +241,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
           chatId: current.chatId,
           history: history.getHistory(),
           people: participantHints,
+          rawReceipt,
           receipt,
           summary: String(payload?.message || 'Penny is revising the split.').trim() || 'Penny is revising the split.',
           title,
@@ -256,6 +263,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
         message,
         onEvent: recordAndEmit,
         people,
+        rawReceipt,
         receipt,
         split,
         title,
@@ -264,6 +272,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
         message,
         onEvent: recordAndEmit,
         people: participantHints,
+        rawReceipt,
         receipt,
         title,
       })
@@ -281,6 +290,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
             summary: String(agentResult?.question || 'Penny needs one more detail.').trim() || 'Penny needs one more detail.',
           }),
           people: participantHints,
+          rawReceipt: agentResult?.rawReceipt || rawReceipt,
           receipt: agentResult?.receipt || receipt,
           summary: String(agentResult?.question || 'Penny needs one more detail.').trim() || 'Penny needs one more detail.',
           title,
@@ -310,6 +320,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
         imageProvided: false,
         people: finalPeople,
         plan: agentResult.plan,
+        rawReceipt: agentResult?.rawReceipt || rawReceipt,
         receipt: agentResult.receipt,
         title,
       }),
@@ -344,6 +355,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
             message: error?.message || 'Penny could not revise the split.',
           }),
           people: participantHints,
+          rawReceipt,
           receipt,
           summary: String(current?.summary || 'Penny could not revise the split.').trim() || 'Penny could not revise the split.',
           title,

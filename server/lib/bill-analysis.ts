@@ -52,6 +52,43 @@ function normalizeItems(items: any[]) {
     .filter((item: any) => item.amountCents > 0)
 }
 
+function normalizeNotes(notes: any[]) {
+  return (Array.isArray(notes) ? notes : [])
+    .map((note: any) => String(note || '').trim())
+    .filter(Boolean)
+}
+
+function sumItemAmounts(items: any[]) {
+  return items.reduce((sum: number, item: any) => sum + item.amountCents, 0)
+}
+
+function appendUniqueNote(notes: string[], note: string) {
+  const normalized = String(note || '').trim()
+
+  if (!normalized || notes.includes(normalized)) {
+    return notes
+  }
+
+  return [...notes, normalized]
+}
+
+function sameValue(left: unknown, right: unknown) {
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function pushCorrection(corrections: any[], field: string, from: unknown, to: unknown, reason: string) {
+  if (sameValue(from, to)) {
+    return
+  }
+
+  corrections.push({
+    field,
+    from,
+    reason,
+    to,
+  })
+}
+
 function normalizePlanBillItems(items: any[], people: string[], totalCents: number) {
   if (!Array.isArray(items) || !items.length) {
     return []
@@ -154,6 +191,95 @@ function buildReceiptSummary(merchant: string, itemCount: number) {
   return `Parsed ${itemCount} bill item${itemCount === 1 ? '' : 's'} from ${merchant || 'the receipt'}.`
 }
 
+function summarizeReceiptReconciliation(corrections: any[], receipt: any) {
+  if (!corrections.length) {
+    return 'Receipt math already balances.'
+  }
+
+  const matches = receipt.subtotalCents + receipt.taxCents + receipt.tipCents === receipt.totalCents
+
+  if (matches) {
+    return `Reconciled ${corrections.length} receipt field${corrections.length === 1 ? '' : 's'} so the math balances.`
+  }
+
+  return `Applied ${corrections.length} safe receipt correction${corrections.length === 1 ? '' : 's'}, but the totals still need review.`
+}
+
+function buildNormalizedReceipt(receipt: any) {
+  const items = normalizeItems(receipt?.items || [])
+  const subtotalFromItems = sumItemAmounts(items)
+  const inputSubtotalCents = toCents(receipt?.subtotalCents)
+  const inputTaxCents = toCents(receipt?.taxCents)
+  const inputTipCents = toCents(receipt?.tipCents)
+  const inputTotalCents = toCents(receipt?.totalCents)
+  const rawSubtotalCents = inputSubtotalCents || subtotalFromItems
+  const rawTaxCents = inputTaxCents
+  const rawTipCents = inputTipCents
+  const rawTotalCents = inputTotalCents || rawSubtotalCents + rawTaxCents + rawTipCents
+  const moneyScale = inferReceiptMoneyScale(subtotalFromItems, rawSubtotalCents, rawTotalCents)
+  let subtotalCents = scaleMoney(rawSubtotalCents, moneyScale) || subtotalFromItems
+  let taxCents = scaleMoney(rawTaxCents, moneyScale)
+  const tipCents = scaleMoney(rawTipCents, moneyScale)
+  let totalCents = scaleMoney(rawTotalCents, moneyScale) || subtotalCents + taxCents + tipCents
+  let notes = normalizeNotes(receipt?.notes)
+  const corrections: any[] = []
+
+  if (moneyScale > 1) {
+    pushCorrection(corrections, 'moneyScale', 1, moneyScale, `Scaled the extracted money fields by ${moneyScale}x to match the item totals.`)
+    notes = appendUniqueNote(notes, `Normalized OpenAI money fields by ${moneyScale}x to match the item totals.`)
+  }
+
+  if (subtotalFromItems > 0 && subtotalCents !== subtotalFromItems) {
+    pushCorrection(corrections, 'subtotalCents', subtotalCents, subtotalFromItems, 'Matched the subtotal to the extracted line items.')
+    subtotalCents = subtotalFromItems
+    notes = appendUniqueNote(notes, 'Matched the subtotal to the extracted line items.')
+  }
+
+  const derivedTotalCents = subtotalCents + taxCents + tipCents
+
+  if (!inputTotalCents && derivedTotalCents > 0 && totalCents !== derivedTotalCents) {
+    pushCorrection(corrections, 'totalCents', totalCents, derivedTotalCents, 'Derived the total from subtotal, tax, and tip.')
+    totalCents = derivedTotalCents
+    notes = appendUniqueNote(notes, 'Derived the total from subtotal, tax, and tip.')
+  }
+
+  if (subtotalCents + tipCents <= totalCents && subtotalCents + taxCents + tipCents !== totalCents) {
+    const nextTaxCents = totalCents - subtotalCents - tipCents
+
+    if (nextTaxCents >= 0) {
+      pushCorrection(corrections, 'taxCents', taxCents, nextTaxCents, 'Adjusted tax to reconcile the subtotal, tip, and total.')
+      taxCents = nextTaxCents
+      notes = appendUniqueNote(notes, 'Adjusted tax cents to reconcile the extracted subtotal and total.')
+    }
+  }
+
+  const recomputedTotalCents = subtotalCents + taxCents + tipCents
+
+  if (recomputedTotalCents !== totalCents && Math.abs(recomputedTotalCents - totalCents) <= 2) {
+    pushCorrection(corrections, 'totalCents', totalCents, recomputedTotalCents, 'Matched the total to the subtotal, tax, and tip within rounding.')
+    totalCents = recomputedTotalCents
+    notes = appendUniqueNote(notes, 'Matched the total to the subtotal, tax, and tip within rounding.')
+  }
+
+  const normalizedReceipt = {
+    billDate: normalizeBillDate(receipt?.billDate),
+    currency: String(receipt?.currency || 'EUR').trim() || 'EUR',
+    items,
+    merchant: String(receipt?.merchant || '').trim(),
+    notes,
+    subtotalCents,
+    taxCents,
+    tipCents,
+    totalCents,
+  }
+
+  return {
+    corrections,
+    receipt: normalizedReceipt,
+    summary: summarizeReceiptReconciliation(corrections, normalizedReceipt),
+  }
+}
+
 export function createLocalAnalysis({ title, people, rawText, imageProvided, notes = [] as string[] }: {
   title: string
   people: string[]
@@ -246,9 +372,10 @@ export function createLocalAnalysis({ title, people, rawText, imageProvided, not
   }
 }
 
-export function createReceiptAnalysis({ title, people, receipt, imageProvided }: {
+export function createReceiptAnalysis({ title, people, rawReceipt, receipt, imageProvided }: {
   title: string
   people: string[]
+  rawReceipt?: any
   receipt: any
   imageProvided: boolean
 }) {
@@ -268,6 +395,7 @@ export function createReceiptAnalysis({ title, people, receipt, imageProvided }:
       model: null,
       used: false,
     },
+    rawReceipt: rawReceipt || receipt,
     receipt,
     source: imageProvided ? 'openai-image' : 'openai-text',
     split: [],
@@ -319,47 +447,60 @@ export function normalizePiAnalysis({ title, people, imageProvided, notes = [] a
 }
 
 export function normalizeExtractedReceipt(receipt: any) {
-  const items = normalizeItems(receipt?.items || [])
-  const subtotalFromItems = items.reduce((sum: number, item: any) => sum + item.amountCents, 0)
-  const rawSubtotalCents = toCents(receipt?.subtotalCents) || subtotalFromItems
-  const rawTaxCents = toCents(receipt?.taxCents)
-  const rawTipCents = toCents(receipt?.tipCents)
-  const rawTotalCents = toCents(receipt?.totalCents) || rawSubtotalCents + rawTaxCents + rawTipCents
-  const moneyScale = inferReceiptMoneyScale(subtotalFromItems, rawSubtotalCents, rawTotalCents)
-  const subtotalCents = scaleMoney(rawSubtotalCents, moneyScale) || subtotalFromItems
-  let taxCents = scaleMoney(rawTaxCents, moneyScale)
-  const tipCents = scaleMoney(rawTipCents, moneyScale)
-  const totalCents = scaleMoney(rawTotalCents, moneyScale) || subtotalCents + taxCents + tipCents
-  const notes = Array.isArray(receipt?.notes)
-    ? receipt.notes.map((note: any) => String(note).trim()).filter(Boolean)
-    : []
+  return buildNormalizedReceipt(receipt).receipt
+}
 
-  if (moneyScale > 1) {
-    notes.push(`Normalized OpenAI money fields by ${moneyScale}x to match the item totals.`)
+export function reconcileExtractedReceipt(receipt: any) {
+  return buildNormalizedReceipt(receipt)
+}
+
+export function editExtractedReceipt(receipt: any, changes: any, reason?: string) {
+  const currentReceipt = normalizeExtractedReceipt(receipt)
+  const nextInput = {
+    ...currentReceipt,
+    billDate: Object.prototype.hasOwnProperty.call(changes || {}, 'billDate') ? changes.billDate : currentReceipt.billDate,
+    currency: Object.prototype.hasOwnProperty.call(changes || {}, 'currency') ? changes.currency : currentReceipt.currency,
+    items: Array.isArray(changes?.items) ? changes.items : currentReceipt.items,
+    merchant: Object.prototype.hasOwnProperty.call(changes || {}, 'merchant') ? changes.merchant : currentReceipt.merchant,
+    notes: Array.isArray(changes?.notes) ? changes.notes : currentReceipt.notes,
+    subtotalCents: Object.prototype.hasOwnProperty.call(changes || {}, 'subtotalCents') ? changes.subtotalCents : currentReceipt.subtotalCents,
+    taxCents: Object.prototype.hasOwnProperty.call(changes || {}, 'taxCents') ? changes.taxCents : currentReceipt.taxCents,
+    tipCents: Object.prototype.hasOwnProperty.call(changes || {}, 'tipCents') ? changes.tipCents : currentReceipt.tipCents,
+    totalCents: Object.prototype.hasOwnProperty.call(changes || {}, 'totalCents') ? changes.totalCents : currentReceipt.totalCents,
   }
+  const result = buildNormalizedReceipt(nextInput)
+  const corrections: any[] = []
 
-  if (subtotalCents + tipCents <= totalCents && subtotalCents + taxCents + tipCents !== totalCents) {
-    taxCents = totalCents - subtotalCents - tipCents
-    notes.push('Adjusted tax cents to reconcile the extracted subtotal and total.')
+  pushCorrection(corrections, 'billDate', currentReceipt.billDate, result.receipt.billDate, 'Updated the receipt date.')
+  pushCorrection(corrections, 'currency', currentReceipt.currency, result.receipt.currency, 'Updated the receipt currency.')
+  pushCorrection(corrections, 'merchant', currentReceipt.merchant, result.receipt.merchant, 'Updated the receipt merchant.')
+  pushCorrection(corrections, 'items', currentReceipt.items, result.receipt.items, 'Updated the extracted receipt items.')
+  pushCorrection(corrections, 'subtotalCents', currentReceipt.subtotalCents, result.receipt.subtotalCents, 'Updated the receipt subtotal.')
+  pushCorrection(corrections, 'taxCents', currentReceipt.taxCents, result.receipt.taxCents, 'Updated the receipt tax.')
+  pushCorrection(corrections, 'tipCents', currentReceipt.tipCents, result.receipt.tipCents, 'Updated the receipt tip.')
+  pushCorrection(corrections, 'totalCents', currentReceipt.totalCents, result.receipt.totalCents, 'Updated the receipt total.')
+
+  if (String(reason || '').trim()) {
+    result.receipt.notes = appendUniqueNote(
+      result.receipt.notes,
+      `Penny updated the extracted receipt: ${String(reason || '').trim()}.`,
+    )
   }
 
   return {
-    billDate: normalizeBillDate(receipt?.billDate),
-    currency: String(receipt?.currency || 'EUR').trim() || 'EUR',
-    items,
-    merchant: String(receipt?.merchant || '').trim(),
-    notes,
-    subtotalCents,
-    taxCents,
-    tipCents,
-    totalCents,
+    corrections,
+    receipt: result.receipt,
+    summary: corrections.length
+      ? `Updated ${corrections.length} receipt field${corrections.length === 1 ? '' : 's'} and kept the receipt normalized.`
+      : 'No receipt fields changed.',
   }
 }
 
-export function createAgentAnalysis({ title, people, plan, receipt, imageProvided }: {
+export function createAgentAnalysis({ title, people, plan, rawReceipt, receipt, imageProvided }: {
   title: string
   people: string[]
   plan: any
+  rawReceipt?: any
   receipt: any
   imageProvided: boolean
 }) {
@@ -386,6 +527,7 @@ export function createAgentAnalysis({ title, people, plan, receipt, imageProvide
       model: process.env.PI_AGENT_MODEL || 'gpt-4.1-mini',
       used: true,
     },
+    rawReceipt: rawReceipt || receipt,
     receipt,
     source: imageProvided ? 'openai-image+pi-agent' : 'openai-text+pi-agent',
     split: normalizeSplit(plan?.split, people, receipt.totalCents),

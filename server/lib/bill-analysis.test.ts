@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   createLocalAnalysis,
+  editExtractedReceipt,
   normalizeExtractedReceipt,
   normalizePeople,
+  reconcileExtractedReceipt,
 } from './bill-analysis'
 import { normalizeBillDate } from './bill-date'
 
@@ -107,5 +109,85 @@ describe('normalizeExtractedReceipt', () => {
       tipCents: 300,
       totalCents: 2220,
     })
+  })
+})
+
+describe('reconcileExtractedReceipt', () => {
+  it('matches the subtotal to the item rows and repairs tax as the remainder', () => {
+    const result = reconcileExtractedReceipt({
+      billDate: '2026-04-18',
+      currency: 'EUR',
+      items: [
+        { amountCents: 1250, name: 'Pasta', quantity: 1 },
+        { amountCents: 550, name: 'Dessert', quantity: 1 },
+      ],
+      merchant: 'Cafe',
+      subtotalCents: 1900,
+      taxCents: 0,
+      tipCents: 300,
+      totalCents: 2220,
+    })
+
+    expect(result.summary).toBe('Reconciled 2 receipt fields so the math balances.')
+    expect(result.corrections).toEqual([
+      {
+        field: 'subtotalCents',
+        from: 1900,
+        reason: 'Matched the subtotal to the extracted line items.',
+        to: 1800,
+      },
+      {
+        field: 'taxCents',
+        from: 0,
+        reason: 'Adjusted tax to reconcile the subtotal, tip, and total.',
+        to: 120,
+      },
+    ])
+    expect(result.receipt).toMatchObject({
+      subtotalCents: 1800,
+      taxCents: 120,
+      tipCents: 300,
+      totalCents: 2220,
+    })
+  })
+})
+
+describe('editExtractedReceipt', () => {
+  it('applies explicit receipt corrections and keeps the receipt normalized', () => {
+    const result = editExtractedReceipt({
+      billDate: '2026-04-18',
+      currency: 'EUR',
+      items: [
+        { amountCents: 1250, name: 'Pasta', quantity: 1 },
+        { amountCents: 550, name: 'Dessert', quantity: 1 },
+      ],
+      merchant: 'Cafe',
+      subtotalCents: 1800,
+      taxCents: 120,
+      tipCents: 300,
+      totalCents: 2220,
+    }, {
+      tipCents: 0,
+      totalCents: 1920,
+    }, 'tip was not on the receipt')
+
+    expect(result.summary).toBe('Updated 2 receipt fields and kept the receipt normalized.')
+    expect(result.corrections).toEqual([
+      {
+        field: 'tipCents',
+        from: 300,
+        reason: 'Updated the receipt tip.',
+        to: 0,
+      },
+      {
+        field: 'totalCents',
+        from: 2220,
+        reason: 'Updated the receipt total.',
+        to: 1920,
+      },
+    ])
+    expect(result.receipt.notes).toContain('Penny updated the extracted receipt: tip was not on the receipt.')
+    expect(result.receipt.totalCents).toBe(1920)
+    expect(result.receipt.tipCents).toBe(0)
   })
 })
