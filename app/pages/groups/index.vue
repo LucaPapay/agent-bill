@@ -1,10 +1,21 @@
 <script setup lang="ts">
+import CreatePersonForm from '../../components/ledger/CreatePersonForm.vue'
 import GroupCard from '../../components/app/GroupCard.vue'
 import GroupIconPicker from '../../components/ledger/GroupIconPicker.vue'
 import PageShell from '../../components/layout/PageShell.vue'
 import { getGroupIconLabel } from '../../../shared/group-icons'
 
-const { errorMessage, formatCents, createGroup, groupIcon, groupName, ledger, saving } = useLedgerState()
+const {
+  createGroup,
+  createPerson,
+  errorMessage,
+  formatCents,
+  groupIcon,
+  groupName,
+  ledger,
+  personName,
+  saving,
+} = useLedgerState()
 
 function groupOpenAmount(group: any) {
   const cents = (group.simplifiedTransfers || []).reduce((sum: number, transfer: any) => sum + transfer.amountCents, 0)
@@ -49,6 +60,10 @@ function submitGroup() {
     }
   })
 }
+
+function submitPerson() {
+  createPerson()
+}
 </script>
 
 <template>
@@ -72,6 +87,13 @@ function submitGroup() {
       </div>
 
       <div class="section-pad groups-grid" style="padding-bottom: 96px;">
+        <CreatePersonForm
+          :person-name="personName"
+          :saving="saving"
+          @submit="submitPerson"
+          @update:person-name="personName = $event"
+        />
+
         <GroupCard
           v-for="group in ledger.groups"
           :key="group.id"
