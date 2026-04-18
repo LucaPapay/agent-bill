@@ -6,7 +6,7 @@ import {
   ModelRegistry,
   SessionManager,
 } from '@mariozechner/pi-coding-agent'
-import { normalizeExtractedReceipt } from './bill-analysis'
+import { normalizeExtractedReceipt, normalizePeople, splitEvenly } from './bill-analysis'
 import { extractReceiptWithOpenAI } from './openai-receipt'
 import { splitPlanSchema } from './receipt-contract'
 
@@ -42,16 +42,20 @@ function buildPrompt({ title, people, imageBase64, rawText }: {
     'Follow this exact order:',
     '1. Immediately call log_progress with stage "start".',
     '2. Call extract_receipt exactly once.',
-    '3. Decide which items are shared and which likely belong to one person.',
-    '4. Distribute tax and tip proportionally.',
-    '5. Call submit_split_plan exactly once.',
+    '3. Turn the parsed receipt into save-ready billItems.',
+    '4. Make sure the billItems sum exactly to the receipt total, including tax, tip, and any rounding.',
+    '5. Derive the participant split from those billItems.',
+    '6. Call submit_split_plan exactly once.',
     'Rules:',
     '- Only use the provided participant names.',
     '- The split must include every participant exactly once.',
     '- The split amounts must sum exactly to the receipt total.',
+    '- The billItems must sum exactly to the receipt total.',
+    '- Each billItem must have a short name, a positive amount, and one or more assignedPeople.',
+    '- The split must exactly match the totals implied by billItems when each billItem is split evenly across its assignedPeople.',
     '- Shared food can be split across everyone when ownership is unclear.',
     '- Single-consumer drinks or desserts should only be assigned when there is a strong clue.',
-    '- Tax and tip should be distributed proportionally across the split.',
+    '- Keep original receipt item names when practical, but you may add short adjustment items for shared tax, tip, or rounding.',
     '- You must call extract_receipt before you decide the split.',
     '- Use log_progress for short UI-visible updates as you move through the problem.',
     '- When you are done, call submit_split_plan exactly once.',
@@ -131,10 +135,14 @@ function buildRevisionPrompt({ message, people, receipt, split, title }: {
     'Update the split based on the user follow-up message.',
     'Follow this exact order:',
     '1. Immediately call log_progress with stage "revise".',
-    '2. Rework the split using the parsed receipt and the current split.',
-    '3. Either call submit_split_plan exactly once or call ask_follow_up_question exactly once.',
+    '2. Rework the save-ready billItems using the parsed receipt and the current split.',
+    '3. Recompute the participant split from those billItems.',
+    '4. Either call submit_split_plan exactly once or call ask_follow_up_question exactly once.',
     'Rules:',
     '- The split amounts must sum exactly to the receipt total.',
+    '- The billItems must sum exactly to the receipt total.',
+    '- Each billItem must have a short name, a positive amount, and one or more assignedPeople.',
+    '- The split must exactly match the totals implied by billItems when each billItem is split evenly across its assignedPeople.',
     '- Respect explicit user instructions when they do not break the receipt total.',
     '- If the user only clarifies ownership, keep the total and rebalance the shares.',
     '- Keep notes short and concrete.',
@@ -164,11 +172,16 @@ function buildReceiptSplitPrompt({ message, people, receipt, title }: {
     'Create the first split from the parsed receipt and the user instruction.',
     'Follow this exact order:',
     '1. Immediately call log_progress with stage "split".',
-    '2. Build a practical split using the parsed receipt and the user instruction.',
-    '3. Either call submit_split_plan exactly once or call ask_follow_up_question exactly once.',
+    '2. Build save-ready billItems using the parsed receipt and the user instruction.',
+    '3. Compute the participant split from those billItems.',
+    '4. Either call submit_split_plan exactly once or call ask_follow_up_question exactly once.',
     'Rules:',
     '- The split amounts must sum exactly to the receipt total.',
+    '- The billItems must sum exactly to the receipt total.',
+    '- Each billItem must have a short name, a positive amount, and one or more assignedPeople.',
+    '- The split must exactly match the totals implied by billItems when each billItem is split evenly across its assignedPeople.',
     '- Shared food can be split across everyone when ownership is unclear.',
+    '- Keep original receipt item names when practical, but you may add short adjustment items for shared tax, tip, or rounding.',
     '- Respect explicit user instructions when they do not break the receipt total.',
     '- Keep notes short and concrete.',
     ...buildClarificationRules(),
@@ -183,16 +196,19 @@ function buildReceiptSplitPrompt({ message, people, receipt, title }: {
 }
 
 function getSplitPlanError({
+  billItems,
   people,
   receipt,
   split,
 }: {
+  billItems: any[]
   people: string[]
   receipt: any
   split: any[]
 }) {
   const totalCents = split.reduce((sum: number, entry: any) => sum + entry.amountCents, 0)
   const participantNames = split.map((entry: any) => String(entry.person || '').trim())
+  const allowedPeople = people.length ? people : participantNames
 
   if (!receipt) {
     return 'Split plan rejected. No parsed receipt is available.'
@@ -215,6 +231,46 @@ function getSplitPlanError({
 
   if (totalCents !== receipt.totalCents) {
     return `Split plan rejected. Your split totals ${totalCents} cents but the receipt total is ${receipt.totalCents} cents. Adjust and submit again.`
+  }
+
+  if (!Array.isArray(billItems) || !billItems.length) {
+    return 'Split plan rejected. Include at least one save-ready bill item.'
+  }
+
+  const normalizedBillItems = billItems.map((item: any, index: number) => ({
+    amountCents: Math.max(0, Math.round(Number(item?.amountCents || 0))),
+    assignedPeople: normalizePeople(Array.isArray(item?.assignedPeople) ? item.assignedPeople : []),
+    name: String(item?.name || `Item ${index + 1}`).trim(),
+  }))
+
+  if (normalizedBillItems.some((item: any) => !item.name || item.amountCents <= 0 || !item.assignedPeople.length)) {
+    return 'Split plan rejected. Every bill item needs a name, a positive amount, and at least one assigned person.'
+  }
+
+  if (normalizedBillItems.some((item: any) => item.assignedPeople.some((person: string) => !allowedPeople.includes(person)))) {
+    return `Split plan rejected. billItems can only use these participants: ${allowedPeople.join(', ')}.`
+  }
+
+  const billItemsTotal = normalizedBillItems.reduce((sum: number, item: any) => sum + item.amountCents, 0)
+
+  if (billItemsTotal !== receipt.totalCents) {
+    return `Split plan rejected. Your billItems total ${billItemsTotal} cents but the receipt total is ${receipt.totalCents} cents. Adjust and submit again.`
+  }
+
+  const derivedTotals = new Map(allowedPeople.map((person: string) => [person, 0]))
+
+  for (const item of normalizedBillItems) {
+    const splitAmounts = splitEvenly(item.amountCents, item.assignedPeople)
+
+    for (const entry of splitAmounts) {
+      derivedTotals.set(entry.person, (derivedTotals.get(entry.person) || 0) + entry.amountCents)
+    }
+  }
+
+  for (const entry of split) {
+    if ((derivedTotals.get(entry.person) || 0) !== entry.amountCents) {
+      return 'Split plan rejected. The billItems do not reproduce the submitted participant totals.'
+    }
   }
 
   return ''
@@ -448,6 +504,11 @@ export async function runPiBillAgent({
     label: 'Submit Split Plan',
     description: 'Submit the final split plan once the reasoning is done.',
     parameters: Type.Object({
+      billItems: Type.Array(Type.Object({
+        amountCents: Type.Integer({ minimum: 0 }),
+        assignedPeople: Type.Array(Type.String()),
+        name: Type.String(),
+      })),
       notes: Type.Array(Type.String()),
       split: Type.Array(Type.Object({
         amountCents: Type.Integer({ minimum: 0 }),
@@ -458,6 +519,7 @@ export async function runPiBillAgent({
     }),
     execute: async (_toolCallId, params) => {
       const error = getSplitPlanError({
+        billItems: params.billItems,
         people,
         receipt: extractedReceipt,
         split: params.split,
@@ -572,6 +634,11 @@ export async function runPiBillRevisionAgent({
     label: 'Submit Split Plan',
     description: 'Submit the final split plan once the reasoning is done.',
     parameters: Type.Object({
+      billItems: Type.Array(Type.Object({
+        amountCents: Type.Integer({ minimum: 0 }),
+        assignedPeople: Type.Array(Type.String()),
+        name: Type.String(),
+      })),
       notes: Type.Array(Type.String()),
       split: Type.Array(Type.Object({
         amountCents: Type.Integer({ minimum: 0 }),
@@ -582,6 +649,7 @@ export async function runPiBillRevisionAgent({
     }),
     execute: async (_toolCallId, params) => {
       const error = getSplitPlanError({
+        billItems: params.billItems,
         people,
         receipt: normalizedReceipt,
         split: params.split,
@@ -707,6 +775,11 @@ export async function runPiBillReceiptSplitAgent({
     label: 'Submit Split Plan',
     description: 'Submit the final split plan once the reasoning is done.',
     parameters: Type.Object({
+      billItems: Type.Array(Type.Object({
+        amountCents: Type.Integer({ minimum: 0 }),
+        assignedPeople: Type.Array(Type.String()),
+        name: Type.String(),
+      })),
       notes: Type.Array(Type.String()),
       split: Type.Array(Type.Object({
         amountCents: Type.Integer({ minimum: 0 }),
@@ -717,6 +790,7 @@ export async function runPiBillReceiptSplitAgent({
     }),
     execute: async (_toolCallId, params) => {
       const error = getSplitPlanError({
+        billItems: params.billItems,
         people,
         receipt: normalizedReceipt,
         split: params.split,

@@ -76,6 +76,7 @@ function buildChatPayload({
 }) {
   return {
     billDate: String(base?.billDate || receipt?.billDate || ''),
+    billItems: Array.isArray(base?.billItems) ? base.billItems : [],
     chatId,
     currency: String(base?.currency || receipt?.currency || 'EUR'),
     history,

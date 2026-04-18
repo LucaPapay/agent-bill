@@ -26,14 +26,21 @@ export function normalizeSavedRunPayload(value: unknown) {
   const payload = parseJsonValue(value)
 
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    return {}
-  }
-
-  if ((payload as any).receipt !== null) {
-    return payload
+    return {
+      billItems: [],
+    }
   }
 
   const normalizedPayload: any = { ...payload }
+
+  if (!Array.isArray(normalizedPayload.billItems)) {
+    normalizedPayload.billItems = []
+  }
+
+  if ((payload as any).receipt !== null) {
+    return normalizedPayload
+  }
+
   delete normalizedPayload.receipt
   return normalizedPayload
 }
