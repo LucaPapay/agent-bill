@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Avenir Next", "Helvetica Neue", "Segoe UI", sans-serif;
+  --font-serif: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+
+  --color-paper: oklch(0.97 0.02 85);
+  --color-paper-strong: oklch(0.93 0.03 82);
+  --color-ink: oklch(0.26 0.03 40);
+  --color-muted: oklch(0.54 0.03 43);
+  --color-accent: oklch(0.72 0.16 54);
+  --color-accent-deep: oklch(0.58 0.13 43);
+  --color-mint: oklch(0.79 0.09 165);
+}
+
+:root {
+  background:
+    radial-gradient(circle at top left, rgba(255, 217, 163, 0.8), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(187, 231, 215, 0.55), transparent 24%),
+    linear-gradient(180deg, #fff9f1 0%, #f5ecde 100%);
+  color: var(--color-ink);
+}
+
+body {
+  min-height: 100vh;
+  background: transparent;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: rgba(223, 129, 28, 0.25);
+}
+
+.receipt-grid {
+  background-image:
+    linear-gradient(rgba(92, 67, 40, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92, 67, 40, 0.06) 1px, transparent 1px);
+  background-position: -1px -1px;
+  background-size: 1.1rem 1.1rem;
+}
+
+.card-shadow {
+  box-shadow:
+    0 24px 60px rgba(83, 57, 29, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}

@@ -1,0 +1,30 @@
+{
+  "name": "agent-bill",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "check": "nuxt typecheck",
+    "db:logs": "docker compose logs -f postgres",
+    "db:stop": "docker compose stop postgres",
+    "dev": "docker compose up -d postgres && nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@mariozechner/pi-ai": "^0.67.68",
+    "@orpc/client": "^1.13.14",
+    "@orpc/server": "^1.13.14",
+    "@tailwindcss/vite": "^4.2.2",
+    "nuxt": "^4.4.2",
+    "postgres": "^3.4.9",
+    "tailwindcss": "^4.2.2",
+    "vue": "^3.5.32",
+    "vue-router": "^5.0.4",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@vue/language-core": "^3.2.6"
+  }
+}
