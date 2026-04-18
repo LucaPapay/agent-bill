@@ -1,0 +1,109 @@
+import OpenAI from 'openai'
+import { extractedReceiptSchema, receiptExtractionFormat } from './receipt-contract'
+
+let client: OpenAI | null = null
+
+function openai() {
+  if (!client) {
+    client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    })
+  }
+
+  return client
+}
+
+function buildPrompt({ title, people, rawText }: {
+  title: string
+  people: string[]
+  rawText?: string
+}) {
+  const participantText = people.length
+    ? `Participants:\n${people.map(person => `- ${person}`).join('\n')}`
+    : ''
+
+  const rawTextBlock = rawText
+    ? `OCR fallback text:\n${rawText.slice(0, 8000)}`
+    : ''
+
+  return [
+    `Extract a restaurant receipt for "${title}".`,
+    'Return merchant, bill date, currency, items, subtotal, tax, tip, total, and short extraction notes.',
+    'Rules:',
+    '- Use integer cents for every money field.',
+    '- Keep quantity as an integer.',
+    '- If a field is missing, use an empty string or 0 instead of inventing a value.',
+    '- Keep notes short and concrete.',
+    participantText,
+    rawTextBlock,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+export async function extractReceiptWithOpenAI({
+  title,
+  people,
+  imageBase64,
+  mimeType,
+  rawText,
+  onEvent = () => {},
+}: {
+  title: string
+  people: string[]
+  imageBase64?: string
+  mimeType?: string
+  rawText?: string
+  onEvent?: (payload: any) => void
+}) {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is required for OpenAI receipt extraction.')
+  }
+
+  const content: any[] = [{
+    type: 'input_text',
+    text: buildPrompt({ title, people, rawText }),
+  }]
+
+  if (imageBase64) {
+    content.push({
+      type: 'input_image',
+      image_url: `data:${mimeType || 'image/jpeg'};base64,${imageBase64}`,
+    })
+  }
+
+  const model = process.env.OPENAI_RECEIPT_MODEL || 'gpt-4.1-mini'
+
+  onEvent({
+    type: 'status',
+    phase: 'extracting',
+    message: 'Sending the receipt to OpenAI for structured extraction.',
+  })
+
+  const response = await openai().responses.create({
+    model,
+    input: [{
+      role: 'user',
+      content,
+    }],
+    text: {
+      format: receiptExtractionFormat,
+    },
+  })
+
+  const outputText = response.output_text?.trim()
+
+  if (!outputText) {
+    throw new Error('OpenAI did not return a structured receipt payload.')
+  }
+
+  const parsed = extractedReceiptSchema.parse(JSON.parse(outputText))
+
+  onEvent({
+    type: 'receipt_extracted',
+    model,
+    receipt: parsed,
+  })
+
+  return parsed
+}

@@ -25,6 +25,7 @@ See [app explanation.md](</Users/lucapapay/dev/agent-bill/app explanation.md>) f
 - Do not add auth yet.
 - Other agents may be working in parallel; ignore unrelated changes you did not make.
 - Work in a way that does not interrupt or overwrite another agent's in-flight changes.
+- Do not change branches without asking; the user manages branches.
 
 ## App Shape
 
