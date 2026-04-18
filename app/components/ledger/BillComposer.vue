@@ -120,7 +120,7 @@ function formatItemSummary(item, formatCents) {
     </div>
 
     <div v-if="selectedGroup" class="section-pad assign-layout" style="padding-bottom: 96px;">
-      <div class="assign-sidebar">
+      <div class="bill-composer-summary-rail">
         <div class="assign-summary-stack">
           <div class="surface-panel" style="padding: 12px;">
             <div style="display: flex; gap: 8px; justify-content: space-between;">
@@ -150,13 +150,6 @@ function formatItemSummary(item, formatCents) {
             </div>
           </div>
 
-          <div style="background: var(--marigold); color: var(--ink); border-radius: 14px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; border: 1.5px solid var(--ink);">
-            <IconGlyph name="sparkle" width="16" height="16" style="flex-shrink: 0; margin-top: 2px;" />
-            <div style="font-size: 12px; line-height: 1.35;">
-              <b>Penny:</b> Item assignments save the raw per-person bill shares first. Group settlement is derived after that, not instead of that.
-            </div>
-          </div>
-
           <div class="assign-remaining-bar">
             <div class="assign-remaining-copy">
               <span class="assign-remaining-label">Remaining</span>
@@ -169,28 +162,16 @@ function formatItemSummary(item, formatCents) {
                 {{ saveLabel }}
                 <IconGlyph name="chevron" width="16" height="16" />
               </button>
-              <button class="btn btn-ghost assign-inline-button" @click="emit('reset')">
-                Reset form
-              </button>
             </div>
           </div>
         </div>
+      </div>
 
+      <div v-if="errorMessage || selectedBill" class="assign-sidebar">
         <div v-if="errorMessage" style="padding: 12px 14px; border-radius: 16px; background: #fff0ec; color: #7d2f21; border: 1px solid rgba(255,84,54,0.2); font-size: 13px;">
           {{ errorMessage }}
         </div>
 
-        <div v-if="selectedBill" class="surface-panel" style="padding: 14px;">
-          <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
-            Latest saved bill
-          </div>
-          <div style="font-size: 15px; font-weight: 700; margin-top: 8px;">
-            {{ selectedBill.title }}
-          </div>
-          <div class="mono" style="font-size: 11px; color: var(--muted); margin-top: 4px;">
-            {{ formatCents(selectedBill.totalAmountCents) }} · {{ selectedBill.items.length }} ITEMS
-          </div>
-        </div>
       </div>
 
       <div class="assign-items-card">
@@ -258,21 +239,17 @@ function formatItemSummary(item, formatCents) {
             </label>
           </div>
 
-          <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
-            <div>
+          <div class="receipt-items-header">
+            <div class="receipt-items-copy">
               <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
                 Receipt items
               </div>
-              <div style="font-size: 14px; line-height: 1.45; margin-top: 4px;">
-                {{
-                  editingItems
-                    ? 'Fix the parsed item names or amounts here. Assignments stay in walkthrough mode so the list still fits on mobile.'
-                    : 'Walk through the parsed items and tap who shared each one. If an item is wrong, switch to edit mode first.'
-                }}
+              <div v-if="editingItems" style="font-size: 14px; line-height: 1.45; margin-top: 4px;">
+                Fix the parsed item names or amounts here. Assignments stay in walkthrough mode so the list still fits on mobile.
               </div>
             </div>
 
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <div class="receipt-items-actions">
               <button
                 v-if="editingItems"
                 class="btn btn-primary"
@@ -339,12 +316,12 @@ function formatItemSummary(item, formatCents) {
             <div
               v-for="item in billItems"
               :key="`${item.id}:walkthrough`"
-              style="padding: 14px; border-radius: 18px; background: var(--paper);"
+              style="padding: 10px 14px 14px; border-radius: 18px; background: var(--paper);"
             >
-              <div style="font-size: 16px; font-weight: 700; margin-top: 6px;">
+              <div style="font-size: 16px; font-weight: 700;">
                 {{ item.name || 'Untitled item' }}
               </div>
-              <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
+              <div style="font-size: 13px; color: var(--muted); margin-top: 2px;">
                 {{ formatItemSummary(item, formatCents) }}
               </div>
               <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px;">
@@ -387,9 +364,57 @@ function formatItemSummary(item, formatCents) {
   grid-template-columns: minmax(0, 1fr) minmax(110px, 180px);
 }
 
+.receipt-items-header {
+  margin-bottom: 6px;
+  position: relative;
+}
+
+.receipt-items-copy {
+  padding-right: 180px;
+}
+
+.receipt-items-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.bill-composer-summary-rail {
+  display: grid;
+}
+
+@media (min-width: 900px) {
+  .bill-composer {
+    overflow: visible;
+  }
+
+  .bill-composer-summary-rail {
+    align-self: start;
+    position: sticky;
+    top: 96px;
+    z-index: 6;
+  }
+
+  .bill-composer-summary-rail .assign-summary-stack {
+    position: static;
+  }
+}
+
 @media (max-width: 720px) {
   .composer-edit-row {
     grid-template-columns: 1fr;
+  }
+
+  .receipt-items-copy {
+    padding-right: 0;
+  }
+
+  .receipt-items-actions {
+    margin-top: 8px;
+    position: static;
   }
 }
 </style>
