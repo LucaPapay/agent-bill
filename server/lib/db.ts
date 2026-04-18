@@ -19,6 +19,7 @@ export {
   createPerson,
   findOrCreateGooglePerson,
   getGroupMemberIds,
+  getGroupMemberNames,
   hasPerson,
 } from './db/groups'
 export { getLedgerSnapshot } from './db/ledger-snapshot'

@@ -260,6 +260,14 @@ const uploadLabel = computed(() => {
 
   return 'Upload'
 })
+const showShellTitle = computed(() =>
+  !previewUrl.value
+  && !hasSavedChat.value
+  && !parsedReceipt.value
+  && !leadMessages.value.some(entry => entry.who === 'user')
+  && !tailMessages.value.some(entry => entry.who === 'user')
+  && !visibleAnalysisFeed.value.some(entry => entry.who === 'user'),
+)
 
 function formatMoney(amountCents, currency = 'EUR') {
   return new Intl.NumberFormat('en-US', {
@@ -392,6 +400,7 @@ async function startFileAnalysis(file) {
 
   await analysis.startFromFile({
     file,
+    groupId: selectedGroup.value?.id || '',
     people: splitPeople.value,
     title,
   })
@@ -426,8 +435,7 @@ function onFileChange(event) {
 async function onPickGroup(group) {
   if (parsedReceipt.value) {
     localGroupId.value = group.id
-    composerVisible.value = false
-    await analysis.confirmGroupSelection(group.name, getGroupPeople(group), group.name)
+    await analysis.confirmGroupSelection(group.name, getGroupPeople(group), group.name, group.id)
     return
   }
 
@@ -449,8 +457,7 @@ async function onSend() {
     if (matchingGroup) {
       if (parsedReceipt.value) {
         localGroupId.value = matchingGroup.id
-        composerVisible.value = false
-        await analysis.confirmGroupSelection(matchingGroup.name, getGroupPeople(matchingGroup), message)
+        await analysis.confirmGroupSelection(matchingGroup.name, getGroupPeople(matchingGroup), matchingGroup.name, matchingGroup.id)
         return
       }
 
@@ -474,7 +481,7 @@ async function onSend() {
   }
 
   if (parsedReceipt.value) {
-    await analysis.revise(message, splitPeople.value)
+    await analysis.revise(message, splitPeople.value, selectedGroup.value?.id || '')
     return
   }
 
@@ -491,7 +498,14 @@ async function hydrateSavedChat(nextChatId) {
 
   composerText.value = ''
   clearInputs()
-  return await analysis.loadChat(normalizedChatId)
+  const loadedChat = await analysis.loadChat(normalizedChatId)
+  const persistedGroupId = String(loadedChat?.groupId || '').trim()
+
+  if (persistedGroupId && availableGroups.value.some(group => group.id === persistedGroupId)) {
+    localGroupId.value = persistedGroupId
+  }
+
+  return loadedChat
 }
 
 async function resetScan() {
@@ -505,7 +519,6 @@ async function resetScan() {
 
 function clearGroup() {
   localGroupId.value = ''
-  composerVisible.value = false
 
   if (parsedReceipt.value) {
     autoQuestionKey.value = ''
@@ -715,7 +728,7 @@ onBeforeUnmount(() => {
             <div class="scan-panel-kicker scan-panel-kicker-on-dark">
               Scan chat
             </div>
-            <div class="scan-chat-shell-title">
+            <div v-if="showShellTitle" class="scan-chat-shell-title">
               Chat first. Receipt next.
             </div>
           </div>

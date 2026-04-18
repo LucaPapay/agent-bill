@@ -226,14 +226,17 @@ export function useBillAnalysisStream() {
 
   async function startFromFile({
     file,
+    groupId = '',
     title,
     people = [],
   }: {
     file: File
+    groupId?: string
     title: string
     people?: string[]
   }) {
     return await start({
+      groupId: String(groupId || '').trim() || undefined,
       imageBase64: await fileToBase64(file),
       mimeType: file.type || 'image/jpeg',
       people,
@@ -244,7 +247,13 @@ export function useBillAnalysisStream() {
   function openRevisionStream(
     message: string,
     people: string[] = [],
-    options: { displayUserMessage?: string, pushUserMessage?: boolean, statusMessage?: string } = {},
+    options: {
+      displayUserMessage?: string
+      groupId?: string
+      pushUserMessage?: boolean
+      statusMessage?: string
+      systemMessage?: string
+    } = {},
   ) {
     stop()
     assistantText.value = ''
@@ -255,18 +264,27 @@ export function useBillAnalysisStream() {
       pushFeed('user', options.displayUserMessage || message)
     }
 
+    if (options.systemMessage) {
+      pushFeed('log', options.systemMessage)
+    }
+
     if (options.statusMessage) {
       pushFeed('log', options.statusMessage)
     }
 
     openStream(useOrpc().reviseBillSplitStream({
       chatId: chatId.value,
+      groupId: String(options.groupId || '').trim() || undefined,
       message,
       people,
+      systemMessage: String(options.systemMessage || '').trim() || undefined,
+      userMessage: options.pushUserMessage === false
+        ? undefined
+        : String(options.displayUserMessage || message).trim() || undefined,
     }))
   }
 
-  async function revise(message: string, people: string[] = []) {
+  async function revise(message: string, people: string[] = [], groupId = '') {
     const nextMessage = String(message || '').trim()
 
     if (!nextMessage || !chatId.value || !resolveReceipt(result.value || receipt.value)) {
@@ -274,13 +292,14 @@ export function useBillAnalysisStream() {
     }
 
     openRevisionStream(nextMessage, people, {
+      groupId,
       statusMessage: 'Penny is revising the split...',
     })
 
     return null
   }
 
-  async function requestSplitQuestion(people: string[] = []) {
+  async function requestSplitQuestion(people: string[] = [], groupId = '') {
     if (!chatId.value || !resolveReceipt(result.value || receipt.value)) {
       return null
     }
@@ -289,6 +308,7 @@ export function useBillAnalysisStream() {
       'Ask me one short question that will give you enough information to create the split for this receipt. Do not create the split yet.',
       people,
       {
+        groupId,
         pushUserMessage: false,
         statusMessage: 'Penny is preparing the split question...',
       },
@@ -314,7 +334,7 @@ export function useBillAnalysisStream() {
     return null
   }
 
-  async function confirmGroupSelection(groupName: string, people: string[] = [], displayUserMessage = '') {
+  async function confirmGroupSelection(groupName: string, people: string[] = [], displayUserMessage = '', groupId = '') {
     const normalizedGroupName = String(groupName || '').trim()
     const participantSummary = people.length
       ? `The participants are ${people.join(', ')}.`
@@ -325,11 +345,13 @@ export function useBillAnalysisStream() {
     }
 
     openRevisionStream(
-      `The selected group is "${normalizedGroupName}". ${participantSummary} Ask me one short question about how I want to split the receipt before you create the first split.`,
+      `The selected group is "${normalizedGroupName}". ${participantSummary} Do not ask me to select the group again. Ask me one short question about how I want to split the receipt before you create the first split.`,
       people,
       {
         displayUserMessage: String(displayUserMessage || normalizedGroupName).trim() || normalizedGroupName,
+        groupId,
         statusMessage: 'Penny is asking how to split it...',
+        systemMessage: `Selected group: ${normalizedGroupName}`,
       },
     )
 

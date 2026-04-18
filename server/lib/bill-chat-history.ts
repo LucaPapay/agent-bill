@@ -30,6 +30,10 @@ export function appendBillChatReply(history: any[], message: string) {
   return pushEntry(history, 'user', message)
 }
 
+export function appendBillChatSystemMessage(history: any[], message: string) {
+  return pushEntry(history, 'log', message)
+}
+
 export function appendBillChatEvent(history: any[], payload: any) {
   if (payload.type === 'status') {
     return pushEntry(history, payload.phase === 'agent' ? 'penny' : 'log', payload.message)

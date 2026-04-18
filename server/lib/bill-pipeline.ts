@@ -1,6 +1,7 @@
 import {
   appendBillChatEvent,
   appendBillChatReply,
+  appendBillChatSystemMessage,
   createBillChatSeed,
 } from './bill-chat-history'
 import {
@@ -11,8 +12,10 @@ import {
   normalizeExtractedReceipt,
 } from './bill-analysis'
 import {
+  assertPersonCanAccessGroup,
   createBillChat,
   getBillChat,
+  getGroupMemberNames,
   saveBillRun,
 } from './db'
 import { extractReceiptWithOpenAI } from './openai-receipt'
@@ -60,6 +63,7 @@ function createRunSaver() {
 function buildChatPayload({
   base,
   chatId,
+  groupId,
   history,
   people,
   rawReceipt,
@@ -69,6 +73,7 @@ function buildChatPayload({
 }: {
   base?: any
   chatId: string
+  groupId?: string
   history: any[]
   people: string[]
   rawReceipt?: any
@@ -81,6 +86,7 @@ function buildChatPayload({
     billItems: Array.isArray(base?.billItems) ? base.billItems : [],
     chatId,
     currency: String(base?.currency || receipt?.currency || 'EUR'),
+    groupId: String(groupId || base?.groupId || '').trim() || undefined,
     history,
     items: Array.isArray(base?.items) ? base.items : Array.isArray(receipt?.items) ? receipt.items : [],
     merchant: String(base?.merchant || receipt?.merchant || title).trim() || title,
@@ -106,9 +112,33 @@ function buildChatPayload({
   }
 }
 
+async function resolveParticipants({
+  fallbackPeople,
+  groupId,
+  personId,
+}: {
+  fallbackPeople: string[]
+  groupId: string
+  personId: string
+}) {
+  const normalizedGroupId = String(groupId || '').trim()
+
+  if (!normalizedGroupId) {
+    return normalizePeople(fallbackPeople)
+  }
+
+  await assertPersonCanAccessGroup(personId, normalizedGroupId)
+  return normalizePeople(await getGroupMemberNames(normalizedGroupId))
+}
+
 export async function runBillAnalysisPipeline(input: any, personId: string, onEvent = (_payload: any) => {}) {
+  const groupId = String(input?.groupId || '').trim()
   const title = String(input?.title || 'Untitled bill').trim() || 'Untitled bill'
-  const people = normalizePeople(input?.people || [])
+  const people = await resolveParticipants({
+    fallbackPeople: input?.people || [],
+    groupId,
+    personId,
+  })
 
   if (!input?.imageBase64 && !input?.rawText) {
     throw new Error('Provide a receipt image or OCR text.')
@@ -129,6 +159,7 @@ export async function runBillAnalysisPipeline(input: any, personId: string, onEv
     chatId: chat.id,
     payload: buildChatPayload({
       chatId: chat.id,
+      groupId,
       history: history.getHistory(),
       people,
       summary: 'Receipt uploaded. Penny is parsing the bill items.',
@@ -170,6 +201,7 @@ export async function runBillAnalysisPipeline(input: any, personId: string, onEv
   const payload = {
     ...analysis,
     chatId: chat.id,
+    groupId: groupId || undefined,
     history: history.finish(analysis),
   }
   const run = await saveBillRun({
@@ -186,31 +218,50 @@ export async function runBillAnalysisPipeline(input: any, personId: string, onEv
 }
 
 export async function runBillRevisionPipeline(input: any, personId: string, onEvent = (_payload: any) => {}) {
+  const requestedGroupId = String(input?.groupId || '').trim() || String(input?.selectedGroupId || '').trim()
   const message = String(input?.message || '').trim()
+  const systemMessage = String(input?.systemMessage || '').trim()
+  const userMessage = String(input?.userMessage || '').trim()
 
   if (!message) {
     throw new Error('A follow-up message is required to revise the split.')
   }
 
   const current = await getBillChat(personId, String(input?.chatId || ''))
+  const groupId = requestedGroupId || String(current?.groupId || '').trim()
   const title = String(current?.title || 'Untitled bill').trim() || 'Untitled bill'
   const rawReceipt = current?.rawReceipt || current?.receipt
   const receipt = current?.receipt
   const split = Array.isArray(current?.split) ? current.split : []
-  const people = normalizePeople(
-    Array.isArray(current?.people) && current.people.length
-      ? current.people
-      : split.map((entry: any) => entry.person),
-  )
-  const participantHints = people.length ? people : normalizePeople(input?.people || [])
+  const people = await resolveParticipants({
+    fallbackPeople: (
+      Array.isArray(current?.people) && current.people.length
+        ? current.people
+        : split.map((entry: any) => entry.person)
+    ),
+    groupId,
+    personId,
+  })
+  const participantHints = people.length
+    ? people
+    : await resolveParticipants({
+      fallbackPeople: input?.people || [],
+      groupId,
+      personId,
+    })
 
   if (!receipt?.totalCents) {
     throw new Error('A parsed receipt is required to revise the split.')
   }
 
+  const baseHistory = userMessage
+    ? appendBillChatReply(Array.isArray(current?.history) ? current.history : [], userMessage)
+    : Array.isArray(current?.history) ? current.history : []
   const history = createHistoryRecorder(
     onEvent,
-    appendBillChatReply(Array.isArray(current?.history) ? current.history : [], message),
+    systemMessage
+      ? appendBillChatSystemMessage(baseHistory, systemMessage)
+      : baseHistory,
   )
   const runSaver = createRunSaver()
   await saveBillRun({
@@ -218,6 +269,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
     payload: buildChatPayload({
       base: current,
       chatId: current.chatId,
+      groupId,
       history: history.getHistory(),
       people: participantHints,
       rawReceipt,
@@ -239,6 +291,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
         payload: buildChatPayload({
           base: current,
           chatId: current.chatId,
+          groupId,
           history: history.getHistory(),
           people: participantHints,
           rawReceipt,
@@ -286,6 +339,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
             summary: String(agentResult?.question || 'Penny needs one more detail.').trim() || 'Penny needs one more detail.',
           },
           chatId: current.chatId,
+          groupId,
           history: history.finish({
             summary: String(agentResult?.question || 'Penny needs one more detail.').trim() || 'Penny needs one more detail.',
           }),
@@ -329,6 +383,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
     const payload = {
       ...analysis,
       chatId: current.chatId,
+      groupId: groupId || current.groupId || undefined,
       history: history.finish(analysis),
     }
     const run = await saveBillRun({
@@ -350,6 +405,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
         ...buildChatPayload({
           base: current,
           chatId: current.chatId,
+          groupId,
           history: appendBillChatEvent(history.getHistory(), {
             type: 'error',
             message: error?.message || 'Penny could not revise the split.',

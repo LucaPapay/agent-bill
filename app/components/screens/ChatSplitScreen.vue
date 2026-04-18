@@ -1,9 +1,17 @@
 <script setup>
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { avatarColors, people } from '../app/mockData'
 import IconGlyph from '../app/IconGlyph.vue'
 
 const emit = defineEmits(['done', 'jump-to-items'])
+
+const demoAvatarColors = {
+  You: '#F6B533',
+  Sarah: '#FF5436',
+  Miles: '#8FC56A',
+  Priya: '#B9A6E8',
+}
+
+const demoPeople = ['You', 'Sarah', 'Miles', 'Priya']
 
 const initialMessages = [
   {
@@ -20,7 +28,7 @@ const flow = [
       who: 'penny',
       text: 'Got it — 4 people. How should I split it?',
       chips: ['Even split', 'By items', "I paid for Sarah's drink"],
-      avatars: people,
+      avatars: demoPeople,
     },
   },
   {
@@ -217,7 +225,7 @@ onBeforeUnmount(() => {
                   width: '22px',
                   height: '22px',
                   borderRadius: '11px',
-                  background: avatarColors[person],
+                  background: demoAvatarColors[person],
                   fontSize: '10px',
                   fontWeight: 700,
                   display: 'flex',
@@ -257,7 +265,7 @@ onBeforeUnmount(() => {
                   width: '26px',
                   height: '26px',
                   borderRadius: '13px',
-                  background: avatarColors[row.name],
+                  background: demoAvatarColors[row.name],
                   border: '1.5px solid var(--ink)',
                   color: 'var(--ink)',
                   fontSize: '11px',
