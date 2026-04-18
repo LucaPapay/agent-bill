@@ -46,6 +46,10 @@ export function appendBillChatEvent(history: any[], payload: any) {
     return pushEntry(history, payload.phase === 'agent' ? 'penny' : 'log', payload.message)
   }
 
+  if (payload.type === 'error') {
+    return pushEntry(history, 'log', payload.message)
+  }
+
   if (payload.type === 'receipt_extracted') {
     return pushEntry(
       history,

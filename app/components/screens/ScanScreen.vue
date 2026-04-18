@@ -54,6 +54,19 @@ const {
   updateBillItemName,
 } = ledger
 
+function getPathChatId() {
+  if (typeof window === 'undefined') {
+    return ''
+  }
+
+  const match = window.location.pathname.match(/^\/scan\/([^/?#]+)/)
+  return match?.[1] ? decodeURIComponent(match[1]) : ''
+}
+
+function getResolvedChatId() {
+  return String(props.chatId || '').trim() || getPathChatId()
+}
+
 const parsedPeople = computed(() =>
   [...new Set(
     peopleText.value
@@ -248,6 +261,29 @@ async function startFileAnalysis(file) {
   })
 }
 
+async function hydrateSavedChat(nextChatId) {
+  const normalizedChatId = String(nextChatId || '').trim()
+
+  if (!normalizedChatId) {
+    return null
+  }
+
+  replyText.value = ''
+  selectedFile.value = null
+  clearInputs()
+  revokePreview()
+
+  return await analysis.loadChat(normalizedChatId).then((value) => {
+    if (!value) {
+      return null
+    }
+
+    title.value = value.title || 'Untitled bill'
+    peopleText.value = Array.isArray(value.people) ? value.people.join(', ') : ''
+    return value
+  })
+}
+
 function onFileChange(event) {
   const file = event.target.files?.[0]
 
@@ -263,7 +299,7 @@ async function resetScan() {
   resetDraftInputs()
   analysis.reset()
 
-  if (props.chatId) {
+  if (getResolvedChatId()) {
     await navigateTo('/scan')
   }
 }
@@ -353,7 +389,9 @@ watch(
 )
 
 watch(() => props.chatId, (nextChatId, previousChatId) => {
-  if (!nextChatId) {
+  const resolvedChatId = String(nextChatId || '').trim() || getPathChatId()
+
+  if (!resolvedChatId) {
     if (previousChatId || analysis.chatId.value || analysis.result.value) {
       resetDraftInputs()
       analysis.reset()
@@ -362,19 +400,7 @@ watch(() => props.chatId, (nextChatId, previousChatId) => {
     return
   }
 
-  replyText.value = ''
-  selectedFile.value = null
-  clearInputs()
-  revokePreview()
-
-  analysis.loadChat(nextChatId).then((value) => {
-    if (!value) {
-      return
-    }
-
-    title.value = value.title || 'Untitled bill'
-    peopleText.value = Array.isArray(value.people) ? value.people.join(', ') : ''
-  })
+  void hydrateSavedChat(resolvedChatId)
 }, { immediate: true })
 
 watch(() => analysis.chatId.value, (nextChatId) => {
@@ -387,6 +413,7 @@ watch(() => analysis.chatId.value, (nextChatId) => {
 
 onMounted(() => {
   void ledger.ensureLoaded()
+  void hydrateSavedChat(getResolvedChatId())
 
   showCameraCapture.value =
     window.matchMedia('(pointer: coarse)').matches

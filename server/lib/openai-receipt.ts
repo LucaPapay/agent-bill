@@ -78,7 +78,7 @@ export async function extractReceiptWithOpenAI({
 
   const model = process.env.OPENAI_RECEIPT_MODEL || 'gpt-4.1-mini'
 
-  onEvent({
+  await onEvent({
     type: 'status',
     phase: 'extracting',
     message: 'Sending the receipt to OpenAI for structured extraction.',
@@ -103,7 +103,7 @@ export async function extractReceiptWithOpenAI({
 
   const parsed = extractedReceiptSchema.parse(JSON.parse(outputText))
 
-  onEvent({
+  await onEvent({
     type: 'receipt_extracted',
     model,
     receipt: parsed,

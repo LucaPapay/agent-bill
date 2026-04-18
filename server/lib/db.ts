@@ -18,6 +18,7 @@ export {
   createPerson,
   findOrCreateGooglePerson,
   getGroupMemberIds,
+  hasPerson,
 } from './db/groups'
 export { getLedgerSnapshot } from './db/ledger-snapshot'
 export {

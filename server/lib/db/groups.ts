@@ -93,6 +93,19 @@ export async function createGroup(name: string, icon: string) {
   }
 }
 
+export async function hasPerson(personId: string) {
+  await ensureSchema()
+
+  const rows = await db()`
+    select 1
+    from people
+    where id = ${personId}
+    limit 1
+  `
+
+  return Boolean(rows[0])
+}
+
 export async function addPersonToGroup(groupId: string, personId: string) {
   await ensureSchema()
 

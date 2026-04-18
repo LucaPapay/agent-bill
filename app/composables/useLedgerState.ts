@@ -5,7 +5,7 @@ let loadingPromise: Promise<void> | null = null
 
 export function useLedgerState() {
   const api = useOrpc()
-  const { user } = useUserSession()
+  const { clear, user } = useUserSession()
 
   const ledger = useState<any>('ledger-state:ledger', () => ({
     groups: [],
@@ -536,7 +536,16 @@ export function useLedgerState() {
         applyLedger(value)
         ledgerLoaded.value = true
       },
-      (error: any) => {
+      async (error: any) => {
+        const message = String(error?.message || '').toLowerCase()
+
+        if (error?.status === 401 || message.includes('unauthorized') || message.includes('sign in')) {
+          await clear()
+          resetState()
+          await navigateTo('/login')
+          return
+        }
+
         errorMessage.value = error?.message || 'Could not load the local ledger.'
       },
     )
