@@ -257,7 +257,7 @@ export function normalizeExtractedReceipt(receipt: any) {
   const rawTotalCents = toCents(receipt?.totalCents) || rawSubtotalCents + rawTaxCents + rawTipCents
   const moneyScale = inferReceiptMoneyScale(subtotalFromItems, rawSubtotalCents, rawTotalCents)
   const subtotalCents = scaleMoney(rawSubtotalCents, moneyScale) || subtotalFromItems
-  const taxCents = scaleMoney(rawTaxCents, moneyScale)
+  let taxCents = scaleMoney(rawTaxCents, moneyScale)
   const tipCents = scaleMoney(rawTipCents, moneyScale)
   const totalCents = scaleMoney(rawTotalCents, moneyScale) || subtotalCents + taxCents + tipCents
   const notes = Array.isArray(receipt?.notes)
@@ -266,6 +266,11 @@ export function normalizeExtractedReceipt(receipt: any) {
 
   if (moneyScale > 1) {
     notes.push(`Normalized OpenAI money fields by ${moneyScale}x to match the item totals.`)
+  }
+
+  if (subtotalCents + tipCents <= totalCents && subtotalCents + taxCents + tipCents !== totalCents) {
+    taxCents = totalCents - subtotalCents - tipCents
+    notes.push('Adjusted tax cents to reconcile the extracted subtotal and total.')
   }
 
   return {

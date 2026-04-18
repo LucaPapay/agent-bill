@@ -40,8 +40,8 @@ Separately:
 
 1. The Scan screen now expects a real receipt image.
 2. On mobile it opens the camera, and elsewhere it opens a file picker.
-3. As soon as the user selects an image, the frontend creates a streamed analysis job.
-4. OpenAI extracts a structured receipt, then Penny runs one Pi agent pass and streams progress back over SSE.
+3. As soon as the user selects an image, the frontend opens a typed `oRPC` analysis stream.
+4. OpenAI extracts a structured receipt, then Penny runs one Pi agent pass and streams progress back over the `oRPC` event iterator transport.
 5. Every successful analysis run is saved as a `bill_runs` record.
 6. The backend still supports raw text input for local fallback work, but that path is no longer exposed in the main scan UI.
 
@@ -203,7 +203,7 @@ The real manual-ledger functionality is now connected into the route structure l
 
 The scan-first design flow is still only partially connected today:
 
-- `Scan` now runs the real backend receipt pipeline with SSE updates
+- `Scan` now runs the real backend receipt pipeline through `oRPC` streaming
 - `Chat Split` is still downstream presentation flow
 - the scan result does not yet create a saved ledger bill automatically
 - the durable manual workflow now runs through `/groups` -> `/groups/:groupId` -> `/groups/:groupId/bills/new` -> `/groups/:groupId/bills/:billId`

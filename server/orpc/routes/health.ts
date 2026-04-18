@@ -5,7 +5,7 @@ export const health = os.handler(() => ({
   name: 'agent-bill',
   openaiReady: Boolean(process.env.OPENAI_API_KEY),
   piReady: Boolean(process.env.OPENAI_API_KEY),
-  streamTransport: 'sse',
+  streamTransport: 'orpc-event-iterator',
   timestamp: new Date().toISOString(),
 }))
 

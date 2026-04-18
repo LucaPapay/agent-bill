@@ -1,17 +1,25 @@
-import { os } from '@orpc/server'
-import { z } from 'zod'
+import { eventIterator, os } from '@orpc/server'
 import { runBillAnalysisPipeline } from '../../lib/bill-pipeline'
+import { streamBillAnalysis } from '../../lib/bill-analysis-stream'
+import {
+  analysisEventSchema,
+  analysisInputSchema,
+  analysisResultSchema,
+} from '../../lib/receipt-contract'
 
 export const analyzeBill = os
-  .input(z.object({
-    imageBase64: z.string().optional(),
-    mimeType: z.string().optional(),
-    people: z.array(z.string().trim().min(1)).min(1),
-    rawText: z.string().trim().optional(),
-    title: z.string().trim().min(1).default('Untitled bill'),
-  }))
+  .input(analysisInputSchema)
+  .output(analysisResultSchema)
   .handler(async ({ input }) => runBillAnalysisPipeline(input))
+
+export const analyzeBillStream = os
+  .input(analysisInputSchema)
+  .output(eventIterator(analysisEventSchema))
+  .handler(async function* ({ input }) {
+    yield* streamBillAnalysis(input)
+  })
 
 export const analysisRouter = {
   analyzeBill,
+  analyzeBillStream,
 }

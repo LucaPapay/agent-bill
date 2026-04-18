@@ -1,11 +1,9 @@
-let currentSource: EventSource | null = null
+import { consumeEventIterator } from '@orpc/client'
+
+let currentCancel: null | (() => Promise<void>) = null
 
 function trimFeed(feed: Array<{ text: string; who: string }>, entry: { text: string; who: string }) {
   return [...feed, entry].slice(-10)
-}
-
-function isAnalysisJob(value: any) {
-  return typeof value?.id === 'string' && typeof value?.streamUrl === 'string'
 }
 
 function fileToBase64(file: File) {
@@ -32,9 +30,9 @@ export function useBillAnalysisStream() {
   const status = useState('bill-analysis:status', () => 'idle')
 
   function stop() {
-    if (currentSource) {
-      currentSource.close()
-      currentSource = null
+    if (currentCancel) {
+      void currentCancel()
+      currentCancel = null
     }
   }
 
@@ -105,50 +103,27 @@ export function useBillAnalysisStream() {
     reset()
     status.value = 'starting'
     pushFeed('log', 'Opening analysis stream...')
+    jobId.value = ''
 
-    const response = await $fetch.raw('/api/analysis/jobs', {
-      method: 'POST',
-      body: input,
-    }).catch((fetchError: any) => {
-      error.value = fetchError?.data?.statusMessage || fetchError?.message || 'Could not start the analysis job.'
-      status.value = 'error'
-      pushFeed('log', error.value)
-      return null
-    })
+    currentCancel = consumeEventIterator(useOrpc().analyzeBillStream(input), {
+      onEvent: (event) => {
+        applyPayload(event)
+      },
+      onError: (streamError: any) => {
+        if (status.value === 'complete' || status.value === 'error') {
+          return
+        }
 
-    if (!response) {
-      return null
-    }
-
-    const contentType = String(response.headers.get('content-type') || '')
-    const payload = response._data
-
-    if (!contentType.includes('application/json') || !isAnalysisJob(payload)) {
-      error.value = 'The analysis endpoint did not return a job payload. Restart Nuxt so the API routes reload.'
-      status.value = 'error'
-      pushFeed('log', error.value)
-      return null
-    }
-
-    const job = payload as { id: string; streamUrl: string }
-    jobId.value = job.id
-    currentSource = new EventSource(job.streamUrl)
-
-    currentSource.addEventListener('update', (event) => {
-      applyPayload(JSON.parse((event as MessageEvent).data))
-    })
-
-    currentSource.onerror = () => {
-      if (status.value !== 'complete' && status.value !== 'error') {
-        error.value = 'The live analysis stream disconnected.'
+        error.value = streamError?.message || 'The live analysis stream disconnected.'
         status.value = 'error'
         pushFeed('log', error.value)
-      }
+      },
+      onFinish: () => {
+        currentCancel = null
+      },
+    })
 
-      stop()
-    }
-
-    return job
+    return null
   }
 
   async function startFromFile({
