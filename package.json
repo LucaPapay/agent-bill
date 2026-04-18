@@ -35,6 +35,7 @@
   },
   "devDependencies": {
     "@vue/language-core": "^3.2.6",
+    "tsx": "^4.21.0",
     "vitest": "^3.2.4"
   }
 }

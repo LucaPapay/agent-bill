@@ -146,9 +146,38 @@ function buildGroupSelectionRules(people: string[]) {
   ]
 }
 
-function buildRevisionPrompt({ message, people, receipt, split, title }: {
+function buildPreviousSplitHintText(matches: any[]) {
+  return matches
+    .slice(0, 3)
+    .map((match: any, index: number) => {
+      const itemNames = (match.billItems || [])
+        .slice(0, 6)
+        .map((item: any) => String(item?.name || '').trim())
+        .filter(Boolean)
+        .join(', ')
+      const splitSummary = (match.split || [])
+        .slice(0, 6)
+        .map((entry: any) => `${entry.person}: ${formatMoney(entry.amountCents || 0)}`)
+        .join(', ')
+      const reasons = Array.isArray(match.why) ? match.why.join(', ') : ''
+      const sourceLabel = match.source === 'ledger_bill' ? 'Saved bill' : 'Saved split chat'
+
+      return [
+        `${index + 1}. ${match.title || match.merchant || 'Untitled bill'}`,
+        `${sourceLabel}${match.groupName ? ` in ${match.groupName}` : ''}${match.billDate ? ` on ${match.billDate}` : ''}`,
+        match.people?.length ? `People: ${match.people.join(', ')}` : '',
+        itemNames ? `Items: ${itemNames}` : '',
+        splitSummary ? `Split: ${splitSummary}` : '',
+        reasons ? `Why it matches: ${reasons}` : '',
+      ].filter(Boolean).join('\n')
+    })
+    .join('\n\n')
+}
+
+function buildRevisionPrompt({ message, people, previousSplitHints, receipt, split, title }: {
   message: string
   people: string[]
+  previousSplitHints?: string
   receipt: any
   split: any[]
   title: string
@@ -161,7 +190,7 @@ function buildRevisionPrompt({ message, people, receipt, split, title }: {
     '1. Immediately call log_progress with stage "revise".',
     '2. If the receipt math needs a safe repair, call reconcile_extracted_receipt before you touch the split.',
     '3. Only if the user explicitly corrects extracted receipt data, call edit_extracted_receipt.',
-    '4. If prior meals in this group might help you infer ownership, call search_previous_splits once before you assign billItems.',
+    '4. Review the previous split hints below when they are present. Only if you still need a narrower lookup, call search_previous_splits once before you assign billItems.',
     '5. Rework the save-ready billItems using the parsed receipt and the current split.',
     '6. Recompute the participant split from those billItems.',
     '7. Either call submit_split_plan exactly once or call ask_follow_up_question exactly once.',
@@ -175,8 +204,10 @@ function buildRevisionPrompt({ message, people, receipt, split, title }: {
     '- Keep notes short and concrete.',
     '- Use reconcile_extracted_receipt for safe math cleanup such as subtotal, tax, tip, total, money-scale, or rounding issues.',
     '- Do not call edit_extracted_receipt unless the user explicitly corrects the extracted receipt.',
-    '- Use search_previous_splits when the dish ownership is ambiguous, when the group tends to order similar meals, or when the user references a previous split.',
+    '- Use the previous split hints below when the dish ownership is ambiguous, when the group tends to order similar meals, or when the user references a previous split.',
+    '- If the preloaded hints are not enough, call search_previous_splits once with a narrower query before you assign billItems.',
     '- Treat previous splits as hints, not truth. Prefer same group and same people when you borrow any pattern.',
+    '- Only call ask_follow_up_question after you have considered the previous split hints below.',
     ...buildClarificationRules(),
     ...buildParticipantRules(people),
     '',
@@ -186,14 +217,17 @@ function buildRevisionPrompt({ message, people, receipt, split, title }: {
     'Parsed receipt:',
     buildReceiptSummary(receipt),
     '',
+    previousSplitHints ? `Previous split hints:\n${previousSplitHints}` : '',
+    previousSplitHints ? '' : '',
     'Current split:',
     buildCurrentSplitSummary(split, receipt?.currency || 'EUR'),
   ].join('\n')
 }
 
-function buildReceiptSplitPrompt({ message, people, receipt, title }: {
+function buildReceiptSplitPrompt({ message, people, previousSplitHints, receipt, title }: {
   message: string
   people: string[]
+  previousSplitHints?: string
   receipt: any
   title: string
 }) {
@@ -205,7 +239,7 @@ function buildReceiptSplitPrompt({ message, people, receipt, title }: {
     '1. Immediately call log_progress with stage "split".',
     '2. If the receipt math needs a safe repair, call reconcile_extracted_receipt before you build billItems.',
     '3. Only if the user explicitly corrects extracted receipt data, call edit_extracted_receipt.',
-    '4. If prior meals in this group might help you infer ownership, call search_previous_splits once before you assign billItems.',
+    '4. Review the previous split hints below when they are present. Only if you still need a narrower lookup, call search_previous_splits once before you assign billItems.',
     '5. Build save-ready billItems using the parsed receipt and the user instruction.',
     '6. Compute the participant split from those billItems.',
     '7. Either call submit_split_plan exactly once or call ask_follow_up_question exactly once.',
@@ -220,9 +254,11 @@ function buildReceiptSplitPrompt({ message, people, receipt, title }: {
     '- Keep notes short and concrete.',
     '- Use reconcile_extracted_receipt for safe math cleanup such as subtotal, tax, tip, total, money-scale, or rounding issues.',
     '- Do not call edit_extracted_receipt unless the user explicitly corrects the extracted receipt.',
-    '- Use search_previous_splits when the dish ownership is ambiguous, when the group tends to order similar meals, or when the user references a previous split.',
+    '- Use the previous split hints below when the dish ownership is ambiguous, when the group tends to order similar meals, or when the user references a previous split.',
+    '- If the preloaded hints are not enough, call search_previous_splits once with a narrower query before you assign billItems.',
     '- Treat previous splits as hints, not truth. Prefer same group and same people when you borrow any pattern.',
-    '- If the user only gave you the group or participant list, call ask_follow_up_question with one short question about how the receipt should be split before you create the first split.',
+    '- Only call ask_follow_up_question after you have considered the previous split hints below. If those hints support a practical first split, make it instead of asking who had what.',
+    '- If the user only gave you the group or participant list, use the previous split hints first. Only call ask_follow_up_question if those hints still do not give you a practical first split.',
     ...buildClarificationRules(),
     ...buildGroupSelectionRules(people),
     ...buildParticipantRules(people),
@@ -232,7 +268,58 @@ function buildReceiptSplitPrompt({ message, people, receipt, title }: {
     '',
     'Parsed receipt:',
     buildReceiptSummary(receipt),
+    '',
+    previousSplitHints ? `Previous split hints:\n${previousSplitHints}` : '',
   ].join('\n')
+}
+
+async function loadPreviousSplitHints({
+  chatId,
+  groupId,
+  onEvent,
+  people,
+  personId,
+  receipt,
+}: {
+  chatId?: string
+  groupId?: string
+  onEvent: (payload: any) => void
+  people: string[]
+  personId?: string
+  receipt: any
+}) {
+  if (!personId || !receipt) {
+    return ''
+  }
+
+  await onEvent({
+    type: 'agent_progress',
+    message: groupId
+      ? 'Penny is checking what this group ate before.'
+      : 'Penny is checking similar previous splits.',
+    stage: 'memory',
+  })
+
+  const result = await searchPreviousSplits({
+    chatId,
+    groupId,
+    maxResults: 3,
+    people,
+    personId,
+    receipt,
+  })
+
+  if (!result.matches.length) {
+    return ''
+  }
+
+  await onEvent({
+    type: 'agent_progress',
+    message: result.summary,
+    stage: 'memory',
+  })
+
+  return buildPreviousSplitHintText(result.matches)
 }
 
 function getSplitPlanError({
@@ -978,11 +1065,20 @@ export async function runPiBillRevisionAgent({
     session,
     statusMessage: 'Penny is revising the split.',
   })
+  const previousSplitHints = await loadPreviousSplitHints({
+    chatId,
+    groupId,
+    onEvent,
+    people,
+    personId,
+    receipt: currentReceipt.value,
+  })
 
   try {
     await session.prompt(buildRevisionPrompt({
       message,
       people,
+      previousSplitHints,
       receipt: currentReceipt.value,
       split,
       title,
@@ -1160,11 +1256,20 @@ export async function runPiBillReceiptSplitAgent({
     session,
     statusMessage: 'Penny is building the first split.',
   })
+  const previousSplitHints = await loadPreviousSplitHints({
+    chatId,
+    groupId,
+    onEvent,
+    people,
+    personId,
+    receipt: currentReceipt.value,
+  })
 
   try {
     await session.prompt(buildReceiptSplitPrompt({
       message,
       people,
+      previousSplitHints,
       receipt: currentReceipt.value,
       title,
     }))
