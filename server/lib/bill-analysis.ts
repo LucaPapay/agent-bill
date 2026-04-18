@@ -50,6 +50,35 @@ function normalizeItems(items: any[]) {
     .filter((item: any) => item.amountCents > 0)
 }
 
+function scaleMoney(value: number, scale: number) {
+  if (!value || scale === 1) {
+    return value
+  }
+
+  return Math.max(0, Math.round(value / scale))
+}
+
+function inferReceiptMoneyScale(itemSubtotalCents: number, subtotalCents: number, totalCents: number) {
+  if (!itemSubtotalCents) {
+    return 1
+  }
+
+  for (const scale of [100, 10]) {
+    const scaledSubtotal = scaleMoney(subtotalCents, scale)
+    const scaledTotal = scaleMoney(totalCents, scale)
+
+    if (scaledTotal >= itemSubtotalCents * 0.9 && scaledTotal <= itemSubtotalCents * 1.25) {
+      return scale
+    }
+
+    if (scaledSubtotal >= itemSubtotalCents * 0.85 && scaledSubtotal <= itemSubtotalCents * 1.15) {
+      return scale
+    }
+  }
+
+  return 1
+}
+
 function normalizeSplit(split: any[] | undefined, people: string[], totalCents: number) {
   const fallback = splitEvenly(totalCents, people)
 
@@ -222,17 +251,29 @@ export function normalizePiAnalysis({ title, people, imageProvided, notes = [] a
 export function normalizeExtractedReceipt(receipt: any) {
   const items = normalizeItems(receipt?.items || [])
   const subtotalFromItems = items.reduce((sum: number, item: any) => sum + item.amountCents, 0)
-  const subtotalCents = toCents(receipt?.subtotalCents) || subtotalFromItems
-  const taxCents = toCents(receipt?.taxCents)
-  const tipCents = toCents(receipt?.tipCents)
-  const totalCents = toCents(receipt?.totalCents) || subtotalCents + taxCents + tipCents
+  const rawSubtotalCents = toCents(receipt?.subtotalCents) || subtotalFromItems
+  const rawTaxCents = toCents(receipt?.taxCents)
+  const rawTipCents = toCents(receipt?.tipCents)
+  const rawTotalCents = toCents(receipt?.totalCents) || rawSubtotalCents + rawTaxCents + rawTipCents
+  const moneyScale = inferReceiptMoneyScale(subtotalFromItems, rawSubtotalCents, rawTotalCents)
+  const subtotalCents = scaleMoney(rawSubtotalCents, moneyScale) || subtotalFromItems
+  const taxCents = scaleMoney(rawTaxCents, moneyScale)
+  const tipCents = scaleMoney(rawTipCents, moneyScale)
+  const totalCents = scaleMoney(rawTotalCents, moneyScale) || subtotalCents + taxCents + tipCents
+  const notes = Array.isArray(receipt?.notes)
+    ? receipt.notes.map((note: any) => String(note).trim()).filter(Boolean)
+    : []
+
+  if (moneyScale > 1) {
+    notes.push(`Normalized OpenAI money fields by ${moneyScale}x to match the item totals.`)
+  }
 
   return {
     billDate: String(receipt?.billDate || '').trim(),
     currency: String(receipt?.currency || 'EUR').trim() || 'EUR',
     items,
     merchant: String(receipt?.merchant || '').trim(),
-    notes: Array.isArray(receipt?.notes) ? receipt.notes.map((note: any) => String(note).trim()).filter(Boolean) : [],
+    notes,
     subtotalCents,
     taxCents,
     tipCents,
@@ -265,7 +306,7 @@ export function createAgentAnalysis({ title, people, plan, receipt, imageProvide
       used: true,
     },
     pi: {
-      model: process.env.PI_AGENT_MODEL || 'gpt-5-mini',
+      model: process.env.PI_AGENT_MODEL || 'gpt-4.1-mini',
       used: true,
     },
     receipt,

@@ -1,6 +1,6 @@
 import { readBody } from 'h3'
 import { z } from 'zod'
-import { createAnalysisJob } from '../../lib/analysis-jobs'
+import { createAnalysisJob } from '../../../lib/analysis-jobs'
 
 const inputSchema = z.object({
   imageBase64: z.string().optional(),

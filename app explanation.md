@@ -38,10 +38,12 @@ The manual ledger track is still the stable storage base. The newer frontend des
 
 Separately:
 
-1. The user can upload a receipt image or paste bill text.
-2. If `OPENAI_API_KEY` exists, Pi analyzes the bill and proposes a split.
-3. If not, the app falls back to a local text parser and even split.
-4. Every successful analysis run is saved as a `bill_runs` record.
+1. The Scan screen now expects a real receipt image.
+2. On mobile it opens the camera, and elsewhere it opens a file picker.
+3. As soon as the user selects an image, the frontend creates a streamed analysis job.
+4. OpenAI extracts a structured receipt, then Penny runs one Pi agent pass and streams progress back over SSE.
+5. Every successful analysis run is saved as a `bill_runs` record.
+6. The backend still supports raw text input for local fallback work, but that path is no longer exposed in the main scan UI.
 
 ## Current bill behavior
 
@@ -201,8 +203,9 @@ The real manual-ledger functionality is now connected into the route structure l
 
 The scan-first design flow is still only partially connected today:
 
-- `Scan` and `Chat Split` are still presentation/demo flow
-- they do not yet create saved ledger bills
+- `Scan` now runs the real backend receipt pipeline with SSE updates
+- `Chat Split` is still downstream presentation flow
+- the scan result does not yet create a saved ledger bill automatically
 - the durable manual workflow now runs through `/groups` -> `/groups/:groupId` -> `/groups/:groupId/bills/new` -> `/groups/:groupId/bills/:billId`
 
 ## Current frontend structure
@@ -245,6 +248,6 @@ That simplification exists in the backend and is rendered in the group detail an
 Useful next work after this:
 
 - connect receipt-analysis output into saved itemized bills
-- add OCR fallback for image-only mode without Pi
+- add image OCR fallback for no-key local mode
 - add household/session concepts before auth
 - add payment settlement state once simplified group obligations are visible
