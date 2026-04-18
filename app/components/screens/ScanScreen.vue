@@ -231,7 +231,7 @@ function formatMoney(amountCents, currency = 'EUR') {
 }
 
 function formatAmountInput(amountCents) {
-  return ((amountCents || 0) / 100).toFixed(2)
+  return ((amountCents || 0) / 100).toFixed(2).replace('.', ',')
 }
 
 function revokePreview() {

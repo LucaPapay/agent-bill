@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PropType } from 'vue'
 import { reactive, watch } from 'vue'
+import MoneyInput from '../app/MoneyInput.vue'
 
 type Person = {
   name: string
@@ -65,7 +66,7 @@ watch(() => props.transfers, (transfers) => {
 }, { deep: true, immediate: true })
 
 function centsToInput(cents: number) {
-  return ((cents || 0) / 100).toFixed(2)
+  return ((cents || 0) / 100).toFixed(2).replace('.', ',')
 }
 
 function toCents(value: string | number | undefined | null) {
@@ -143,13 +144,12 @@ function submitPayment(transfer: SettlementTransfer) {
         </div>
 
         <form style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;" @submit.prevent="submitPayment(transfer)">
-          <input
-            v-model="paymentAmounts[transfer.id]"
-            type="text"
-            inputmode="decimal"
+          <MoneyInput
+            :model-value="paymentAmounts[transfer.id]"
             :disabled="saving"
-            style="flex: 1 1 120px; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 14px; background: white; padding: 10px 12px; outline: none;"
-          >
+            :input-style="{ flex: '1 1 120px', border: '1.5px solid rgba(20,18,16,0.12)', borderRadius: '14px', background: 'white', padding: '10px 12px', outline: 'none' }"
+            @update:model-value="paymentAmounts[transfer.id] = $event"
+          />
 
           <button class="btn btn-primary" :disabled="saving || !paymentAmounts[transfer.id]?.trim()">
             Record payment
