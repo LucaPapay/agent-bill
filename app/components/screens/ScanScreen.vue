@@ -23,7 +23,7 @@ const selectedFile = ref(null)
 const showCameraCapture = ref(false)
 const scrollRef = ref(null)
 const composerText = ref('')
-const composerSeededChatId = ref('')
+const composerSeedKey = ref('')
 const localGroupId = ref('')
 const leadMessages = ref([])
 const tailMessages = ref([])
@@ -279,7 +279,7 @@ function pushLocalMessage(who, text) {
 
 function resetDraftInputs() {
   composerText.value = ''
-  composerSeededChatId.value = ''
+  composerSeedKey.value = ''
   selectedFile.value = null
   leadMessages.value = []
   tailMessages.value = []
@@ -442,18 +442,41 @@ function clearGroup() {
 }
 
 async function continueToSplit() {
-  if (!selectedGroup.value || !parsedReceipt.value || !splitRows.value.length) {
+  if (!selectedGroup.value || !parsedReceipt.value) {
     return false
   }
 
   const seedChatId = String(analysis.chatId.value || analysis.result.value?.chatId || '').trim()
+  const hasResolvedSplit = splitRows.value.length > 0
+  const seedKey = `${seedChatId || selectedGroup.value.id}:${hasResolvedSplit ? 'split' : 'parsed'}`
 
-  if (seedChatId && composerSeededChatId.value === seedChatId) {
+  if (composerSeedKey.value === seedKey) {
     return true
   }
 
+  const splitDraftItems = hasResolvedSplit
+    ? splitRows.value.map((row, index) => {
+        const membership = selectedGroup.value?.memberships?.find((entry) =>
+          String(entry?.person?.name || '').trim().toLowerCase() === String(row.person || '').trim().toLowerCase(),
+        )
+
+        if (!membership) {
+          return null
+        }
+
+        return {
+          amount: formatAmountInput(row.amountCents || 0),
+          assignedPersonIds: [membership.personId],
+          id: `scan-split-${seedChatId || Date.now()}-${index}`,
+          name: `${row.person} share`,
+        }
+      }).filter(Boolean)
+    : []
+
   stageBillComposerDraft({
-    billItems: parsedItems.value.length
+    billItems: splitDraftItems.length
+      ? splitDraftItems
+      : parsedItems.value.length
       ? parsedItems.value.map((item, index) => ({
           amount: formatAmountInput(item.amountCents || 0),
           assignedPersonIds: [],
@@ -462,7 +485,7 @@ async function continueToSplit() {
         }))
       : [],
     billPaidByPersonId: selectedGroup.value.memberships?.[0]?.personId || '',
-    billTip: formatAmountInput(parsedReceipt.value.tipCents || 0),
+    billTip: splitDraftItems.length ? '0.00' : formatAmountInput(parsedReceipt.value.tipCents || 0),
     billTitle: parsedReceipt.value.merchant || `${selectedGroup.value.name} receipt`,
     billTotal: formatAmountInput(parsedReceipt.value.totalCents || 0),
     groupId: selectedGroup.value.id,
@@ -470,12 +493,12 @@ async function continueToSplit() {
 
   setSelectedGroup(selectedGroup.value.id)
   consumeBillComposerDraft(selectedGroup.value.id)
-  composerSeededChatId.value = seedChatId || selectedGroup.value.id
+  composerSeedKey.value = seedKey
   return true
 }
 
 function openBillComposerFromScan() {
-  composerSeededChatId.value = ''
+  composerSeedKey.value = ''
   void continueToSplit()
 }
 
@@ -516,11 +539,11 @@ watch(
 watch(
   [
     () => analysis.chatId.value,
-    () => splitRows.value.length,
+    () => parsedReceipt.value,
     () => localGroupId.value,
   ],
   () => {
-    if (!selectedGroup.value || !splitRows.value.length) {
+    if (!selectedGroup.value || !parsedReceipt.value) {
       return
     }
 
@@ -701,7 +724,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-if="parsedReceipt && splitRows.length" class="scan-chat-row">
+          <div v-if="parsedReceipt" class="scan-chat-row">
             <div class="scan-avatar">
               <IconGlyph name="sparkle" width="16" height="16" />
             </div>
