@@ -48,6 +48,12 @@ See [app explanation.md](</Users/lucapapay/dev/agent-bill/app explanation.md>) f
 - Each bill stores bill items, item assignees, member shares, and raw transfers.
 - The selected group also exposes a simplified settlement view built from all transfers in that group.
 
+## Frontend Shell Status
+
+- The app now uses a multi-screen shell instead of one long ledger page.
+- `Groups`, `Assign`, and `Settled` are the screens currently wired to real ledger data.
+- `Scan` and `Chat Split` currently act as design/demo flow and are not yet connected back into saved itemized bills.
+
 ## Next Good Steps
 
 - Add real OCR fallback for image-only mode without Pi.

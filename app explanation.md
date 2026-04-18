@@ -193,6 +193,12 @@ The real manual-ledger functionality is connected into that shell through the Gr
 - Assign is where itemized bills are created and previewed
 - Settled is where saved bill detail and simplified group settlement are reviewed
 
+The scan-first design flow is only partially connected today:
+
+- `Scan` and `Chat Split` are still presentation/demo flow
+- they do not yet create saved ledger bills
+- the durable manual workflow still runs through `Groups` -> `Assign` -> `Settled`
+
 ## Group settlement behavior
 
 The selected group exposes a simplified settlement view:
