@@ -96,6 +96,7 @@ const demoGroups = [
         title: 'Neon Sushi Sprint',
       },
     ],
+    backgroundColor: '#F6C453',
     icon: '🍷',
     members: ['Jojo', 'Alice', 'Bob', 'Cara', 'Diego'],
     name: 'Moonlight Supper Club',
@@ -168,6 +169,7 @@ const demoGroups = [
         title: 'Detergent & Disco Lights',
       },
     ],
+    backgroundColor: '#B9E3C6',
     icon: '🏠',
     members: ['Jojo', 'Esme', 'Farah', 'Gus'],
     name: 'Studio House League',
@@ -233,6 +235,7 @@ const demoGroups = [
         title: 'Summit Sunrise Breakfast',
       },
     ],
+    backgroundColor: '#A9D4F2',
     icon: '🏔️',
     members: ['Bob', 'Cara', 'Hana', 'Ivo', 'Jojo'],
     name: 'Alpine Escape 2026',
@@ -423,6 +426,7 @@ async function ensureSchema() {
       id text primary key,
       name text not null,
       icon text,
+      background_color text,
       created_at timestamptz not null default now()
     )
   `
@@ -430,6 +434,11 @@ async function ensureSchema() {
   await sql`
     alter table groups
     add column if not exists icon text
+  `
+
+  await sql`
+    alter table groups
+    add column if not exists background_color text
   `
 
   await sql`
@@ -538,8 +547,14 @@ async function seedDemoLedger() {
       const groupId = randomUUID()
 
       await tx`
-        insert into groups (id, name, icon, created_at)
-        values (${groupId}, ${group.name}, ${group.icon}, ${timestampMinutesAgo(3000 - (groupIndex * 10))})
+        insert into groups (id, name, icon, background_color, created_at)
+        values (
+          ${groupId},
+          ${group.name},
+          ${group.icon},
+          ${group.backgroundColor || null},
+          ${timestampMinutesAgo(3000 - (groupIndex * 10))}
+        )
       `
 
       for (const memberName of group.members) {

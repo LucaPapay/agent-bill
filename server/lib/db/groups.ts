@@ -74,18 +74,22 @@ export async function findOrCreateGooglePerson({
   return mapPerson(rows[0]!)
 }
 
-export async function createGroup(name: string, icon: string) {
+export async function createGroup(name: string, presentation: {
+  backgroundColor: string
+  icon: string
+}) {
   await ensureSchema()
 
   const id = randomUUID()
   const rows = await db()`
-    insert into groups (id, name, icon)
-    values (${id}, ${name}, ${icon})
-    returning id, name, icon, created_at
+    insert into groups (id, name, icon, background_color)
+    values (${id}, ${name}, ${presentation.icon}, ${presentation.backgroundColor})
+    returning id, name, icon, background_color, created_at
   `
   const row = rows[0]!
 
   return {
+    backgroundColor: row.background_color || '',
     createdAt: row.created_at,
     id: row.id,
     icon: row.icon || '',

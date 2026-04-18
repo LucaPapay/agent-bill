@@ -1,19 +1,14 @@
 <script setup lang="ts">
-import CreatePersonForm from '../../components/ledger/CreatePersonForm.vue'
 import GroupCard from '../../components/app/GroupCard.vue'
-import GroupIconPicker from '../../components/ledger/GroupIconPicker.vue'
 import PageShell from '../../components/layout/PageShell.vue'
-import { getGroupIconLabel } from '../../../shared/group-icons'
+import { getGroupIconBackground, getGroupIconLabel } from '../../../shared/group-icons'
 
 const {
   createGroup,
-  createPerson,
   errorMessage,
   formatCents,
-  groupIcon,
   groupName,
   ledger,
-  personName,
   saving,
 } = useLedgerState()
 
@@ -61,9 +56,6 @@ function submitGroup() {
   })
 }
 
-function submitPerson() {
-  createPerson()
-}
 </script>
 
 <template>
@@ -87,18 +79,12 @@ function submitPerson() {
       </div>
 
       <div class="section-pad groups-grid" style="padding-bottom: 96px;">
-        <CreatePersonForm
-          :person-name="personName"
-          :saving="saving"
-          @submit="submitPerson"
-          @update:person-name="personName = $event"
-        />
-
         <GroupCard
           v-for="group in ledger.groups"
           :key="group.id"
           :amount-label="groupOpenAmount(group)"
           :avatar-names="groupMemberNames(group)"
+          :icon-background="getGroupIconBackground(group)"
           :icon-label="getGroupIconLabel(group)"
           :subtitle="`${group.bills.length} bills · ${group.memberships.length} people`"
           :title="group.name"
@@ -115,7 +101,7 @@ function submitPerson() {
               <div
                 style="width: 52px; height: 52px; border-radius: 16px; background: var(--cream-2); color: var(--ink); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; border: 1.5px dashed rgba(20,18,16,0.35);"
               >
-                {{ groupIcon }}
+                AI
               </div>
 
               <div style="flex: 1; min-width: 0;">
@@ -123,7 +109,7 @@ function submitPerson() {
                   Create a new group
                 </div>
                 <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
-                  Start a shared ledger for dinner, travel, or the flat.
+                  Start a shared ledger for dinner, travel, or the flat. Penny picks the icon and background color.
                 </div>
               </div>
             </div>
@@ -135,8 +121,6 @@ function submitPerson() {
               style="width: 100%; margin-top: 16px; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
               @input="updateGroupName"
             >
-
-            <GroupIconPicker :model-value="groupIcon" @update:model-value="groupIcon = $event" />
 
             <div
               v-if="errorMessage"

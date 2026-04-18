@@ -16,6 +16,7 @@ import {
   voidSettlementPayment,
 } from '../db'
 import { buildBillLedger } from '../group-ledger'
+import { generateGroupPresentation } from '../openai-group-presentation'
 
 export async function getLedger(personId: string) {
   return await getLedgerSnapshot(personId)
@@ -26,8 +27,9 @@ export async function createLedgerPerson(name: string, personId: string) {
   return await getLedgerSnapshot(personId)
 }
 
-export async function createLedgerGroup(name: string, icon: string, personId: string) {
-  const group = await createGroup(name, icon)
+export async function createLedgerGroup(name: string, personId: string) {
+  const presentation = await generateGroupPresentation(name)
+  const group = await createGroup(name, presentation)
   await addPersonToGroup(group.id, personId)
 
   return {

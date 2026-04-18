@@ -3,7 +3,16 @@ import PageShell from '../components/layout/PageShell.vue'
 import ProfileScreen from '../components/screens/ProfileScreen.vue'
 
 const { clear, user } = useUserSession()
-const { addCurrentUserToAllGroups, errorMessage, health, ledger, resetState, saving } = useLedgerState()
+const {
+  addCurrentUserToAllGroups,
+  createPerson,
+  errorMessage,
+  health,
+  ledger,
+  personName,
+  resetState,
+  saving,
+} = useLedgerState()
 
 async function logout() {
   await clear()
@@ -14,6 +23,10 @@ async function logout() {
 function addToAllGroups() {
   return addCurrentUserToAllGroups()
 }
+
+function submitPerson() {
+  return createPerson()
+}
 </script>
 
 <template>
@@ -23,9 +36,12 @@ function addToAllGroups() {
       :error-message="errorMessage"
       :health="health"
       :ledger="ledger"
+      :person-name="personName"
       :saving="saving"
       @add-to-all-groups="addToAllGroups"
       @logout="logout"
+      @submit-person="submitPerson"
+      @update:person-name="personName = $event"
     />
   </PageShell>
 </template>
