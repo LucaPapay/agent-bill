@@ -74,18 +74,22 @@ export async function findOrCreateGooglePerson({
   return mapPerson(rows[0]!)
 }
 
-export async function createGroup(name: string, icon: string) {
+export async function createGroup(name: string, presentation: {
+  backgroundColor: string
+  icon: string
+}) {
   await ensureSchema()
 
   const id = randomUUID()
   const rows = await db()`
-    insert into groups (id, name, icon)
-    values (${id}, ${name}, ${icon})
-    returning id, name, icon, created_at
+    insert into groups (id, name, icon, background_color)
+    values (${id}, ${name}, ${presentation.icon}, ${presentation.backgroundColor})
+    returning id, name, icon, background_color, created_at
   `
   const row = rows[0]!
 
   return {
+    backgroundColor: row.background_color || '',
     createdAt: row.created_at,
     id: row.id,
     icon: row.icon || '',
@@ -115,6 +119,23 @@ export async function addPersonToGroup(groupId: string, personId: string) {
     values (${id}, ${groupId}, ${personId})
     on conflict (group_id, person_id) do nothing
   `
+}
+
+export async function addPersonToAllGroups(personId: string) {
+  await ensureSchema()
+
+  const groups = await db()`
+    select id
+    from groups
+  `
+
+  for (const group of groups) {
+    await db()`
+      insert into group_memberships (id, group_id, person_id)
+      values (${randomUUID()}, ${group.id}, ${personId})
+      on conflict (group_id, person_id) do nothing
+    `
+  }
 }
 
 export async function getGroupMemberIds(groupId: string) {

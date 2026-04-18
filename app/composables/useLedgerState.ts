@@ -1,5 +1,4 @@
 import { computed } from 'vue'
-import { defaultGroupIcon } from '../../shared/group-icons'
 
 let loadingPromise: Promise<void> | null = null
 
@@ -22,7 +21,6 @@ export function useLedgerState() {
 
   const personName = useState('ledger-state:person-name', () => '')
   const groupName = useState('ledger-state:group-name', () => '')
-  const groupIcon = useState('ledger-state:group-icon', () => defaultGroupIcon)
   const personToAddId = useState('ledger-state:person-to-add-id', () => '')
 
   const billTitle = useState('ledger-state:bill-title', () => 'Friday dinner')
@@ -566,7 +564,6 @@ export function useLedgerState() {
     pendingBillComposerDraft.value = null
     personName.value = ''
     groupName.value = ''
-    groupIcon.value = defaultGroupIcon
     personToAddId.value = ''
     billItemId.value = 0
     resetBillForm()
@@ -615,12 +612,10 @@ export function useLedgerState() {
     saving.value = true
 
     return api.createLedgerGroup({
-      icon: groupIcon.value || defaultGroupIcon,
       name: groupName.value,
     }).then(
       (value: any) => {
         groupName.value = ''
-        groupIcon.value = defaultGroupIcon
         selectedGroupId.value = value.groupId
         applyLedger(value.ledger)
         return value
@@ -652,6 +647,24 @@ export function useLedgerState() {
       },
       (error: any) => {
         errorMessage.value = error?.message || 'Could not add the person to the group.'
+        return null
+      },
+    ).finally(() => {
+      saving.value = false
+    })
+  }
+
+  function addCurrentUserToAllGroups() {
+    errorMessage.value = ''
+    saving.value = true
+
+    return api.addLedgerPersonToAllGroups().then(
+      (value: any) => {
+        applyLedger(value)
+        return value
+      },
+      (error: any) => {
+        errorMessage.value = error?.message || 'Could not add you to every group.'
         return null
       },
     ).finally(() => {
@@ -814,6 +827,7 @@ export function useLedgerState() {
 
   return {
     addBillItem,
+    addCurrentUserToAllGroups,
     addPersonToGroup,
     allBills,
     billItems,
@@ -837,7 +851,6 @@ export function useLedgerState() {
     formatCents,
     getBillById,
     getGroupById,
-    groupIcon,
     groupName,
     health,
     homeSummary,

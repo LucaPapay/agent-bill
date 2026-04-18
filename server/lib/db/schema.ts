@@ -48,6 +48,7 @@ export async function createSchema(sql: any) {
       id text primary key,
       name text not null,
       icon text,
+      background_color text,
       created_at timestamptz not null default now()
     )
   `
@@ -55,6 +56,11 @@ export async function createSchema(sql: any) {
   await sql`
     alter table groups
     add column if not exists icon text
+  `
+
+  await sql`
+    alter table groups
+    add column if not exists background_color text
   `
 
   await sql`

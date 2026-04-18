@@ -2,8 +2,7 @@
 import AvatarBadge from '../app/AvatarBadge.vue'
 import GroupCard from '../app/GroupCard.vue'
 import IconGlyph from '../app/IconGlyph.vue'
-import GroupIconPicker from '../ledger/GroupIconPicker.vue'
-import { getGroupIconLabel } from '../../../shared/group-icons'
+import { getGroupIconBackground, getGroupIconLabel } from '../../../shared/group-icons'
 
 const props = defineProps({
   canAddPersonToGroup: Boolean,
@@ -16,10 +15,6 @@ const props = defineProps({
     default: value => value,
   },
   groupName: {
-    type: String,
-    default: '',
-  },
-  groupIcon: {
     type: String,
     default: '',
   },
@@ -52,7 +47,6 @@ const emit = defineEmits([
   'select-group',
   'submit-group',
   'submit-person',
-  'update:group-icon',
   'update:group-name',
   'update:person-name',
   'update:person-to-add-id',
@@ -70,14 +64,6 @@ function groupOpenAmount(group) {
 
 function groupMemberNames(group) {
   return (group.memberships || []).map(membership => membership.person.name)
-}
-
-function groupIconBackground(group) {
-  return props.selectedGroup?.id === group.id ? 'var(--ink)' : 'var(--marigold)'
-}
-
-function groupIconColor(group) {
-  return props.selectedGroup?.id === group.id ? 'var(--cream)' : 'var(--ink)'
 }
 </script>
 
@@ -129,7 +115,7 @@ function groupIconColor(group) {
             Create group
           </div>
           <div style="font-size: 14px; line-height: 1.5; margin-top: 8px;">
-            Groups own bills, raw transfers, and the simplified settlement.
+            Groups own bills, raw transfers, and the simplified settlement. Penny picks the icon and background color.
           </div>
           <input
             :value="groupName"
@@ -138,7 +124,6 @@ function groupIconColor(group) {
             style="width: 100%; margin-top: 14px; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
             @input="emit('update:group-name', $event.target.value)"
           >
-          <GroupIconPicker :model-value="groupIcon" @update:model-value="emit('update:group-icon', $event)" />
           <button class="btn btn-accent btn-block" style="margin-top: 12px;" :disabled="saving || !groupName.trim()">
             Add group
           </button>
@@ -156,8 +141,7 @@ function groupIconColor(group) {
         :key="group.id"
         :amount-label="groupOpenAmount(group)"
         :avatar-names="groupMemberNames(group)"
-        :icon-background="groupIconBackground(group)"
-        :icon-color="groupIconColor(group)"
+        :icon-background="getGroupIconBackground(group)"
         :icon-label="getGroupIconLabel(group)"
         :selected="selectedGroup?.id === group.id"
         :subtitle="`${group.bills.length} bills · ${group.memberships.length} people`"

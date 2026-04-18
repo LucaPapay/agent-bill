@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  addLedgerPersonToAllGroups,
   addLedgerPersonToGroup,
   createLedgerBill,
   createLedgerGroup,
@@ -32,11 +33,10 @@ export const createLedgerPersonProcedure = protectedRpc
 
 export const createLedgerGroupProcedure = protectedRpc
   .input(z.object({
-    icon: z.string().trim().min(1).max(16),
     name: z.string().trim().min(1),
   }))
   .handler(async ({ context, input }) => {
-    return await createLedgerGroup(input.name, input.icon, context.personId)
+    return await createLedgerGroup(input.name, context.personId)
   })
 
 export const addLedgerPersonToGroupProcedure = protectedRpc
@@ -46,6 +46,11 @@ export const addLedgerPersonToGroupProcedure = protectedRpc
   }))
   .handler(async ({ context, input }) => {
     return await addLedgerPersonToGroup(context.personId, input.groupId, input.personId)
+  })
+
+export const addLedgerPersonToAllGroupsProcedure = protectedRpc
+  .handler(async ({ context }) => {
+    return await addLedgerPersonToAllGroups(context.personId)
   })
 
 export const createLedgerBillProcedure = protectedRpc
@@ -103,6 +108,7 @@ export const undoSettlementPaymentProcedure = protectedRpc
   })
 
 export const ledgerRouter = {
+  addLedgerPersonToAllGroups: addLedgerPersonToAllGroupsProcedure,
   addLedgerPersonToGroup: addLedgerPersonToGroupProcedure,
   createLedgerBill: createLedgerBillProcedure,
   createLedgerGroup: createLedgerGroupProcedure,
