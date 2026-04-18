@@ -316,33 +316,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div class="scan-feed">
-            <div
-              v-for="(entry, index) in analysis.feed.value.length ? analysis.feed.value : [{ who: 'log', text: 'Waiting for the first analysis run.' }]"
-              :key="`${entry.text}-${index}`"
-              class="scan-feed-row"
-              :class="entry.who"
-            >
-              <div class="scan-feed-who">
-                {{ entry.who === 'penny' ? 'Penny' : 'System' }}
-              </div>
-              <div class="scan-feed-text">
-                {{ entry.text }}
-              </div>
-            </div>
-          </div>
-
-          <div v-if="assistantReply" class="scan-note">
-            <div class="scan-note-label">
-              Agent reply
-            </div>
-            <div>{{ assistantReply }}</div>
-          </div>
-
-          <div v-if="analysis.error.value" class="scan-error">
-            {{ analysis.error.value }}
-          </div>
-
           <div v-if="extractedReceipt" class="scan-result-card">
             <div class="scan-result-head">
               <div>
@@ -397,6 +370,39 @@ onBeforeUnmount(() => {
               <button class="btn btn-accent" :disabled="!canContinue" @click="continueToChat">
                 Continue to split chat
               </button>
+            </div>
+          </div>
+
+          <div v-if="assistantReply" class="scan-note">
+            <div class="scan-note-label">
+              Agent reply
+            </div>
+            <div>{{ assistantReply }}</div>
+          </div>
+
+          <div v-if="analysis.error.value" class="scan-error">
+            {{ analysis.error.value }}
+          </div>
+
+          <div class="scan-feed-shell">
+            <div class="scan-note-label">
+              Live feed
+            </div>
+
+            <div class="scan-feed">
+              <div
+                v-for="(entry, index) in analysis.feed.value.length ? analysis.feed.value : [{ who: 'log', text: 'Waiting for the first analysis run.' }]"
+                :key="`${entry.text}-${index}`"
+                class="scan-feed-row"
+                :class="entry.who"
+              >
+                <div class="scan-feed-who">
+                  {{ entry.who === 'penny' ? 'Penny' : 'System' }}
+                </div>
+                <div class="scan-feed-text">
+                  {{ entry.text }}
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -475,7 +481,7 @@ onBeforeUnmount(() => {
 }
 
 .scan-preview {
-  min-height: 320px;
+  min-height: 380px;
   overflow: hidden;
   border-radius: 22px;
   background:
@@ -649,9 +655,20 @@ onBeforeUnmount(() => {
   color: var(--muted);
 }
 
+.scan-feed-shell {
+  border-radius: 20px;
+  padding: 14px;
+  background: rgba(20, 18, 16, 0.04);
+  border: 1px solid rgba(20, 18, 16, 0.08);
+}
+
 .scan-feed {
   display: grid;
   gap: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+  overscroll-behavior: contain;
 }
 
 .scan-feed-row {
@@ -678,6 +695,15 @@ onBeforeUnmount(() => {
   margin-top: 6px;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.scan-feed::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scan-feed::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(20, 18, 16, 0.18);
 }
 
 .scan-note-label {

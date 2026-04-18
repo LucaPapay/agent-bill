@@ -60,6 +60,30 @@ const ticketLabel = computed(() => {
   return statusLabel.value
 })
 
+const statusChipLabel = computed(() => {
+  if (props.status === 'extracting') {
+    return 'Extracting'
+  }
+
+  if (props.status === 'agent') {
+    return 'Splitting'
+  }
+
+  if (props.status === 'complete') {
+    return 'Complete'
+  }
+
+  if (props.status === 'error') {
+    return 'Needs retry'
+  }
+
+  if (props.status === 'queued' || props.status === 'starting') {
+    return 'Starting'
+  }
+
+  return 'Ready'
+})
+
 function getNodes() {
   const stage = root.value
 
@@ -575,7 +599,7 @@ onBeforeUnmount(() => {
       <div class="receipt-split-caption" data-caption>
         <div>
           <p class="receipt-split-caption-label mono">
-            Penny mode
+            Penny is working
           </p>
           <p class="receipt-split-caption-title">
             {{ title }}
@@ -585,15 +609,13 @@ onBeforeUnmount(() => {
           </p>
         </div>
 
-        <button class="receipt-split-replay" type="button" @click="replay">
-          Replay cut
-        </button>
+        <div class="receipt-split-caption-side">
+          <div class="receipt-split-stat-chip mono" :class="props.status" data-stat-chip>
+            <span>Status</span>
+            <strong>{{ statusChipLabel }}</strong>
+          </div>
+        </div>
       </div>
-    </div>
-
-    <div class="receipt-split-stat-chip mono" data-stat-chip>
-      <span>Status</span>
-      <strong>{{ status }}</strong>
     </div>
   </div>
 </template>
@@ -601,7 +623,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .receipt-split-stage {
   position: relative;
-  min-height: 320px;
+  min-height: 380px;
   height: 100%;
   padding: 16px;
   background:
@@ -650,9 +672,9 @@ onBeforeUnmount(() => {
 
 .receipt-split-frame {
   position: relative;
-  min-height: 320px;
+  min-height: 380px;
   height: 100%;
-  padding: 78px 16px 16px;
+  padding: 78px 16px 20px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -687,7 +709,7 @@ onBeforeUnmount(() => {
 
 .receipt-split-image-stack {
   position: absolute;
-  inset: 72px 28px 112px;
+  inset: 72px 28px 138px;
   display: grid;
   place-items: center;
 }
@@ -803,6 +825,13 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
+.receipt-split-caption-side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: stretch;
+}
+
 .receipt-split-caption-label {
   margin: 0 0 6px;
   color: rgba(22, 19, 15, 0.48);
@@ -825,39 +854,40 @@ onBeforeUnmount(() => {
   line-height: 1.45;
 }
 
-.receipt-split-replay {
-  flex: 0 0 auto;
-  padding: 12px 16px;
-  border-radius: 999px;
-  background: var(--tomato);
-  color: var(--cream);
-  font-size: 13px;
-  font-weight: 700;
-  box-shadow: 0 14px 28px rgba(255, 90, 59, 0.28);
-}
-
 .receipt-split-stat-chip {
-  position: absolute;
-  right: 28px;
-  bottom: 26px;
-  z-index: 5;
-  padding: 9px 12px;
+  padding: 10px 14px;
   display: inline-flex;
   align-items: baseline;
   gap: 10px;
   border-radius: 999px;
-  background: rgba(17, 14, 11, 0.72);
+  background: rgba(17, 14, 11, 0.82);
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(12px);
   color: rgba(255, 247, 236, 0.82);
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .receipt-split-stat-chip strong {
   color: #fff5e9;
   font-size: 11px;
+}
+
+.receipt-split-stat-chip.complete {
+  background: rgba(27, 24, 19, 0.86);
+}
+
+.receipt-split-stat-chip.error {
+  background: rgba(107, 34, 22, 0.88);
+}
+
+.receipt-split-stat-chip.extracting,
+.receipt-split-stat-chip.agent,
+.receipt-split-stat-chip.queued,
+.receipt-split-stat-chip.starting {
+  background: rgba(80, 54, 12, 0.88);
 }
 
 @media (max-width: 640px) {
@@ -870,7 +900,7 @@ onBeforeUnmount(() => {
   }
 
   .receipt-split-image-stack {
-    inset: 72px 16px 122px;
+    inset: 72px 16px 142px;
   }
 
   .receipt-split-claw {
@@ -884,13 +914,12 @@ onBeforeUnmount(() => {
     align-items: stretch;
   }
 
-  .receipt-split-replay {
-    width: 100%;
+  .receipt-split-caption-side {
+    justify-content: flex-start;
   }
 
   .receipt-split-stat-chip {
-    right: 22px;
-    bottom: 18px;
+    width: fit-content;
   }
 }
 </style>
