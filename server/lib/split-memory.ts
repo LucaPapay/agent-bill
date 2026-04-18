@@ -273,6 +273,10 @@ function scoreCandidate(context: any, candidate: any) {
 export function rankPreviousSplitCandidates(candidates: any[], input: any) {
   const context = buildSearchContext(input)
 
+  if (!context.groupId) {
+    return []
+  }
+
   return candidates
     .map((candidate: any) => {
       const ranked = scoreCandidate(context, candidate)
@@ -311,6 +315,15 @@ export async function searchPreviousSplits({
   query?: string
   receipt: any
 }) {
+  const normalizedGroupId = String(groupId || '').trim()
+
+  if (!normalizedGroupId) {
+    return {
+      matches: [],
+      summary: 'Select the group before searching previous splits.',
+    }
+  }
+
   const ledger = await getLedgerSnapshot(personId)
   const groupNameById = new Map((ledger?.groups || []).map((group: any) => [String(group.id || '').trim(), String(group.name || '').trim()]))
   const chatCandidates = await loadSavedChatCandidates(personId, chatId)
@@ -322,7 +335,7 @@ export async function searchPreviousSplits({
     })),
   ]
   const matches = rankPreviousSplitCandidates(candidates, {
-    groupId,
+    groupId: normalizedGroupId,
     maxResults,
     people,
     query,
