@@ -30,13 +30,9 @@ export function appendBillChatReply(history: any[], message: string) {
   return pushEntry(history, 'user', message)
 }
 
-export function appendBillChatSystemMessage(history: any[], message: string) {
-  return pushEntry(history, 'log', message)
-}
-
 export function appendBillChatEvent(history: any[], payload: any) {
   if (payload.type === 'status') {
-    return pushEntry(history, payload.phase === 'agent' ? 'penny' : 'log', payload.message)
+    return history
   }
 
   if (payload.type === 'error') {
@@ -44,15 +40,11 @@ export function appendBillChatEvent(history: any[], payload: any) {
   }
 
   if (payload.type === 'receipt_extracted') {
-    return pushEntry(
-      history,
-      'log',
-      `Penny parsed ${payload.receipt.items.length} items from ${payload.receipt.merchant || 'the receipt'}.`,
-    )
+    return history
   }
 
   if (payload.type === 'agent_progress') {
-    return pushEntry(history, 'penny', payload.message)
+    return history
   }
 
   if (payload.type === 'agent_tool_start') {
