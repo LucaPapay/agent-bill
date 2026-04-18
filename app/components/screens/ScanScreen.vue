@@ -25,6 +25,7 @@ const scrollRef = ref(null)
 const composerText = ref('')
 const autoQuestionKey = ref('')
 const composerSeedKey = ref('')
+const groupCleared = ref(false)
 const localGroupId = ref('')
 const leadMessages = ref([])
 const tailMessages = ref([])
@@ -54,9 +55,15 @@ function getQueryGroupId() {
 }
 
 const availableGroups = computed(() => ledgerData.value.groups || [])
-const selectedGroup = computed(() =>
-  availableGroups.value.find(group => group.id === localGroupId.value) || null,
-)
+const persistedGroupId = computed(() => String(analysis.result.value?.groupId || '').trim())
+const selectedGroup = computed(() => {
+  if (groupCleared.value) {
+    return null
+  }
+
+  const resolvedGroupId = String(localGroupId.value || persistedGroupId.value || '').trim()
+  return availableGroups.value.find(group => group.id === resolvedGroupId) || null
+})
 const hasSavedChat = computed(() => Boolean(analysis.chatId.value))
 const isRunning = computed(() => ['starting', 'queued', 'extracting', 'agent'].includes(analysis.status.value))
 const isPennyLoading = computed(() => analysis.loadingChat.value || isRunning.value)
@@ -133,6 +140,13 @@ const shouldRequestGroupQuestion = computed(() =>
 const showGroupPickerPrompt = computed(() =>
   Boolean(
     awaitingSplitAnswer.value
+    && !selectedGroup.value
+    && availableGroups.value.length,
+  ),
+)
+const awaitingGroupSelection = computed(() =>
+  Boolean(
+    parsedReceipt.value
     && !selectedGroup.value
     && availableGroups.value.length,
   ),
@@ -327,6 +341,7 @@ function resetDraftInputs() {
   autoQuestionKey.value = ''
   composerText.value = ''
   composerSeedKey.value = ''
+  groupCleared.value = false
   selectedFile.value = null
   leadMessages.value = []
   tailMessages.value = []
@@ -380,6 +395,7 @@ function getGroupPeople(group) {
 }
 
 function confirmGroup(group, userText) {
+  groupCleared.value = false
   localGroupId.value = group.id
 
   if (parsedReceipt.value) {
@@ -434,6 +450,7 @@ function onFileChange(event) {
 
 async function onPickGroup(group) {
   if (parsedReceipt.value) {
+    groupCleared.value = false
     localGroupId.value = group.id
     await analysis.confirmGroupSelection(group.name, getGroupPeople(group), group.name, group.id)
     return
@@ -453,14 +470,15 @@ async function onSend() {
 
   const matchingGroup = resolveGroupFromMessage(message)
 
+  if (awaitingGroupSelection.value && matchingGroup) {
+    groupCleared.value = false
+    localGroupId.value = matchingGroup.id
+    await analysis.confirmGroupSelection(matchingGroup.name, getGroupPeople(matchingGroup), matchingGroup.name, matchingGroup.id)
+    return
+  }
+
   if (!selectedGroup.value) {
     if (matchingGroup) {
-      if (parsedReceipt.value) {
-        localGroupId.value = matchingGroup.id
-        await analysis.confirmGroupSelection(matchingGroup.name, getGroupPeople(matchingGroup), matchingGroup.name, matchingGroup.id)
-        return
-      }
-
       confirmGroup(matchingGroup, message)
       return
     }
@@ -475,7 +493,7 @@ async function onSend() {
     return
   }
 
-  if (matchingGroup) {
+  if (!parsedReceipt.value && matchingGroup) {
     confirmGroup(matchingGroup, message)
     return
   }
@@ -502,6 +520,7 @@ async function hydrateSavedChat(nextChatId) {
   const persistedGroupId = String(loadedChat?.groupId || '').trim()
 
   if (persistedGroupId && availableGroups.value.some(group => group.id === persistedGroupId)) {
+    groupCleared.value = false
     localGroupId.value = persistedGroupId
   }
 
@@ -518,6 +537,7 @@ async function resetScan() {
 }
 
 function clearGroup() {
+  groupCleared.value = true
   localGroupId.value = ''
 
   if (parsedReceipt.value) {
@@ -677,6 +697,18 @@ watch(
     void analysis.requestGroupQuestion()
   },
 )
+
+watch(() => analysis.result.value?.groupId, (nextGroupId) => {
+  const normalizedGroupId = String(nextGroupId || '').trim()
+
+  if (!normalizedGroupId || groupCleared.value || localGroupId.value === normalizedGroupId) {
+    return
+  }
+
+  if (availableGroups.value.some(group => group.id === normalizedGroupId)) {
+    localGroupId.value = normalizedGroupId
+  }
+})
 
 watch(() => props.chatId, (nextChatId, previousChatId) => {
   const resolvedChatId = String(nextChatId || '').trim() || getPathChatId()
