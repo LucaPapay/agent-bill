@@ -1,4 +1,5 @@
 <script setup>
+import { ref } from 'vue'
 import AvatarBadge from '../app/AvatarBadge.vue'
 import IconGlyph from '../app/IconGlyph.vue'
 import MoneyInput from '../app/MoneyInput.vue'
@@ -46,10 +47,6 @@ defineProps({
     type: Function,
     default: value => value,
   },
-  layout: {
-    type: String,
-    default: 'cards',
-  },
   saving: Boolean,
   saveLabel: {
     type: String,
@@ -78,19 +75,39 @@ const emit = defineEmits([
   'update:bill-total',
   'update:item-amount',
   'update:item-name',
-  'update:layout',
 ])
 
-const layoutOptions = [
-  { id: 'cards', label: 'Cards' },
-  { id: 'spreadsheet', label: 'Sheet' },
-  { id: 'chat', label: 'Walkthrough' },
-]
+const editingItems = ref(false)
+
+function toCents(value) {
+  const normalized = String(value || '')
+    .trim()
+    .replace(/[^0-9,.-]/g, '')
+    .replace(',', '.')
+  const amount = Number.parseFloat(normalized)
+
+  if (!Number.isFinite(amount)) {
+    return 0
+  }
+
+  return Math.max(0, Math.round(amount * 100))
+}
+
+function formatItemSummary(item, formatCents) {
+  const assignedCount = item.assignedPersonIds.length || 0
+  const itemCents = toCents(item.amount)
+
+  if (assignedCount > 1) {
+    return `${formatCents(itemCents)} total · ${formatCents(itemCents / assignedCount)} each · ${assignedCount} people assigned`
+  }
+
+  return `${item.amount || '0.00'} · ${assignedCount} people assigned`
+}
 </script>
 
 <template>
   <div :class="embedded ? 'bill-composer' : 'screen bill-composer'">
-    <div v-if="selectedGroup" class="section-pad" style="padding-top: 24px; padding-bottom: 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+    <div v-if="selectedGroup" class="section-pad" style="padding-top: 24px; padding-bottom: 18px;">
       <div>
         <span class="tape">Manual ledger</span>
         <h1 class="h-display" style="font-size: 36px; line-height: 1; margin: 8px 0 0;">
@@ -99,21 +116,6 @@ const layoutOptions = [
         <div class="mono" style="font-size: 11px; color: var(--muted); margin-top: 4px;">
           {{ selectedGroup.memberships.length }} PEOPLE · {{ selectedGroup.bills.length }} SAVED BILLS
         </div>
-      </div>
-
-      <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
-        <button
-          v-for="option in layoutOptions"
-          :key="option.id"
-          class="chip"
-          :style="{
-            background: layout === option.id ? 'var(--ink)' : 'rgba(20,18,16,0.08)',
-            color: layout === option.id ? 'var(--cream)' : 'var(--ink)',
-          }"
-          @click="emit('update:layout', option.id)"
-        >
-          {{ option.label }}
-        </button>
       </div>
     </div>
 
@@ -262,23 +264,42 @@ const layoutOptions = [
                 Receipt items
               </div>
               <div style="font-size: 14px; line-height: 1.45; margin-top: 4px;">
-                Leave every item blank if you want the app to fall back to an even split across the whole group.
+                {{
+                  editingItems
+                    ? 'Fix the parsed item names or amounts here. Assignments stay in walkthrough mode so the list still fits on mobile.'
+                    : 'Walk through the parsed items and tap who shared each one. If an item is wrong, switch to edit mode first.'
+                }}
               </div>
             </div>
 
-            <button class="btn btn-primary" style="padding: 10px 16px;" @click="emit('add-item')">
-              Add item
-            </button>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button
+                v-if="editingItems"
+                class="btn btn-primary"
+                style="padding: 10px 16px;"
+                @click="emit('add-item')"
+              >
+                Add item
+              </button>
+              <button
+                class="btn"
+                :class="editingItems ? 'btn-accent' : 'btn-ghost'"
+                style="padding: 10px 16px;"
+                @click="editingItems = !editingItems"
+              >
+                {{ editingItems ? 'Done editing items' : 'Edit items' }}
+              </button>
+            </div>
           </div>
 
-          <div v-if="layout === 'cards'" style="display: flex; flex-direction: column; gap: 10px;">
+          <div v-if="editingItems" style="display: grid; gap: 10px;">
             <div
               v-for="item in billItems"
-              :key="item.id"
+              :key="`${item.id}:edit`"
               class="surface-panel"
               style="padding: 14px;"
             >
-              <div style="display: grid; gap: 10px;" class="profile-grid">
+              <div class="composer-edit-row">
                 <label style="display: grid; gap: 6px;">
                   <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Item</span>
                   <input
@@ -302,107 +323,34 @@ const layoutOptions = [
                 </label>
               </div>
 
-              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;">
+              <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
                 <button
-                  v-for="membership in selectedGroup.memberships"
-                  :key="`${item.id}:${membership.personId}`"
-                  class="chip"
-                  :style="{
-                    background: item.assignedPersonIds.includes(membership.personId) ? 'var(--ink)' : 'rgba(20,18,16,0.08)',
-                    color: item.assignedPersonIds.includes(membership.personId) ? 'var(--cream)' : 'var(--ink)',
-                  }"
-                  @click="emit('toggle-assignment', item.id, membership.personId)"
+                  class="btn btn-ghost"
+                  style="padding: 10px 14px;"
+                  @click="emit('remove-item', item.id)"
                 >
-                  {{ membership.person.name }}
+                  Remove item
                 </button>
               </div>
-
-              <button
-                class="btn btn-ghost"
-                style="margin-top: 12px; padding: 10px 14px;"
-                @click="emit('remove-item', item.id)"
-              >
-                Remove item
-              </button>
             </div>
-          </div>
-
-          <div v-else-if="layout === 'spreadsheet'" style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-              <thead>
-                <tr class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
-                  <th style="text-align: left; padding: 10px 8px;">Item</th>
-                  <th style="text-align: left; padding: 10px 8px;">Price</th>
-                  <th style="text-align: left; padding: 10px 8px;">Assigned</th>
-                  <th style="padding: 10px 8px;" />
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="item in billItems" :key="item.id" style="border-top: 1px solid rgba(20,18,16,0.08); vertical-align: top;">
-                  <td style="padding: 10px 8px; min-width: 180px;">
-                    <input
-                      :value="item.name"
-                      type="text"
-                      placeholder="Margherita pizza"
-                      style="width: 100%; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 14px; background: var(--paper); padding: 10px 12px; outline: none;"
-                      @input="emit('update:item-name', item.id, $event.target.value)"
-                    >
-                  </td>
-                  <td style="padding: 10px 8px; min-width: 120px;">
-                    <MoneyInput
-                      :model-value="item.amount"
-                      allow-empty
-                      placeholder="12,50€"
-                      :input-style="{ width: '100%', border: '1.5px solid rgba(20,18,16,0.12)', borderRadius: '14px', background: 'var(--paper)', padding: '10px 12px', outline: 'none' }"
-                      @update:model-value="emit('update:item-amount', item.id, $event)"
-                    />
-                  </td>
-                  <td style="padding: 10px 8px; min-width: 220px;">
-                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                      <button
-                        v-for="membership in selectedGroup.memberships"
-                        :key="`${item.id}:sheet:${membership.personId}`"
-                        class="chip"
-                        :style="{
-                          background: item.assignedPersonIds.includes(membership.personId) ? 'var(--ink)' : 'rgba(20,18,16,0.08)',
-                          color: item.assignedPersonIds.includes(membership.personId) ? 'var(--cream)' : 'var(--ink)',
-                          padding: '4px 10px',
-                        }"
-                        @click="emit('toggle-assignment', item.id, membership.personId)"
-                      >
-                        {{ membership.person.name }}
-                      </button>
-                    </div>
-                  </td>
-                  <td style="padding: 10px 8px; text-align: right;">
-                    <button class="btn btn-ghost" style="padding: 10px 14px;" @click="emit('remove-item', item.id)">
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
           </div>
 
           <div v-else style="display: grid; gap: 12px;">
             <div
-              v-for="(item, index) in billItems"
-              :key="`${item.id}:chat`"
+              v-for="item in billItems"
+              :key="`${item.id}:walkthrough`"
               style="padding: 14px; border-radius: 18px; background: var(--paper);"
             >
-              <div class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
-                Step {{ index + 1 }}
-              </div>
               <div style="font-size: 16px; font-weight: 700; margin-top: 6px;">
                 {{ item.name || 'Untitled item' }}
               </div>
               <div style="font-size: 13px; color: var(--muted); margin-top: 4px;">
-                {{ item.amount || '0.00' }} · {{ item.assignedPersonIds.length || 0 }} people assigned
+                {{ formatItemSummary(item, formatCents) }}
               </div>
               <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px;">
                 <button
                   v-for="membership in selectedGroup.memberships"
-                  :key="`${item.id}:chat:${membership.personId}`"
+                  :key="`${item.id}:walkthrough:${membership.personId}`"
                   class="chip"
                   :style="{
                     background: item.assignedPersonIds.includes(membership.personId) ? 'var(--ink)' : 'rgba(20,18,16,0.08)',
@@ -431,3 +379,17 @@ const layoutOptions = [
     </div>
   </div>
 </template>
+
+<style scoped>
+.composer-edit-row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 180px);
+}
+
+@media (max-width: 720px) {
+  .composer-edit-row {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

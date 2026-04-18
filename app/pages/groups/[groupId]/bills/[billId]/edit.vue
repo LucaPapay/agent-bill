@@ -25,7 +25,6 @@ const {
   ledgerLoaded,
   loadBillFormFromBill,
   removeBillItem,
-  resultLayout,
   saving,
   selectedBill,
   selectedGroup,
@@ -87,7 +86,6 @@ function saveBill() {
       :can-create-bill="canUpdateBill"
       :error-message="editErrorMessage"
       :format-cents="formatCents"
-      :layout="resultLayout"
       :save-label="'Update bill'"
       :saving="saving"
       :selected-bill="selectedBill"
@@ -104,7 +102,6 @@ function saveBill() {
       @update:bill-total="billTotal = $event"
       @update:item-amount="updateBillItemAmount"
       @update:item-name="updateBillItemName"
-      @update:layout="resultLayout = $event"
     />
 
     <div v-else-if="ledgerLoaded" class="screen">

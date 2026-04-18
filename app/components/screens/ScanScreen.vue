@@ -174,6 +174,9 @@ const splitPeople = computed(() => {
     .map((membership) => String(membership?.person?.name || '').trim())
     .filter(Boolean)
 })
+const canOpenBillComposer = computed(() =>
+  Boolean(parsedReceipt.value && selectedGroup.value),
+)
 const canPickReceipt = computed(() => Boolean(availableGroups.value.length && !isRunning.value && !hasSavedChat.value))
 const canReset = computed(() =>
   Boolean(
@@ -224,16 +227,20 @@ const introMessage = computed(() => {
     return `Loading the saved receipt for ${selectedGroup.value.name}.`
   }
 
-  if (isRunning.value) {
-    return `Using ${selectedGroup.value.name}. I’m parsing the receipt into bill items now.`
-  }
-
   if (parsedReceipt.value) {
+    if (isRunning.value) {
+      return `Using ${selectedGroup.value.name}. The bill items are ready, so you can open the composer now or wait for Penny to finish the split.`
+    }
+
     return awaitingSplitAnswer.value
       ? `Using ${selectedGroup.value.name}. Answer Penny's question so she can build the split.`
       : splitRows.value.length
       ? `Using ${selectedGroup.value.name}. Keep chatting to tweak the split or continue into the composer.`
-      : `Using ${selectedGroup.value.name}. Penny has the receipt and is moving on to the split.`
+      : `Using ${selectedGroup.value.name}. Penny has the bill items ready. Keep chatting or open the composer now.`
+  }
+
+  if (isRunning.value) {
+    return `Using ${selectedGroup.value.name}. I’m parsing the receipt into bill items now.`
   }
 
   if (hasSavedChat.value) {
@@ -256,11 +263,15 @@ const composerPlaceholder = computed(() => {
   }
 
   if (parsedReceipt.value) {
+    if (isRunning.value) {
+      return 'Tell Penny who ate what or open the composer now'
+    }
+
     return awaitingSplitAnswer.value
       ? "Answer Penny's split question"
       : splitRows.value.length
       ? 'Tell Penny what to change about the split'
-      : 'Wait for Penny to draft the split'
+      : 'Tell Penny who ate what or open the composer now'
   }
 
   if (hasSavedChat.value) {
@@ -654,6 +665,7 @@ async function openBillComposerFromScan() {
   }
 
   setSelectedGroup(group.id)
+  analysis.stop()
   composerSeedKey.value = ''
   const hasDraft = await continueToSplit()
 
@@ -977,12 +989,12 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-if="parsedReceipt && splitRows.length && ledgerSelectedGroup" class="scan-chat-row">
+          <div v-if="canOpenBillComposer" class="scan-chat-row">
             <div class="scan-avatar">
               <IconGlyph name="sparkle" width="16" height="16" />
             </div>
             <button type="button" class="btn scan-composer-toggle" @click="openBillComposerFromScan">
-              Open bill composer
+              {{ splitRows.length ? 'Open bill composer' : 'Open bill composer now' }}
             </button>
           </div>
 
