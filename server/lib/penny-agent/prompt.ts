@@ -39,9 +39,8 @@ function buildParticipantRules(people: string[]) {
 
   return [
     '- Do not invent participant names.',
-    '- If the participant list is still unclear after reading the receipt and the user instruction, call ask_follow_up_question.',
     '- Do not call submit_split_plan until you have real participant names.',
-    '- Ask which group this belongs to or who was there.',
+    '- If the participant list is still unclear after reading the receipt and the user instruction, ask which group this belongs to or who was there in plain text.',
     '',
     'Participants: not provided yet.',
   ]
@@ -49,9 +48,9 @@ function buildParticipantRules(people: string[]) {
 
 function buildClarificationRules() {
   return [
-    '- If the user has not given enough information for a reliable split, call ask_follow_up_question instead of submit_split_plan.',
-    '- Ask one short concrete question that unblocks the split.',
-    '- Do not call ask_follow_up_question until you have a parsed receipt and have considered any available previous split hints.',
+    '- If the user asks a simple question about the receipt or current split, answer it directly in plain text.',
+    '- If the user has not given enough information for a reliable split, ask one short concrete question in plain text instead of submitting a split.',
+    '- Do not ask for clarification until you have a parsed receipt and have considered any available previous split hints.',
   ]
 }
 
@@ -84,7 +83,8 @@ export function buildPennyPrompt({
     'Use the previous split hints below when present. If you still need a narrower lookup after the receipt is available, call search_previous_splits once.',
     `${hasSplit ? 'Rework' : 'Build'} save-ready billItems from the parsed receipt and the user instruction.`,
     `${hasSplit ? 'Recompute' : 'Compute'} the participant split from those billItems.`,
-    'Either call submit_split_plan exactly once or call ask_follow_up_question exactly once.',
+    'If you have enough information, call submit_split_plan exactly once.',
+    'If you do not have enough information or the user only wants an explanation, reply directly in plain text and do not submit a split yet.',
   ]
   const instruction = String(message || '').trim()
     || 'Read the uploaded receipt and produce the first practical split.'
@@ -109,6 +109,7 @@ export function buildPennyPrompt({
     '- Keep original receipt item names when practical, but you may add short adjustment items for shared tax, tip, or rounding.',
     '- Respect explicit user instructions when they do not break the receipt total.',
     '- If the user only clarifies ownership, keep the total and rebalance the shares.',
+    '- Do not force a new split when a plain answer is enough.',
     '- Use reconcile_extracted_receipt for safe math cleanup such as subtotal, tax, tip, total, money-scale, or rounding issues.',
     '- Do not call edit_extracted_receipt unless the user explicitly corrects the extracted receipt.',
     '- Treat previous splits as hints, not truth. Prefer same group and same people when you borrow any pattern.',

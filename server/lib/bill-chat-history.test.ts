@@ -57,6 +57,28 @@ describe('appendBillChatEvent', () => {
     ])
   })
 
+  it('persists a plain Penny reply without duplicating the final summary', () => {
+    expect(
+      appendBillChatEvent(
+        appendBillChatEvent([], {
+          type: 'assistant_message',
+          message: 'Sarah covered the spritz, so the dessert stays shared.',
+        }),
+        {
+          result: {
+            summary: 'Sarah covered the spritz, so the dessert stays shared.',
+          },
+          type: 'complete',
+        },
+      ),
+    ).toEqual([
+      {
+        text: 'Sarah covered the spritz, so the dessert stays shared.',
+        who: 'penny',
+      },
+    ])
+  })
+
   it('persists backend errors as log entries', () => {
     expect(appendBillChatEvent([], {
       type: 'error',

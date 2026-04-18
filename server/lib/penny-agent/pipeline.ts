@@ -189,7 +189,11 @@ export async function runPennyAnalysis(input: any, personId: string, onEvent = (
     })
 
     if (!agentResult?.plan) {
-      const summary = String(agentResult?.question || 'Penny needs one more detail.').trim() || 'Penny needs one more detail.'
+      const summary = String(agentResult?.message || 'Penny has an update.').trim() || 'Penny has an update.'
+      history.record({
+        type: 'assistant_message',
+        message: summary,
+      })
       const payload = {
         ...buildChatPayload({
           base: {
@@ -201,7 +205,7 @@ export async function runPennyAnalysis(input: any, personId: string, onEvent = (
               model: process.env.PENNY_AGENT_MODEL || process.env.PI_AGENT_MODEL || 'gpt-4.1-mini',
               used: true,
             },
-            source: 'penny-question',
+            source: 'penny-message',
             summary,
           },
           chatId: chat.id,
@@ -266,7 +270,7 @@ export async function runPennyRevision(input: any, personId: string, onEvent = (
   const userMessage = String(input?.userMessage || '').trim()
 
   if (!message) {
-    throw new Error('A follow-up message is required to revise the split.')
+    throw new Error('A message is required to continue the Penny chat.')
   }
 
   const current = await getBillChat(personId, String(input?.chatId || ''))
@@ -362,22 +366,27 @@ export async function runPennyRevision(input: any, personId: string, onEvent = (
     })
     if (!agentResult?.plan) {
       await runSaver.wait()
+      const summary = String(agentResult?.message || 'Penny has an update.').trim() || 'Penny has an update.'
+      history.record({
+        type: 'assistant_message',
+        message: summary,
+      })
       const payload = {
         ...buildChatPayload({
           base: {
             ...current,
-            source: 'penny-question',
-            summary: String(agentResult?.question || 'Penny needs one more detail.').trim() || 'Penny needs one more detail.',
+            source: 'penny-message',
+            summary,
           },
           chatId: current.chatId,
           groupId,
           history: history.finish({
-            summary: String(agentResult?.question || 'Penny needs one more detail.').trim() || 'Penny needs one more detail.',
+            summary,
           }),
           people: participantHints,
           rawReceipt: agentResult?.rawReceipt || rawReceipt,
           receipt: agentResult?.receipt || receipt,
-          summary: String(agentResult?.question || 'Penny needs one more detail.').trim() || 'Penny needs one more detail.',
+          summary,
           title,
         }),
       }

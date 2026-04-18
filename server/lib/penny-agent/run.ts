@@ -53,7 +53,7 @@ function getSplitPlanError({
   }
 
   if (!people.length) {
-    return 'Split plan rejected. No participant list is available yet. Ask a follow-up question instead of inventing names.'
+    return 'Split plan rejected. No participant list is available yet. Ask the user directly instead of inventing names.'
   }
 
   if (!participantNames.length || participantNames.some((name: string) => !name)) {
@@ -316,44 +316,14 @@ async function createPennySession(customTools: any[]) {
   return session
 }
 
-function defineFollowUpQuestionTool({
-  followUpQuestion,
-}: {
-  followUpQuestion: { value: string }
-}) {
-  return defineTool({
-    name: 'ask_follow_up_question',
-    label: 'Ask Follow-up Question',
-    description: 'Ask one short question when the user has not given enough information for a reliable split.',
-    parameters: Type.Object({
-      question: Type.String({ description: 'A single short clarifying question for the user.' }),
-    }),
-    execute: async (_toolCallId, params) => {
-      const question = String(params.question || '').trim()
-
-      if (!question) {
-        return {
-          content: [{ type: 'text', text: 'Provide a non-empty question.' }],
-          details: {},
-        }
-      }
-
-      followUpQuestion.value = question
-
-      return {
-        content: [{ type: 'text', text: 'Question recorded.' }],
-        details: {},
-      }
-    },
-  })
-}
-
 function subscribeToSession({
+  assistantReply,
   onEvent,
   sawActivity,
   session,
   statusMessage,
 }: {
+  assistantReply: { value: string }
   onEvent: (payload: any) => void
   sawActivity: { value: boolean }
   session: any
@@ -371,6 +341,7 @@ function subscribeToSession({
 
     if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
       sawActivity.value = true
+      assistantReply.value += String(event.assistantMessageEvent.delta || '')
       void Promise.resolve(onEvent({
         type: 'agent_text_delta',
         delta: event.assistantMessageEvent.delta,
@@ -472,8 +443,8 @@ export async function runPennyAgent({
 
   const currentRawReceipt = { value: (rawReceipt || receipt || null) as any }
   const currentReceipt = { value: (receipt ? normalizeExtractedReceipt(receipt) : null) as any }
+  const assistantReply = { value: '' }
   const finalPlan = { value: null as any }
-  const followUpQuestion = { value: '' }
   const sawActivity = { value: false }
   const currentSplit = Array.isArray(split) ? split : []
 
@@ -559,10 +530,6 @@ export async function runPennyAgent({
     personId,
   })
 
-  const askFollowUpQuestion = defineFollowUpQuestionTool({
-    followUpQuestion,
-  })
-
   const submitSplitPlan = defineTool({
     name: 'submit_split_plan',
     label: 'Submit Split Plan',
@@ -616,7 +583,6 @@ export async function runPennyAgent({
     reconcileReceipt,
     editReceipt,
     searchPreviousSplitsTool,
-    askFollowUpQuestion,
     submitSplitPlan,
   ])
   const stopHeartbeats = startHeartbeats({
@@ -631,6 +597,7 @@ export async function runPennyAgent({
     secondMessage: 'Penny is still working through the split.',
   })
   const unsubscribe = subscribeToSession({
+    assistantReply,
     onEvent,
     sawActivity,
     session,
@@ -668,16 +635,13 @@ export async function runPennyAgent({
     throw new Error('The Penny agent finished without extracting a receipt.')
   }
 
-  if (followUpQuestion.value) {
+  if (!finalPlan.value) {
     return {
-      question: followUpQuestion.value,
+      message: String(assistantReply.value || '').trim()
+        || 'Penny could not build a split yet. Ask a specific question or clarify who shared what.',
       rawReceipt: currentRawReceipt.value || currentReceipt.value,
       receipt: currentReceipt.value,
     }
-  }
-
-  if (!finalPlan.value) {
-    throw new Error('The Penny agent finished without submitting a split plan or follow-up question.')
   }
 
   return {

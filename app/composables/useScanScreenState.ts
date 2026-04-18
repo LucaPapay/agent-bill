@@ -142,21 +142,24 @@ export function useScanScreenState(props: { chatId?: string }) {
     return visibleAnalysisFeed.value.slice(0, -1)
   })
   const analysisSource = computed(() => String(analysis.result.value?.source || '').trim())
-  const awaitingSplitAnswer = computed(() => analysisSource.value === 'penny-question' && !splitRows.value.length)
+  const awaitingPennyReply = computed(() =>
+    !splitRows.value.length
+    && (analysisSource.value === 'penny-message' || analysisSource.value === 'penny-question'),
+  )
   const shouldRequestGroupQuestion = computed(() =>
     Boolean(
       analysis.chatId.value
       && parsedReceipt.value
       && !selectedGroup.value
       && !splitRows.value.length
-      && !awaitingSplitAnswer.value
+      && !awaitingPennyReply.value
       && !isRunning.value
       && availableGroups.value.length
     ),
   )
   const showGroupPickerPrompt = computed(() =>
     Boolean(
-      awaitingSplitAnswer.value
+      awaitingPennyReply.value
       && !selectedGroup.value
       && availableGroups.value.length,
     ),
@@ -236,8 +239,8 @@ export function useScanScreenState(props: { chatId?: string }) {
     }
 
     if (parsedReceipt.value) {
-      return awaitingSplitAnswer.value
-        ? `Using ${selectedGroup.value.name}. Answer Penny's question so she can build the split.`
+      return awaitingPennyReply.value
+        ? `Using ${selectedGroup.value.name}. Penny replied. Keep chatting or continue into the composer.`
         : splitRows.value.length
         ? `Using ${selectedGroup.value.name}. Keep chatting to tweak the split or continue into the composer.`
         : `Using ${selectedGroup.value.name}. Penny has the receipt and is moving on to the split.`
@@ -263,8 +266,8 @@ export function useScanScreenState(props: { chatId?: string }) {
     }
 
     if (parsedReceipt.value) {
-      return awaitingSplitAnswer.value
-        ? "Answer Penny's split question"
+      return awaitingPennyReply.value
+        ? 'Reply to Penny'
         : splitRows.value.length
         ? 'Tell Penny what to change about the split'
         : 'Wait for Penny to draft the split'

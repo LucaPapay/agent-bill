@@ -349,7 +349,7 @@ export function useBillAnalysisStream() {
     }
 
     openRevisionStream(
-      `The selected group is "${normalizedGroupName}". ${participantSummary} Do not ask me to select the group again. Build the first split now using the parsed receipt and any relevant previous split hints. Only ask me one short follow-up question if the receipt is still too ambiguous after considering those hints.`,
+      `The selected group is "${normalizedGroupName}". ${participantSummary} Do not ask me to select the group again. Build the first split now using the parsed receipt and any relevant previous split hints. If the receipt is still too ambiguous after considering those hints, ask me one short concrete question in plain text.`,
       people,
       {
         displayUserMessage: String(displayUserMessage || normalizedGroupName).trim() || normalizedGroupName,

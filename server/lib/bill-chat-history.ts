@@ -31,6 +31,10 @@ export function appendBillChatReply(history: any[], message: string) {
 }
 
 export function appendBillChatEvent(history: any[], payload: any) {
+  if (payload.type === 'assistant_message') {
+    return pushEntry(history, 'penny', payload.message)
+  }
+
   if (payload.type === 'status') {
     return history
   }
@@ -52,7 +56,14 @@ export function appendBillChatEvent(history: any[], payload: any) {
   }
 
   if (payload.type === 'complete') {
-    return pushEntry(history, 'penny', payload.result?.summary || 'Split ready.')
+    const summary = normalizeText(payload.result?.summary || 'Split ready.')
+    const lastEntry = history[history.length - 1]
+
+    if (lastEntry?.who === 'penny' && normalizeText(lastEntry.text) === summary) {
+      return history
+    }
+
+    return pushEntry(history, 'penny', summary)
   }
 
   return history
