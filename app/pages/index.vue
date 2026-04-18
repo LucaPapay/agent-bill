@@ -29,6 +29,18 @@ const selectedBill = computed(() =>
   selectedGroup.value?.bills.find((bill: any) => bill.id === selectedBillId.value) || null
 )
 
+const selectedGroupBillTransfers = computed(() =>
+  selectedGroup.value?.billTransfers || []
+)
+
+const selectedGroupSimplifiedTransfers = computed(() =>
+  selectedGroup.value?.simplifiedTransfers || []
+)
+
+const selectedGroupSimplifiedTotalCents = computed(() =>
+  selectedGroupSimplifiedTransfers.value.reduce((sum: number, transfer: any) => sum + transfer.amountCents, 0)
+)
+
 const peopleNotInSelectedGroup = computed(() => {
   const memberIds = new Set((selectedGroup.value?.memberships || []).map((membership: any) => membership.personId))
   return ledger.value.people.filter((person: any) => !memberIds.has(person.id))
@@ -507,6 +519,51 @@ function createBill() {
                   Save bill
                 </button>
               </form>
+            </div>
+
+            <div class="rounded-[1.75rem] border border-stone-200 bg-white p-5">
+              <div class="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Group settlement</p>
+                  <p class="mt-2 text-sm text-muted">
+                    This is the simplified who-owes-who view across every bill in this group.
+                  </p>
+                </div>
+
+                <div class="grid min-w-[220px] gap-3 sm:grid-cols-2">
+                  <div class="rounded-2xl bg-paper px-4 py-4">
+                    <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Payments left</p>
+                    <p class="mt-2 text-2xl font-semibold">{{ selectedGroupSimplifiedTransfers.length }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-paper px-4 py-4">
+                    <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Open amount</p>
+                    <p class="mt-2 text-2xl font-semibold">{{ formatCents(selectedGroupSimplifiedTotalCents) }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="selectedGroupSimplifiedTransfers.length" class="mt-5 grid gap-3">
+                <div
+                  v-for="transfer in selectedGroupSimplifiedTransfers"
+                  :key="transfer.id"
+                  class="flex flex-wrap items-center justify-between gap-4 rounded-[1.5rem] bg-paper px-4 py-4"
+                >
+                  <div>
+                    <p class="font-medium">{{ transfer.fromPerson.name }} owes {{ transfer.toPerson.name }}</p>
+                    <p class="mt-1 text-sm text-muted">
+                      Simplified from {{ selectedGroupBillTransfers.length }} raw transfer{{ selectedGroupBillTransfers.length === 1 ? '' : 's' }} in this group.
+                    </p>
+                  </div>
+                  <span class="text-lg font-semibold">{{ formatCents(transfer.amountCents) }}</span>
+                </div>
+              </div>
+
+              <div
+                v-else
+                class="mt-5 rounded-[1.5rem] bg-paper px-4 py-4 text-sm text-muted"
+              >
+                Nobody owes anyone anything in this group right now.
+              </div>
             </div>
           </div>
 

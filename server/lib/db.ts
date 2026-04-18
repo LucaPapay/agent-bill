@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import postgres from 'postgres'
+import { simplifyGroupTransfers } from './group-simplification'
 
 let client: ReturnType<typeof postgres> | null = null
 let schemaReady: Promise<void> | null = null
@@ -79,10 +80,34 @@ async function ensureSchema() {
         create table if not exists bill_transfers (
           id text primary key,
           bill_id text not null references bills(id) on delete cascade,
+          group_id text references groups(id) on delete cascade,
           from_person_id text not null references people(id),
           to_person_id text not null references people(id),
           amount_cents integer not null
         )
+      `
+
+      await db()`
+        alter table bill_transfers
+        add column if not exists group_id text references groups(id) on delete cascade
+      `
+
+      await db()`
+        update bill_transfers
+        set group_id = bills.group_id
+        from bills
+        where bill_transfers.bill_id = bills.id
+          and bill_transfers.group_id is null
+      `
+
+      await db()`
+        alter table bill_transfers
+        alter column group_id set not null
+      `
+
+      await db()`
+        create index if not exists bill_transfers_group_id_idx
+        on bill_transfers (group_id)
       `
     })()
   }
@@ -220,8 +245,15 @@ export async function createBillRecord({
 
     for (const transfer of transfers) {
       await sql`
-        insert into bill_transfers (id, bill_id, from_person_id, to_person_id, amount_cents)
-        values (${randomUUID()}, ${id}, ${transfer.fromPersonId}, ${transfer.toPersonId}, ${transfer.amountCents})
+        insert into bill_transfers (id, bill_id, group_id, from_person_id, to_person_id, amount_cents)
+        values (
+          ${randomUUID()},
+          ${id},
+          ${groupId},
+          ${transfer.fromPersonId},
+          ${transfer.toPersonId},
+          ${transfer.amountCents}
+        )
       `
     }
 
@@ -243,7 +275,7 @@ export async function getLedgerSnapshot() {
     db()`select id, group_id, person_id, created_at from group_memberships order by created_at asc`,
     db()`select id, group_id, title, total_amount_cents, tip_amount_cents, paid_by_person_id, created_at from bills order by created_at desc`,
     db()`select id, bill_id, person_id, item_amount_cents, tip_amount_cents, total_amount_cents from bill_member_shares`,
-    db()`select id, bill_id, from_person_id, to_person_id, amount_cents from bill_transfers`,
+    db()`select id, bill_id, group_id, from_person_id, to_person_id, amount_cents from bill_transfers`,
   ])
 
   const people = peopleRows.map((row: any) => ({
@@ -313,6 +345,8 @@ export async function getLedgerSnapshot() {
     })
   }
 
+  const billTransfersByGroupId = new Map<string, any[]>()
+
   for (const row of transferRows) {
     const bill = billsById.get(row.bill_id)
     const fromPerson = peopleById.get(row.from_person_id)
@@ -322,23 +356,54 @@ export async function getLedgerSnapshot() {
       continue
     }
 
-    bill.transfers.push({
+    const transfer = {
       amountCents: row.amount_cents,
       fromPerson,
       fromPersonId: row.from_person_id,
       id: row.id,
       toPerson,
       toPersonId: row.to_person_id,
-    })
+    }
+
+    bill.transfers.push(transfer)
+
+    const groupTransfers = billTransfersByGroupId.get(row.group_id) || []
+    groupTransfers.push(transfer)
+    billTransfersByGroupId.set(row.group_id, groupTransfers)
   }
 
-  const groups = groupRows.map((row: any) => ({
-    bills: billsByGroupId.get(row.id) || [],
-    createdAt: row.created_at,
-    id: row.id,
-    memberships: membershipsByGroupId.get(row.id) || [],
-    name: row.name,
-  }))
+  const groups = groupRows.map((row: any) => {
+    const billTransfers = billTransfersByGroupId.get(row.id) || []
+    const simplifiedTransfers = simplifyGroupTransfers(billTransfers)
+      .map((transfer, index) => {
+        const fromPerson = peopleById.get(transfer.fromPersonId)
+        const toPerson = peopleById.get(transfer.toPersonId)
+
+        if (!fromPerson || !toPerson) {
+          return null
+        }
+
+        return {
+          amountCents: transfer.amountCents,
+          fromPerson,
+          fromPersonId: transfer.fromPersonId,
+          id: `simplified:${row.id}:${index}`,
+          toPerson,
+          toPersonId: transfer.toPersonId,
+        }
+      })
+      .filter(Boolean)
+
+    return {
+      billTransfers,
+      bills: billsByGroupId.get(row.id) || [],
+      createdAt: row.created_at,
+      id: row.id,
+      memberships: membershipsByGroupId.get(row.id) || [],
+      name: row.name,
+      simplifiedTransfers,
+    }
+  })
 
   return {
     groups,

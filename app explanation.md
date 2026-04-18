@@ -7,7 +7,7 @@
 The app now has two tracks:
 
 - an existing receipt-analysis track that can use Pi/OpenAI or a local fallback parser
-- a manual ledger track for groups, members, bills, bill shares, and derived transfers
+- a manual ledger track for groups, members, itemized bills, bill shares, raw transfers, and simplified group settlement
 
 The manual ledger track is the important base for the next step, because simplification only makes sense once the app stores explicit who-owes-whom data.
 
@@ -19,36 +19,40 @@ The manual ledger track is the important base for the next step, because simplif
 - A bill belongs to exactly one group.
 - A bill has one payer.
 - A bill stores the total amount and the tip amount separately.
-- A bill shows one manual food share row per group member.
+- A bill stores explicit receipt items.
+- Each bill item can be assigned to one or more group members.
 - Tip is entered once per bill, then split automatically across bill participants.
 - We still want bill detail to show the raw breakdown per person:
-  - food amount
+  - item amount
   - shared tip amount
   - total amount for that bill
-- We also want to persist the derived transfers, because the later simplify step will work from them.
+- We persist both raw bill transfers and simplified group-level transfers derived from them.
 
 ## Current bill behavior
 
 When creating a bill:
 
-- the UI renders one editable food split row per member in the selected group
+- the UI renders one editable receipt item row at a time
+- each item can be assigned to one or more people in the selected group
 - the UI renders one bill-level tip amount
 - the user chooses who paid
 
 When saving a bill:
 
-- the sum of all food shares plus the tip must equal the bill total
-- tip is split evenly across members who have a positive food share
-- if nobody has a positive food share, tip falls back to being split evenly across all group members
+- each item amount is split evenly across its assigned people
+- the sum of all item amounts plus the tip must equal the bill total
+- tip is split evenly across members who have a positive item share
+- if nobody has a positive item share, tip falls back to being split evenly across all group members
 - one per-person bill share row is stored for every group member
 - one derived transfer is stored for every non-payer who owes a positive total on that bill
+- every derived transfer also belongs to the group, not just the bill
 
 Example:
 
 - Alice paid
-- Bob food: 300
-- Cara food: 300
-- Alice food: 300
+- item 1 assigned to Bob: 300
+- item 2 assigned to Cara: 300
+- item 3 assigned to Alice: 300
 - tip: 100
 - total: 1000
 
@@ -114,17 +118,36 @@ The raw per-person bill breakdown that stays visible when opening a bill.
 - `tip_amount_cents`
 - `total_amount_cents`
 
+### `bill_items`
+
+The saved receipt items for one bill.
+
+- `id`
+- `bill_id`
+- `name`
+- `amount_cents`
+- `sort_order`
+
+### `bill_item_assignments`
+
+Join table between bill items and people.
+
+- `id`
+- `bill_item_id`
+- `person_id`
+
 ### `bill_transfers`
 
 The derived obligations created from one bill.
 
 - `id`
 - `bill_id`
+- `group_id`
 - `from_person_id`
 - `to_person_id`
 - `amount_cents`
 
-This is the table the future group-level simplification should aggregate.
+This is the table the group-level simplification aggregates.
 
 ## Current frontend behavior
 
@@ -133,18 +156,20 @@ The main page now acts as a simple manual ledger:
 - create a person
 - create a group
 - add existing people into the selected group
-- create a bill for that group
+- create an itemized bill for that group
+- inspect the simplified settlement for the selected group
 - inspect saved bills
-- inspect both raw bill shares and derived transfers
+- inspect receipt items, raw bill shares, and derived transfers
 
-## Next intended step
+## Group settlement behavior
 
-The next logical feature is group-level simplification:
+The selected group now exposes a simplified settlement view:
 
 - collect all `bill_transfers` inside a group
-- net flows per person pair
+- convert them into one net balance per person
+- settle debtors against creditors directly
 - reduce intermediate hops
-- minimize the number of people each person owes
+- minimize the number of remaining payments
 
 Target example:
 
@@ -152,4 +177,12 @@ Target example:
 - and B owes C
 - then the app should prefer reducing that into A owing C when the net amounts allow it
 
-The manual ledger work added here is meant to make that next step straightforward.
+That simplification now exists in the backend and is rendered in the group detail view.
+
+## Next intended step
+
+Useful next work after this:
+
+- connect receipt-analysis output into saved itemized bills
+- add OCR fallback for image-only mode without Pi
+- add payment settlement state once simplified group obligations are visible

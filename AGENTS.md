@@ -38,8 +38,16 @@ See [app explanation.md](</Users/lucapapay/dev/agent-bill/app explanation.md>) f
 3. If not, the app falls back to a local text parser and even split.
 4. The normalized result is saved to Postgres as a bill run.
 
+## Manual Ledger Status
+
+- Groups own bills and the derived transfers.
+- Manual bills are item-based now, not one flat share row per person.
+- Each bill stores bill items, item assignees, member shares, and raw transfers.
+- The selected group also exposes a simplified settlement view built from all transfers in that group.
+
 ## Next Good Steps
 
 - Add real OCR fallback for image-only mode without Pi.
 - Add household/session concepts before adding auth.
-- Add bill item ownership editing after the first automatic split.
+- Connect receipt-analysis output into the manual ledger item model.
+- Add actual mark-as-paid / settlement tracking once group settlement is visible.
