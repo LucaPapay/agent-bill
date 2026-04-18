@@ -32,6 +32,8 @@ function handleScanDone() {
 <template>
   <main class="app-root">
     <div class="app-view">
+      <BottomTabBar :active-tab="activeTab" @nav="screen = $event" />
+
       <HomeScreen v-if="screen === 'home'" @nav="screen = $event" @open-bill="screen = 'assign'" />
       <GroupsScreen v-else-if="screen === 'groups'" />
       <ProfileScreen v-else-if="screen === 'profile'" />
@@ -45,8 +47,6 @@ function handleScanDone() {
       />
       <SettledScreen v-else-if="screen === 'settled'" @nav="screen = $event" />
       <HomeScreen v-else @nav="screen = $event" @open-bill="screen = 'assign'" />
-
-      <BottomTabBar :active-tab="activeTab" @nav="screen = $event" />
     </div>
   </main>
 </template>

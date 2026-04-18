@@ -2,154 +2,215 @@
 
 ## What the app is
 
-`agent-bill` is a local-first hackathon app for bills, shared costs, and later debt simplification inside a group.
+`agent-bill` is a local-first hackathon app for splitting bills with an agentic backend.
 
-The app now has two tracks:
+There are now two parallel tracks in the codebase:
 
-- an existing receipt-analysis track that can use Pi/OpenAI or a local fallback parser
-- a manual ledger track for groups, members, bills, bill shares, and derived transfers
+- a manual ledger track for people, groups, bills, shares, and transfers
+- a streamed receipt-analysis track that sends a receipt to OpenAI, then hands the structured result to a Pi agent loop
 
-The manual ledger track is the important base for the next step, because simplification only makes sense once the app stores explicit who-owes-whom data.
+The manual ledger track is the stable storage base.
+The streamed analysis track is the fast hackathon workflow.
 
-## Core product assumptions
+## Current backend flow
 
-- A person can belong to many groups.
-- A group can contain many people.
-- A group can contain many bills.
-- A bill belongs to exactly one group.
-- A bill has one payer.
-- A bill stores the total amount and the tip amount separately.
-- A bill shows one manual food share row per group member.
-- Tip is entered once per bill, then split automatically across bill participants.
-- We still want bill detail to show the raw breakdown per person:
-  - food amount
-  - shared tip amount
-  - total amount for that bill
-- We also want to persist the derived transfers, because the later simplify step will work from them.
+The analysis backend is intentionally simple:
 
-## Current bill behavior
+1. The frontend creates a job with `POST /api/analysis/jobs`.
+2. The backend opens an in-memory job and starts emitting progress events.
+3. OpenAI receives either:
+   - a receipt image
+   - or pasted OCR text
+4. OpenAI returns a structured receipt JSON payload.
+5. The backend normalizes that receipt into a predictable shape.
+6. A Pi agent session receives the normalized receipt plus the participant list.
+7. The Pi agent uses two custom tools:
+   - `log_progress`
+   - `submit_split_plan`
+8. The backend persists the final run in Postgres.
+9. The frontend listens on `GET /api/analysis/jobs/:id/events` through SSE until the job completes.
 
-When creating a bill:
+This is the current live path for bill analysis.
 
-- the UI renders one editable food split row per member in the selected group
-- the UI renders one bill-level tip amount
-- the user chooses who paid
+## Why SSE
 
-When saving a bill:
+We only need one-way server updates during analysis.
+SSE is simpler than WebSockets here:
 
-- the sum of all food shares plus the tip must equal the bill total
-- tip is split evenly across members who have a positive food share
-- if nobody has a positive food share, tip falls back to being split evenly across all group members
-- one per-person bill share row is stored for every group member
-- one derived transfer is stored for every non-payer who owes a positive total on that bill
+- no extra socket server setup
+- works cleanly in Nitro
+- easy to consume from `EventSource` in the browser
+- matches the “start a job, stream status, finish once” model
 
-Example:
+So the app uses SSE for the active frontend connection.
 
-- Alice paid
-- Bob food: 300
-- Cara food: 300
-- Alice food: 300
-- tip: 100
-- total: 1000
+## Current streamed event model
 
-Then the bill shares preserve the raw breakdown per person, and the derived transfers say how much Bob and Cara owe Alice for that bill.
+The SSE endpoint emits `update` events with JSON payloads.
 
-## Why payer is required
+Current payload types include:
 
-Without a payer, the app can show shares but it cannot create actual obligations.
+- `status`
+- `receipt_extracted`
+- `agent_tool_start`
+- `agent_tool_end`
+- `agent_progress`
+- `agent_text_delta`
+- `agent_plan_submitted`
+- `complete`
+- `error`
 
-The later simplification step needs obligations, not just bill percentages. So every bill needs a `paid_by_person_id`.
+That gives the frontend enough signal to show:
 
-## Current data model
+- pipeline stage
+- extracted receipt preview
+- live agent narration
+- final split result
+- failure state
 
-### `people`
+## OpenAI step
 
-Global people records. These are reused across groups.
+The OpenAI stage lives in [server/lib/openai-receipt.ts](/Users/jojo/Developer/agent-bill/server/lib/openai-receipt.ts).
 
-- `id`
-- `name`
-- `created_at`
+It uses the Responses API with structured output.
+The prompt asks OpenAI to extract:
 
-### `groups`
+- merchant
+- bill date
+- currency
+- items
+- subtotal
+- tax
+- tip
+- total
+- short notes
 
-Manual user-created groups.
+Money is normalized to integer cents.
 
-- `id`
-- `name`
-- `created_at`
+The schema lives in [server/lib/receipt-contract.ts](/Users/jojo/Developer/agent-bill/server/lib/receipt-contract.ts).
 
-### `group_memberships`
+## Pi agent step
 
-Join table between people and groups.
+The Pi stage lives in [server/lib/pi-bill-agent.ts](/Users/jojo/Developer/agent-bill/server/lib/pi-bill-agent.ts).
 
-- `id`
-- `group_id`
-- `person_id`
-- `created_at`
+It does not try to make the agent too smart.
+The current rules are deliberately narrow:
 
-Constraint:
+- only use the provided participant names
+- prefer shared splits when ownership is unclear
+- distribute tax and tip proportionally
+- call `log_progress` for short UI-visible updates
+- call `submit_split_plan` exactly once
 
-- unique `(group_id, person_id)`
+This keeps the loop hackathon-simple while still giving a real agent step instead of a single direct completion.
 
-### `bills`
+## Pipeline orchestration
 
-One saved bill in one group.
+The orchestration lives in [server/lib/bill-pipeline.ts](/Users/jojo/Developer/agent-bill/server/lib/bill-pipeline.ts).
 
-- `id`
-- `group_id`
-- `title`
-- `total_amount_cents`
-- `tip_amount_cents`
-- `paid_by_person_id`
-- `created_at`
+Behavior today:
 
-### `bill_member_shares`
+- if `OPENAI_API_KEY` exists:
+  - use OpenAI extraction
+  - then run the Pi agent loop
+- if `OPENAI_API_KEY` is missing and only raw text is provided:
+  - use the local fallback parser
+- if an image is provided without `OPENAI_API_KEY`:
+  - fail early
 
-The raw per-person bill breakdown that stays visible when opening a bill.
+That keeps local development usable while still supporting the real AI path.
 
-- `id`
-- `bill_id`
-- `person_id`
-- `item_amount_cents`
-- `tip_amount_cents`
-- `total_amount_cents`
+## Current frontend hook
 
-### `bill_transfers`
+The frontend stream consumer lives in [app/composables/useBillAnalysisStream.ts](/Users/jojo/Developer/agent-bill/app/composables/useBillAnalysisStream.ts).
 
-The derived obligations created from one bill.
+It is responsible for:
 
-- `id`
-- `bill_id`
-- `from_person_id`
-- `to_person_id`
-- `amount_cents`
+- creating the analysis job
+- opening the SSE stream
+- collecting live feed messages
+- accumulating agent text deltas
+- storing the extracted receipt
+- storing the final result
 
-This is the table the future group-level simplification should aggregate.
+So the backend streaming contract already exists, even if the final screen integration is still lightweight.
 
-## Current frontend behavior
+## Current frontend UI shape
 
-The main page now acts as a simple manual ledger:
+The current frontend UI is now a Vue screen flow instead of a prototype-style phone mock.
 
-- create a person
-- create a group
-- add existing people into the selected group
-- create a bill for that group
-- inspect saved bills
-- inspect both raw bill shares and derived transfers
+The main entry lives in [app/pages/index.vue](/Users/jojo/Developer/agent-bill/app/pages/index.vue).
+It switches between the app screens with simple local state:
 
-## Next intended step
+- home
+- groups
+- profile
+- scan
+- chat split
+- assign
+- settled
 
-The next logical feature is group-level simplification:
+Shared UI primitives live in [app/components/app](/Users/jojo/Developer/agent-bill/app/components/app).
+The actual screens live in [app/components/screens](/Users/jojo/Developer/agent-bill/app/components/screens).
 
-- collect all `bill_transfers` inside a group
-- net flows per person pair
-- reduce intermediate hops
-- minimize the number of people each person owes
+The navigation is intentionally simple:
 
-Target example:
+- on mobile it behaves like a bottom app dock
+- on larger screens it becomes a sticky top app navigation bar
 
-- if A owes B
-- and B owes C
-- then the app should prefer reducing that into A owing C when the net amounts allow it
+So the same app remains usable on phone and desktop without pretending to be inside a device frame.
 
-The manual ledger work added here is meant to make that next step straightforward.
+## Responsive layout direction
+
+The responsive styling lives in [app/assets/css/main.css](/Users/jojo/Developer/agent-bill/app/assets/css/main.css).
+
+The current layout approach is:
+
+- mobile keeps the tighter single-column flow
+- tablet and desktop widen the app container
+- larger screens use real content grids instead of scaling up a narrow phone view
+
+Examples:
+
+- the home screen opens into a two-column hero and activity layout
+- the groups screen becomes a grid of group cards
+- the profile screen separates identity and assistant/settings content
+- the assign screen uses a main work area plus a sticky desktop summary sidebar
+
+That keeps the visual language from the design reference, but makes it behave like an actual responsive app.
+
+## Manual ledger data model
+
+The Postgres schema currently contains:
+
+- `bill_runs`
+- `people`
+- `groups`
+- `group_memberships`
+- `bills`
+- `bill_member_shares`
+- `bill_transfers`
+
+The streamed analysis path currently persists into `bill_runs`.
+The manual ledger path persists into the group and bill tables.
+
+This split is fine for now because we are still figuring out the product shape.
+
+## Current limitations
+
+- jobs are in memory, so a server restart loses active streams
+- there is no auth
+- there is no OCR-only offline image path yet
+- the Pi split logic is still conservative and defaults to shared allocation often
+- migrations are still bootstrap SQL, not a formal migration tool
+
+These are acceptable tradeoffs for the current hackathon phase.
+
+## Next good steps
+
+The next sensible backend steps are:
+
+1. Convert streamed analysis output into real group bills and member shares.
+2. Add a small review/edit step before saving the final split.
+3. Make receipt ownership reasoning a second explicit agent pass instead of one combined pass.
+4. Replace ad-hoc schema bootstrap with real migrations once the tables settle.

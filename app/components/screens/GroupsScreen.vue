@@ -28,11 +28,12 @@ const groups = [
       </div>
     </div>
 
-    <div class="section-pad" style="display: flex; flex-direction: column; gap: 12px;">
+    <div class="section-pad groups-grid">
       <div
         v-for="group in groups"
         :key="group.name"
-        style="background: var(--paper); border-radius: 22px; padding: 16px 18px; border: 1px solid rgba(20,18,16,0.08);"
+        class="surface-panel"
+        style="padding: 16px 18px;"
       >
         <div style="display: flex; align-items: center; gap: 12px;">
           <div
@@ -65,7 +66,7 @@ const groups = [
           </div>
         </div>
 
-        <div style="display: flex; margin-top: 12px; padding-left: 4px;">
+        <div style="display: flex; margin-top: 16px; padding-left: 4px;">
           <div
             v-for="(member, index) in group.members.slice(0, 4)"
             :key="member"
