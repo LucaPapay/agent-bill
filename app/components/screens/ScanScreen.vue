@@ -917,7 +917,7 @@ onBeforeUnmount(() => {
             <div class="scan-avatar">
               <IconGlyph name="sparkle" width="16" height="16" />
             </div>
-            <button type="button" class="btn btn-ghost" @click="openBillComposerFromScan">
+            <button type="button" class="btn scan-composer-toggle" @click="openBillComposerFromScan">
               {{ composerVisible ? 'Refresh bill composer' : 'Open bill composer' }}
             </button>
           </div>
@@ -1197,6 +1197,12 @@ onBeforeUnmount(() => {
 .scan-choice-link {
   display: inline-flex;
   align-items: center;
+}
+
+.scan-composer-toggle {
+  background: var(--marigold);
+  color: var(--ink);
+  border: 1.5px solid var(--marigold);
 }
 
 .scan-preview-stage {
