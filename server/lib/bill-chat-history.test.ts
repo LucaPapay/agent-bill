@@ -40,10 +40,10 @@ describe('appendBillChatEvent', () => {
     ]
 
     expect(
-      appendBillChatEvent(
         appendBillChatEvent(
-          appendBillChatEvent(history, {
-            message: 'Analysis job queued.',
+          appendBillChatEvent(
+            appendBillChatEvent(history, {
+            message: 'Penny is warming up her little receipt engine.',
             phase: 'queued',
             type: 'status',
           }),
@@ -65,7 +65,7 @@ describe('appendBillChatEvent', () => {
         who: 'user',
       },
       {
-        text: 'Analysis job queued.',
+        text: 'Penny is warming up her little receipt engine.',
         who: 'log',
       },
       {
