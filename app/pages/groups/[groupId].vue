@@ -17,11 +17,14 @@ const {
   ledgerLoaded,
   peopleNotInSelectedGroup,
   personToAddId,
+  recordSettlementPayment,
   saving,
   selectedGroupBillTransfers,
+  selectedGroupSettlementPayments,
   selectedGroupSimplifiedTotalCents,
   selectedGroupSimplifiedTransfers,
   setSelectedGroup,
+  undoSettlementPayment,
 } = useLedgerState()
 
 const group = computed(() => getGroupById(groupId.value))
@@ -73,9 +76,13 @@ watch(groupId, (value) => {
           <div style="display: grid; gap: 18px;">
             <GroupSettlementPanel
               :format-cents="formatCents"
+              :payments="selectedGroupSettlementPayments"
               :raw-transfer-count="selectedGroupBillTransfers.length"
+              :saving="saving"
               :total-cents="selectedGroupSimplifiedTotalCents"
               :transfers="selectedGroupSimplifiedTransfers"
+              @record-payment="recordSettlementPayment"
+              @undo-payment="undoSettlementPayment"
             />
 
             <BillListPanel

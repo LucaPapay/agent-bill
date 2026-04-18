@@ -1,6 +1,15 @@
 import { os } from '@orpc/server'
 import { z } from 'zod'
-import { createBillRecord, createGroup, createPerson, addPersonToGroup, getGroupMemberIds, getLedgerSnapshot } from '../lib/db'
+import {
+  addPersonToGroup,
+  createBillRecord,
+  createGroup,
+  createPerson,
+  createSettlementPayment,
+  getGroupMemberIds,
+  getLedgerSnapshot,
+  voidSettlementPayment,
+} from '../lib/db'
 import { buildBillLedger } from '../lib/group-ledger'
 import { runBillAnalysisPipeline } from '../lib/bill-pipeline'
 
@@ -90,6 +99,29 @@ const createLedgerBill = os
     }
   })
 
+const recordSettlementPayment = os
+  .input(z.object({
+    amountCents: z.number().int().positive(),
+    fromPersonId: z.string().trim().min(1),
+    groupId: z.string().trim().min(1),
+    toPersonId: z.string().trim().min(1),
+  }))
+  .handler(async ({ input }) => {
+    await createSettlementPayment(input)
+
+    return await getLedgerSnapshot()
+  })
+
+const undoSettlementPayment = os
+  .input(z.object({
+    paymentId: z.string().trim().min(1),
+  }))
+  .handler(async ({ input }) => {
+    await voidSettlementPayment(input.paymentId)
+
+    return await getLedgerSnapshot()
+  })
+
 const health = os.handler(() => ({
   databaseConfigured: Boolean(useRuntimeConfig().databaseUrl),
   name: 'agent-bill',
@@ -107,6 +139,8 @@ export const router = {
   createLedgerPerson,
   getLedger,
   health,
+  recordSettlementPayment,
+  undoSettlementPayment,
 }
 
 export type AppRouter = typeof router

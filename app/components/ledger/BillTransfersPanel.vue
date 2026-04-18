@@ -17,6 +17,10 @@ defineProps({
       Derived transfers
     </div>
 
+    <div style="font-size: 13px; line-height: 1.45; color: var(--muted); margin-bottom: 12px;">
+      These rows show the original obligation created by this bill. Settlement payments are tracked separately at the group level.
+    </div>
+
     <div v-if="bill?.transfers?.length" style="display: grid; gap: 10px;">
       <div
         v-for="transfer in bill.transfers"

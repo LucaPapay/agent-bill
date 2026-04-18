@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import postgres from 'postgres'
-import { simplifyGroupTransfers } from './group-simplification'
+import { buildOpenGroupTransfers, type Transfer } from './group-simplification'
 
 let client: ReturnType<typeof postgres> | null = null
 let schemaReady: Promise<void> | null = null
@@ -127,6 +127,23 @@ async function ensureSchema() {
       await db()`
         create index if not exists bill_transfers_group_id_idx
         on bill_transfers (group_id)
+      `
+
+      await db()`
+        create table if not exists settlement_payments (
+          id text primary key,
+          group_id text not null references groups(id) on delete cascade,
+          from_person_id text not null references people(id),
+          to_person_id text not null references people(id),
+          amount_cents integer not null,
+          created_at timestamptz not null default now(),
+          voided_at timestamptz
+        )
+      `
+
+      await db()`
+        create index if not exists settlement_payments_group_id_idx
+        on settlement_payments (group_id, created_at desc)
       `
     })()
   }
@@ -307,10 +324,129 @@ export async function createBillRecord({
   }
 }
 
+async function getGroupSettlementState(groupId: string) {
+  await ensureSchema()
+
+  const [transferRows, paymentRows] = await Promise.all([
+    db()`
+      select id, from_person_id, to_person_id, amount_cents
+      from bill_transfers
+      where group_id = ${groupId}
+    `,
+    db()`
+      select id, from_person_id, to_person_id, amount_cents, created_at, voided_at
+      from settlement_payments
+      where group_id = ${groupId}
+      order by created_at desc
+    `,
+  ])
+
+  const billTransfers: Transfer[] = transferRows.map((row: any) => ({
+    amountCents: row.amount_cents,
+    fromPersonId: row.from_person_id,
+    toPersonId: row.to_person_id,
+  }))
+
+  const settlementPayments = paymentRows.map((row: any) => ({
+    amountCents: row.amount_cents,
+    createdAt: row.created_at,
+    fromPersonId: row.from_person_id,
+    id: row.id,
+    toPersonId: row.to_person_id,
+    voidedAt: row.voided_at,
+  }))
+
+  const simplifiedTransfers = buildOpenGroupTransfers(billTransfers, settlementPayments)
+
+  return {
+    billTransfers,
+    settlementPayments,
+    simplifiedTransfers,
+  }
+}
+
+export async function createSettlementPayment({
+  amountCents,
+  fromPersonId,
+  groupId,
+  toPersonId,
+}: {
+  amountCents: number
+  fromPersonId: string
+  groupId: string
+  toPersonId: string
+}) {
+  await ensureSchema()
+
+  const normalizedAmountCents = Math.max(0, Math.round(amountCents))
+
+  if (normalizedAmountCents <= 0) {
+    throw new Error('Payment amount must be greater than zero.')
+  }
+
+  if (fromPersonId === toPersonId) {
+    throw new Error('A payment must move between two different people.')
+  }
+
+  const groupMemberIds = await getGroupMemberIds(groupId)
+
+  if (!groupMemberIds.includes(fromPersonId) || !groupMemberIds.includes(toPersonId)) {
+    throw new Error('Settlement payments must stay inside the selected group.')
+  }
+
+  const { simplifiedTransfers } = await getGroupSettlementState(groupId)
+  const openTransfer = simplifiedTransfers.find(transfer =>
+    transfer.fromPersonId === fromPersonId
+    && transfer.toPersonId === toPersonId,
+  )
+
+  if (!openTransfer) {
+    throw new Error('That settlement edge is no longer open.')
+  }
+
+  if (normalizedAmountCents > openTransfer.amountCents) {
+    throw new Error('Payment amount cannot be greater than the current open settlement.')
+  }
+
+  const id = randomUUID()
+  const [row] = await db()`
+    insert into settlement_payments (id, group_id, from_person_id, to_person_id, amount_cents)
+    values (${id}, ${groupId}, ${fromPersonId}, ${toPersonId}, ${normalizedAmountCents})
+    returning id, created_at
+  `
+
+  return {
+    createdAt: row!.created_at,
+    id: row!.id,
+  }
+}
+
+export async function voidSettlementPayment(paymentId: string) {
+  await ensureSchema()
+
+  const [row] = await db()`
+    update settlement_payments
+    set voided_at = now()
+    where id = ${paymentId}
+      and voided_at is null
+    returning id, group_id, voided_at
+  `
+
+  if (!row) {
+    throw new Error('Payment not found or already undone.')
+  }
+
+  return {
+    groupId: row.group_id,
+    id: row.id,
+    voidedAt: row.voided_at,
+  }
+}
+
 export async function getLedgerSnapshot() {
   await ensureSchema()
 
-  const [peopleRows, groupRows, membershipRows, billRows, shareRows, itemRows, itemAssignmentRows, transferRows] = await Promise.all([
+  const [peopleRows, groupRows, membershipRows, billRows, shareRows, itemRows, itemAssignmentRows, transferRows, paymentRows] = await Promise.all([
     db()`select id, name, created_at from people order by lower(name) asc, created_at asc`,
     db()`select id, name, created_at from groups order by created_at desc`,
     db()`select id, group_id, person_id, created_at from group_memberships order by created_at asc`,
@@ -319,6 +455,7 @@ export async function getLedgerSnapshot() {
     db()`select id, bill_id, name, amount_cents, sort_order from bill_items order by sort_order asc, id asc`,
     db()`select id, bill_item_id, person_id from bill_item_assignments`,
     db()`select id, bill_id, group_id, from_person_id, to_person_id, amount_cents from bill_transfers`,
+    db()`select id, group_id, from_person_id, to_person_id, amount_cents, created_at, voided_at from settlement_payments order by created_at desc`,
   ])
 
   const people = peopleRows.map((row: any) => ({
@@ -452,9 +589,37 @@ export async function getLedgerSnapshot() {
     billTransfersByGroupId.set(row.group_id, groupTransfers)
   }
 
+  const settlementPaymentsByGroupId = new Map<string, any[]>()
+
+  for (const row of paymentRows) {
+    const fromPerson = peopleById.get(row.from_person_id)
+    const toPerson = peopleById.get(row.to_person_id)
+
+    if (!fromPerson || !toPerson) {
+      continue
+    }
+
+    const payment = {
+      amountCents: row.amount_cents,
+      createdAt: row.created_at,
+      fromPerson,
+      fromPersonId: row.from_person_id,
+      id: row.id,
+      isVoided: Boolean(row.voided_at),
+      toPerson,
+      toPersonId: row.to_person_id,
+      voidedAt: row.voided_at,
+    }
+
+    const payments = settlementPaymentsByGroupId.get(row.group_id) || []
+    payments.push(payment)
+    settlementPaymentsByGroupId.set(row.group_id, payments)
+  }
+
   const groups = groupRows.map((row: any) => {
     const billTransfers = billTransfersByGroupId.get(row.id) || []
-    const simplifiedTransfers = simplifyGroupTransfers(billTransfers)
+    const settlementPayments = settlementPaymentsByGroupId.get(row.id) || []
+    const simplifiedTransfers = buildOpenGroupTransfers(billTransfers, settlementPayments)
       .map((transfer, index) => {
         const fromPerson = peopleById.get(transfer.fromPersonId)
         const toPerson = peopleById.get(transfer.toPersonId)
@@ -481,6 +646,7 @@ export async function getLedgerSnapshot() {
       id: row.id,
       memberships: membershipsByGroupId.get(row.id) || [],
       name: row.name,
+      settlementPayments,
       simplifiedTransfers,
     }
   })

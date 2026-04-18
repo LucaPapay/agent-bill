@@ -53,6 +53,10 @@ export function useLedgerState() {
     selectedGroup.value?.simplifiedTransfers || [],
   )
 
+  const selectedGroupSettlementPayments = computed(() =>
+    selectedGroup.value?.settlementPayments || [],
+  )
+
   const selectedGroupSimplifiedTotalCents = computed(() =>
     selectedGroupSimplifiedTransfers.value.reduce((sum: number, transfer: any) => sum + transfer.amountCents, 0),
   )
@@ -531,6 +535,61 @@ export function useLedgerState() {
     })
   }
 
+  function recordSettlementPayment({
+    amountCents,
+    fromPersonId,
+    toPersonId,
+  }: {
+    amountCents: number
+    fromPersonId: string
+    toPersonId: string
+  }) {
+    if (!selectedGroupId.value) {
+      return Promise.resolve(null)
+    }
+
+    errorMessage.value = ''
+    saving.value = true
+
+    return api.recordSettlementPayment({
+      amountCents,
+      fromPersonId,
+      groupId: selectedGroupId.value,
+      toPersonId,
+    }).then(
+      (value: any) => {
+        applyLedger(value)
+        return value
+      },
+      (error: any) => {
+        errorMessage.value = error?.message || 'Could not save the settlement payment.'
+        return null
+      },
+    ).finally(() => {
+      saving.value = false
+    })
+  }
+
+  function undoSettlementPayment(paymentId: string) {
+    errorMessage.value = ''
+    saving.value = true
+
+    return api.undoSettlementPayment({
+      paymentId,
+    }).then(
+      (value: any) => {
+        applyLedger(value)
+        return value
+      },
+      (error: any) => {
+        errorMessage.value = error?.message || 'Could not undo the settlement payment.'
+        return null
+      },
+    ).finally(() => {
+      saving.value = false
+    })
+  }
+
   return {
     addBillItem,
     addPersonToGroup,
@@ -564,6 +623,7 @@ export function useLedgerState() {
     personToAddId,
     recentBillActivities,
     removeBillItem,
+    recordSettlementPayment,
     resetBillForm,
     resultLayout,
     saving,
@@ -572,11 +632,13 @@ export function useLedgerState() {
     selectedGroup,
     selectedGroupBillTransfers,
     selectedGroupId,
+    selectedGroupSettlementPayments,
     selectedGroupSimplifiedTotalCents,
     selectedGroupSimplifiedTransfers,
     setSelectedBill,
     setSelectedGroup,
     toggleBillItemAssignment,
+    undoSettlementPayment,
     updateBillItemAmount,
     updateBillItemName,
   }

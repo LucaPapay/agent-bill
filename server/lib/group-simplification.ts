@@ -1,7 +1,14 @@
-type Transfer = {
+export type Transfer = {
   amountCents: number
   fromPersonId: string
   toPersonId: string
+}
+
+type SettlementPayment = {
+  amountCents: number
+  fromPersonId: string
+  toPersonId: string
+  voidedAt?: string | null
 }
 
 function compareOpenAmounts(
@@ -86,4 +93,22 @@ export function simplifyGroupTransfers(transfers: Transfer[]) {
   }
 
   return simplifiedTransfers
+}
+
+export function buildOpenGroupTransfers(transfers: Transfer[], payments: SettlementPayment[]) {
+  const adjustedTransfers = [...transfers]
+
+  for (const payment of payments) {
+    if (payment.voidedAt) {
+      continue
+    }
+
+    adjustedTransfers.push({
+      amountCents: payment.amountCents,
+      fromPersonId: payment.toPersonId,
+      toPersonId: payment.fromPersonId,
+    })
+  }
+
+  return simplifyGroupTransfers(adjustedTransfers)
 }

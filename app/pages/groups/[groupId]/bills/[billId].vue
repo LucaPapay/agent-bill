@@ -16,10 +16,14 @@ const {
   getBillById,
   getGroupById,
   ledgerLoaded,
+  recordSettlementPayment,
+  saving,
   selectedGroupBillTransfers,
+  selectedGroupSettlementPayments,
   selectedGroupSimplifiedTotalCents,
   selectedGroupSimplifiedTransfers,
   setSelectedBill,
+  undoSettlementPayment,
 } = useLedgerState()
 
 const group = computed(() => getGroupById(groupId.value))
@@ -56,9 +60,13 @@ watch([groupId, billId], ([nextGroupId, nextBillId]) => {
         <div style="display: grid; gap: 14px; margin-top: 18px;" class="home-main">
           <GroupSettlementPanel
             :format-cents="formatCents"
+            :payments="selectedGroupSettlementPayments"
             :raw-transfer-count="selectedGroupBillTransfers.length"
+            :saving="saving"
             :total-cents="selectedGroupSimplifiedTotalCents"
             :transfers="selectedGroupSimplifiedTransfers"
+            @record-payment="recordSettlementPayment"
+            @undo-payment="undoSettlementPayment"
           />
 
           <BillListPanel
