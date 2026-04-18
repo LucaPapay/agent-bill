@@ -116,23 +116,6 @@ export async function createSettlementPayment({
   }
 }
 
-export async function getSettlementPaymentGroupId(paymentId: string) {
-  await ensureSchema()
-
-  const [row] = await db()`
-    select group_id
-    from settlement_payments
-    where id = ${paymentId}
-    limit 1
-  `
-
-  if (!row) {
-    throw new Error('Payment not found.')
-  }
-
-  return row.group_id as string
-}
-
 export async function voidSettlementPayment(paymentId: string) {
   await ensureSchema()
 
