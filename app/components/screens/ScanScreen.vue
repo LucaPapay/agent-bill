@@ -1043,7 +1043,7 @@ onBeforeUnmount(() => {
   height: 100vh;
   height: 100dvh;
   overflow: hidden;
-  padding-bottom: 96px;
+  padding-bottom: 32px;
 }
 
 .scan-chat-wrap {
@@ -1468,7 +1468,7 @@ onBeforeUnmount(() => {
     min-height: calc(100dvh - 120px);
     height: calc(100vh - 120px);
     height: calc(100dvh - 120px);
-    padding-bottom: 48px;
+    padding-bottom: 16px;
   }
 }
 
