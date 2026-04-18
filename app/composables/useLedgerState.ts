@@ -659,6 +659,24 @@ export function useLedgerState() {
     })
   }
 
+  function addCurrentUserToAllGroups() {
+    errorMessage.value = ''
+    saving.value = true
+
+    return api.addLedgerPersonToAllGroups().then(
+      (value: any) => {
+        applyLedger(value)
+        return value
+      },
+      (error: any) => {
+        errorMessage.value = error?.message || 'Could not add you to every group.'
+        return null
+      },
+    ).finally(() => {
+      saving.value = false
+    })
+  }
+
   function createBill() {
     if (!selectedGroupId.value) {
       return Promise.resolve(null)
@@ -814,6 +832,7 @@ export function useLedgerState() {
 
   return {
     addBillItem,
+    addCurrentUserToAllGroups,
     addPersonToGroup,
     allBills,
     billItems,

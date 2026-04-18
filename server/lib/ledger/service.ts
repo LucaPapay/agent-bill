@@ -1,4 +1,5 @@
 import {
+  addPersonToAllGroups,
   addPersonToGroup,
   assertPersonCanAccessGroup,
   assertPersonCanAccessVisiblePerson,
@@ -40,6 +41,11 @@ export async function addLedgerPersonToGroup(authPersonId: string, groupId: stri
   await assertPersonCanAccessVisiblePerson(authPersonId, personId)
   await addPersonToGroup(groupId, personId)
   return await getLedgerSnapshot(authPersonId)
+}
+
+export async function addLedgerPersonToAllGroups(personId: string) {
+  await addPersonToAllGroups(personId)
+  return await getLedgerSnapshot(personId)
 }
 
 export async function createLedgerBill(authPersonId: string, input: {

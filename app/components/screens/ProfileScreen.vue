@@ -7,6 +7,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  errorMessage: {
+    type: String,
+    default: '',
+  },
   health: {
     type: Object,
     default: null,
@@ -15,9 +19,13 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  saving: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['logout'])
+const emit = defineEmits(['add-to-all-groups', 'logout'])
 
 const savedBills = computed(() =>
   props.ledger.groups.reduce((sum, group) => sum + group.bills.length, 0)
@@ -41,19 +49,40 @@ const settings = computed(() => [
     </div>
 
     <div class="section-pad profile-grid">
-      <div class="surface-panel" style="padding: 20px; display: flex; gap: 14px; align-items: center;">
-        <AvatarBadge :name="currentUser?.name || 'You'" size="lg" />
-        <div style="flex: 1;">
-          <div style="font-weight: 700; font-size: 18px;">
-            {{ currentUser?.name || 'Signed in' }}
+      <div class="surface-panel" style="padding: 20px;">
+        <div style="display: flex; gap: 14px; align-items: center;">
+          <AvatarBadge :name="currentUser?.name || 'You'" size="lg" />
+          <div style="flex: 1;">
+            <div style="font-weight: 700; font-size: 18px;">
+              {{ currentUser?.name || 'Signed in' }}
+            </div>
+            <div style="font-size: 12px; color: var(--muted);">
+              {{ currentUser?.email || 'Google account' }}
+            </div>
           </div>
-          <div style="font-size: 12px; color: var(--muted);">
-            {{ currentUser?.email || 'Google account' }}
+          <button class="btn btn-ghost" style="padding: 10px 14px; font-size: 12px;" @click="emit('logout')">
+            Log out
+          </button>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;">
+          <button
+            class="btn btn-accent"
+            :disabled="saving"
+            style="padding: 10px 16px; font-size: 12px;"
+            @click="emit('add-to-all-groups')"
+          >
+            {{ saving ? 'Adding you...' : 'Add me to all groups' }}
+          </button>
+
+          <div class="mono" style="align-self: center; font-size: 10px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase;">
+            Testing only
           </div>
         </div>
-        <button class="btn btn-ghost" style="padding: 10px 14px; font-size: 12px;" @click="emit('logout')">
-          Log out
-        </button>
+
+        <div v-if="errorMessage" style="margin-top: 12px; padding: 12px 14px; border-radius: 16px; background: #fff0ec; color: #7d2f21; border: 1px solid rgba(255,84,54,0.2); font-size: 13px;">
+          {{ errorMessage }}
+        </div>
       </div>
 
       <div>

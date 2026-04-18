@@ -11,6 +11,7 @@ export {
   updateBillRecord,
 } from './db/bills'
 export {
+  addPersonToAllGroups,
   addPersonToGroup,
   assertPersonCanAccessGroup,
   assertPersonCanAccessVisiblePerson,

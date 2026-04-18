@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  addLedgerPersonToAllGroups,
   addLedgerPersonToGroup,
   createLedgerBill,
   createLedgerGroup,
@@ -46,6 +47,11 @@ export const addLedgerPersonToGroupProcedure = protectedRpc
   }))
   .handler(async ({ context, input }) => {
     return await addLedgerPersonToGroup(context.personId, input.groupId, input.personId)
+  })
+
+export const addLedgerPersonToAllGroupsProcedure = protectedRpc
+  .handler(async ({ context }) => {
+    return await addLedgerPersonToAllGroups(context.personId)
   })
 
 export const createLedgerBillProcedure = protectedRpc
@@ -103,6 +109,7 @@ export const undoSettlementPaymentProcedure = protectedRpc
   })
 
 export const ledgerRouter = {
+  addLedgerPersonToAllGroups: addLedgerPersonToAllGroupsProcedure,
   addLedgerPersonToGroup: addLedgerPersonToGroupProcedure,
   createLedgerBill: createLedgerBillProcedure,
   createLedgerGroup: createLedgerGroupProcedure,

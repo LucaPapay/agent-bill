@@ -117,6 +117,23 @@ export async function addPersonToGroup(groupId: string, personId: string) {
   `
 }
 
+export async function addPersonToAllGroups(personId: string) {
+  await ensureSchema()
+
+  const groups = await db()`
+    select id
+    from groups
+  `
+
+  for (const group of groups) {
+    await db()`
+      insert into group_memberships (id, group_id, person_id)
+      values (${randomUUID()}, ${group.id}, ${personId})
+      on conflict (group_id, person_id) do nothing
+    `
+  }
+}
+
 export async function getGroupMemberIds(groupId: string) {
   await ensureSchema()
 
