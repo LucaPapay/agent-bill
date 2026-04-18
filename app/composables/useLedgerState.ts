@@ -345,6 +345,31 @@ export function useLedgerState() {
     syncBillForm(selectedGroup.value)
   }
 
+  function loadBillFormFromBill(groupId: string, billId: string, options?: { duplicate?: boolean }) {
+    const bill = getBillById(groupId, billId)
+
+    if (!bill) {
+      return false
+    }
+
+    setSelectedGroup(groupId)
+    selectedBillId.value = bill.id
+    billTitle.value = options?.duplicate ? `${bill.title} copy` : bill.title
+    billTotal.value = String((bill.totalAmountCents || 0) / 100)
+    billTip.value = String((bill.tipAmountCents || 0) / 100)
+    billPaidByPersonId.value = bill.paidByPersonId
+    billItems.value = bill.items.length
+      ? bill.items.map((item: any) => ({
+          amount: String((item.amountCents || 0) / 100),
+          assignedPersonIds: [...(item.assignedPersonIds || [])],
+          id: nextBillItemId(),
+          name: item.name,
+        }))
+      : [createEmptyBillItem(selectedGroup.value)]
+
+    return true
+  }
+
   function addBillItem() {
     billItems.value.push(createEmptyBillItem(selectedGroup.value))
   }
@@ -535,6 +560,65 @@ export function useLedgerState() {
     })
   }
 
+  function updateBill(billId: string) {
+    if (!selectedGroupId.value) {
+      return Promise.resolve(null)
+    }
+
+    errorMessage.value = ''
+    saving.value = true
+
+    const payloadItems = billItems.value
+      .map(item => ({
+        amountCents: toCents(item.amount),
+        assignedPersonIds: normalizeAssignedPersonIds(selectedGroup.value, item.assignedPersonIds || []),
+        name: item.name.trim(),
+      }))
+      .filter(item => item.name || item.amountCents > 0)
+
+    return api.updateLedgerBill({
+      billId,
+      billItems: payloadItems,
+      groupId: selectedGroupId.value,
+      paidByPersonId: billPaidByPersonId.value,
+      tipAmountCents: billTipCents.value,
+      title: billTitle.value,
+      totalAmountCents: billTotalCents.value,
+    }).then(
+      (value: any) => {
+        selectedBillId.value = value.billId
+        applyLedger(value.ledger)
+        return value
+      },
+      (error: any) => {
+        errorMessage.value = error?.message || 'Could not update the bill.'
+        return null
+      },
+    ).finally(() => {
+      saving.value = false
+    })
+  }
+
+  function deleteBill(billId: string) {
+    errorMessage.value = ''
+    saving.value = true
+
+    return api.deleteLedgerBill({
+      billId,
+    }).then(
+      (value: any) => {
+        applyLedger(value.ledger)
+        return value
+      },
+      (error: any) => {
+        errorMessage.value = error?.message || 'Could not delete the bill.'
+        return null
+      },
+    ).finally(() => {
+      saving.value = false
+    })
+  }
+
   function recordSettlementPayment({
     amountCents,
     fromPersonId,
@@ -608,6 +692,7 @@ export function useLedgerState() {
     createBill,
     createGroup,
     createPerson,
+    deleteBill,
     ensureLoaded,
     errorMessage,
     formatCents,
@@ -618,6 +703,7 @@ export function useLedgerState() {
     homeSummary,
     ledger,
     ledgerLoaded,
+    loadBillFormFromBill,
     peopleNotInSelectedGroup,
     personName,
     personToAddId,
@@ -639,6 +725,7 @@ export function useLedgerState() {
     setSelectedGroup,
     toggleBillItemAssignment,
     undoSettlementPayment,
+    updateBill,
     updateBillItemAmount,
     updateBillItemName,
   }

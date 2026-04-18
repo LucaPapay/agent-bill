@@ -45,6 +45,10 @@ defineProps({
     default: 'cards',
   },
   saving: Boolean,
+  saveLabel: {
+    type: String,
+    default: 'Save bill',
+  },
   selectedBill: {
     type: Object,
     default: null,
@@ -156,7 +160,7 @@ const layoutOptions = [
             Items + tip must equal the bill total
           </div>
           <button class="btn btn-accent btn-block" :disabled="saving || !canCreateBill" @click="emit('save')">
-            Save bill
+            {{ saveLabel }}
             <IconGlyph name="chevron" width="16" height="16" />
           </button>
           <button class="btn btn-ghost btn-block" style="margin-top: 10px;" @click="emit('reset')">

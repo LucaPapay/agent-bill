@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import PageShell from '../../../../components/layout/PageShell.vue'
-import BillComposer from '../../../../components/ledger/BillComposer.vue'
+import PageShell from '../../../../../components/layout/PageShell.vue'
+import BillComposer from '../../../../../components/ledger/BillComposer.vue'
 
 const route = useRoute()
 const groupId = computed(() => String(route.params.groupId || ''))
-const duplicateBillId = computed(() => String(route.query.duplicate || ''))
+const billId = computed(() => String(route.params.billId || ''))
 
 const {
+  addBillItem,
   billItems,
   billPaidByPersonId,
   billPreviewShares,
@@ -16,43 +17,53 @@ const {
   billTitle,
   billTotal,
   canCreateBill,
-  createBill,
   errorMessage,
   formatCents,
+  getBillById,
   getGroupById,
   ledgerLoaded,
   loadBillFormFromBill,
   removeBillItem,
-  resetBillForm,
   resultLayout,
   saving,
   selectedBill,
   selectedGroup,
-  setSelectedGroup,
-  addBillItem,
   toggleBillItemAssignment,
+  updateBill,
   updateBillItemAmount,
   updateBillItemName,
 } = useLedgerState()
 
 const group = computed(() => getGroupById(groupId.value))
-
-watch([groupId, duplicateBillId], ([nextGroupId, nextDuplicateBillId]) => {
-  if (!nextGroupId) {
-    return
+const bill = computed(() => getBillById(groupId.value, billId.value))
+const activeSettlementPaymentCount = computed(() =>
+  (group.value?.settlementPayments || []).filter((payment: any) => !payment.isVoided).length,
+)
+const canUpdateBill = computed(() => canCreateBill.value && activeSettlementPaymentCount.value === 0)
+const editErrorMessage = computed(() => {
+  if (errorMessage.value) {
+    return errorMessage.value
   }
 
-  setSelectedGroup(nextGroupId)
-
-  if (nextDuplicateBillId && loadBillFormFromBill(nextGroupId, nextDuplicateBillId, { duplicate: true })) {
-    return
+  if (activeSettlementPaymentCount.value > 0) {
+    return 'Void active settlement payments before editing this bill.'
   }
 
-  resetBillForm()
+  return ''
+})
+
+watch([groupId, billId], ([nextGroupId, nextBillId]) => {
+  if (nextGroupId && nextBillId) {
+    loadBillFormFromBill(nextGroupId, nextBillId)
+  }
 }, { immediate: true })
 
 function saveBill() {
-  createBill().then((value: any) => {
+  if (!billId.value) {
+    return
+  }
+
+  updateBill(billId.value).then((value: any) => {
     if (value?.billId) {
       navigateTo(`/groups/${groupId.value}/bills/${value.billId}`)
     }
@@ -63,7 +74,7 @@ function saveBill() {
 <template>
   <PageShell>
     <BillComposer
-      v-if="group"
+      v-if="group && bill"
       :bill-items="billItems"
       :bill-paid-by-person-id="billPaidByPersonId"
       :bill-preview-shares="billPreviewShares"
@@ -71,17 +82,17 @@ function saveBill() {
       :bill-tip="billTip"
       :bill-title="billTitle"
       :bill-total="billTotal"
-      :can-create-bill="canCreateBill"
-      :error-message="errorMessage"
+      :can-create-bill="canUpdateBill"
+      :error-message="editErrorMessage"
       :format-cents="formatCents"
       :layout="resultLayout"
-      :save-label="'Save bill'"
+      :save-label="'Update bill'"
       :saving="saving"
       :selected-bill="selectedBill"
       :selected-group="selectedGroup"
       @add-item="addBillItem"
       @remove-item="removeBillItem"
-      @reset="resetBillForm"
+      @reset="loadBillFormFromBill(groupId, billId)"
       @save="saveBill"
       @toggle-assignment="toggleBillItemAssignment"
       @update:bill-paid-by-person-id="billPaidByPersonId = $event"
@@ -97,10 +108,10 @@ function saveBill() {
       <div class="section-pad" style="padding-top: 24px;">
         <div class="surface-panel" style="padding: 20px;">
           <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
-            Group not found
+            Bill not found
           </div>
           <div style="font-size: 15px; line-height: 1.5; margin-top: 8px;">
-            Pick a real group before opening the bill composer.
+            Pick a real saved bill before opening the editor.
           </div>
         </div>
       </div>

@@ -6,8 +6,10 @@ import {
   createGroup,
   createPerson,
   createSettlementPayment,
+  deleteBillRecord,
   getGroupMemberIds,
   getLedgerSnapshot,
+  updateBillRecord,
   voidSettlementPayment,
 } from '../lib/db'
 import { buildBillLedger } from '../lib/group-ledger'
@@ -99,6 +101,61 @@ const createLedgerBill = os
     }
   })
 
+const updateLedgerBill = os
+  .input(z.object({
+    billId: z.string().trim().min(1),
+    billItems: z.array(z.object({
+      amountCents: z.number().int().min(0),
+      assignedPersonIds: z.array(z.string().trim().min(1)).min(1),
+      name: z.string().trim().min(1),
+    })),
+    groupId: z.string().trim().min(1),
+    paidByPersonId: z.string().trim().min(1),
+    tipAmountCents: z.number().int().min(0),
+    title: z.string().trim().min(1),
+    totalAmountCents: z.number().int().min(0),
+  }))
+  .handler(async ({ input }) => {
+    const groupMemberIds = await getGroupMemberIds(input.groupId)
+    const { memberShares, transfers } = buildBillLedger({
+      billItems: input.billItems,
+      groupMemberIds,
+      paidByPersonId: input.paidByPersonId,
+      tipAmountCents: input.tipAmountCents,
+      totalAmountCents: input.totalAmountCents,
+    })
+
+    const bill = await updateBillRecord({
+      billId: input.billId,
+      billItems: input.billItems,
+      memberShares,
+      paidByPersonId: input.paidByPersonId,
+      tipAmountCents: input.tipAmountCents,
+      title: input.title,
+      totalAmountCents: input.totalAmountCents,
+      transfers,
+    })
+
+    return {
+      billId: bill.id,
+      ledger: await getLedgerSnapshot(),
+    }
+  })
+
+const deleteLedgerBill = os
+  .input(z.object({
+    billId: z.string().trim().min(1),
+  }))
+  .handler(async ({ input }) => {
+    const deleted = await deleteBillRecord(input.billId)
+
+    return {
+      billId: deleted.id,
+      groupId: deleted.groupId,
+      ledger: await getLedgerSnapshot(),
+    }
+  })
+
 const recordSettlementPayment = os
   .input(z.object({
     amountCents: z.number().int().positive(),
@@ -137,10 +194,12 @@ export const router = {
   createLedgerBill,
   createLedgerGroup,
   createLedgerPerson,
+  deleteLedgerBill,
   getLedger,
   health,
   recordSettlementPayment,
   undoSettlementPayment,
+  updateLedgerBill,
 }
 
 export type AppRouter = typeof router

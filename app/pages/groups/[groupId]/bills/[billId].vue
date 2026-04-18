@@ -12,6 +12,7 @@ const groupId = computed(() => String(route.params.groupId || ''))
 const billId = computed(() => String(route.params.billId || ''))
 
 const {
+  deleteBill,
   formatCents,
   getBillById,
   getGroupById,
@@ -28,12 +29,28 @@ const {
 
 const group = computed(() => getGroupById(groupId.value))
 const bill = computed(() => getBillById(groupId.value, billId.value))
+const activeSettlementPaymentCount = computed(() =>
+  (group.value?.settlementPayments || []).filter((payment: any) => !payment.isVoided).length,
+)
+const canMutateBill = computed(() => activeSettlementPaymentCount.value === 0)
 
 watch([groupId, billId], ([nextGroupId, nextBillId]) => {
   if (nextGroupId && nextBillId) {
     setSelectedBill(nextGroupId, nextBillId)
   }
 }, { immediate: true })
+
+function removeBill() {
+  if (!bill.value || !group.value || !window.confirm(`Delete "${bill.value.title}"?`)) {
+    return
+  }
+
+  deleteBill(bill.value.id).then((value: any) => {
+    if (value?.groupId) {
+      navigateTo(`/groups/${value.groupId}`)
+    }
+  })
+}
 </script>
 
 <template>
@@ -55,6 +72,34 @@ watch([groupId, billId], ([nextGroupId, nextBillId]) => {
           <NuxtLink class="btn btn-primary" style="flex: 1; text-decoration: none;" :to="`/groups/${group.id}/bills/new`">
             Create another bill
           </NuxtLink>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+          <NuxtLink
+            class="btn btn-ghost"
+            :style="{ flex: 1, textDecoration: 'none', opacity: canMutateBill ? 1 : 0.55, pointerEvents: canMutateBill ? 'auto' : 'none' }"
+            :to="`/groups/${group.id}/bills/${bill.id}/edit`"
+          >
+            Edit bill
+          </NuxtLink>
+          <NuxtLink class="btn btn-ghost" style="flex: 1; text-decoration: none;" :to="`/groups/${group.id}/bills/new?duplicate=${bill.id}`">
+            Duplicate
+          </NuxtLink>
+          <button
+            class="btn btn-ghost"
+            :disabled="saving || !canMutateBill"
+            style="flex: 1;"
+            @click="removeBill"
+          >
+            Delete
+          </button>
+        </div>
+
+        <div
+          v-if="!canMutateBill"
+          style="margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: var(--paper); font-size: 13px; line-height: 1.45;"
+        >
+          Active settlement payments exist in this group, so this bill is locked until those payments are undone.
         </div>
 
         <div style="display: grid; gap: 14px; margin-top: 18px;" class="home-main">
