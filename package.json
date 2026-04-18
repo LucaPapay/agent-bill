@@ -21,6 +21,7 @@
     "@orpc/client": "^1.13.14",
     "@orpc/server": "^1.13.14",
     "@tailwindcss/vite": "^4.2.2",
+    "gsap": "^3.15.0",
     "nuxt": "^4.4.2",
     "openai": "^6.34.0",
     "postgres": "^3.4.9",

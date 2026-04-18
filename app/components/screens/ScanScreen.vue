@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import IconGlyph from '../app/IconGlyph.vue'
+import ReceiptSplitPreview from '../scan/ReceiptSplitPreview.vue'
 import { people } from '../app/mockData'
 import { useBillAnalysisStream } from '../../composables/useBillAnalysisStream'
 
@@ -240,12 +241,13 @@ onBeforeUnmount(() => {
           </div>
 
           <div class="scan-preview">
-            <img
+            <ReceiptSplitPreview
               v-if="previewUrl"
-              :src="previewUrl"
-              alt="Receipt preview"
-              class="scan-preview-image"
-            >
+              :image-src="previewUrl"
+              :status="analysis.status.value"
+              :title="safeTitle"
+              :total-label="resolvedTotalCents ? totalLabel : ''"
+            />
 
             <div v-else class="scan-placeholder">
               <div class="scan-placeholder-icon">
