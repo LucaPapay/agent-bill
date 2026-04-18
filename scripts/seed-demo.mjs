@@ -7,17 +7,17 @@ const sql = postgres(databaseUrl, {
   onnotice() {},
 })
 
-const peopleNames = [
-  'Jojo',
-  'Alice',
-  'Bob',
-  'Cara',
-  'Diego',
-  'Esme',
-  'Farah',
-  'Gus',
-  'Hana',
-  'Ivo',
+const demoPeople = [
+  { email: 'jojo.rossi@example.com', key: 'Jojo', name: 'Jojo Rossi' },
+  { email: 'alice.nguyen@example.com', key: 'Alice', name: 'Alice Nguyen' },
+  { email: 'bob.martin@example.com', key: 'Bob', name: 'Bob Martin' },
+  { email: 'cara.oliveira@example.com', key: 'Cara', name: 'Cara Oliveira' },
+  { email: 'diego.santos@example.com', key: 'Diego', name: 'Diego Santos' },
+  { email: 'esme.dubois@example.com', key: 'Esme', name: 'Esme Dubois' },
+  { email: 'farah.haddad@example.com', key: 'Farah', name: 'Farah Haddad' },
+  { email: 'gus.petrov@example.com', key: 'Gus', name: 'Gus Petrov' },
+  { email: 'hana.kovac@example.com', key: 'Hana', name: 'Hana Kovac' },
+  { email: 'ivo.markovic@example.com', key: 'Ivo', name: 'Ivo Markovic' },
 ]
 
 const demoGroups = [
@@ -384,8 +384,38 @@ async function ensureSchema() {
     create table if not exists people (
       id text primary key,
       name text not null,
+      email text,
+      google_sub text,
+      avatar_url text,
+      created_by_person_id text references people(id) on delete set null,
+      last_login_at timestamptz,
       created_at timestamptz not null default now()
     )
+  `
+
+  await sql`
+    alter table people
+    add column if not exists email text
+  `
+
+  await sql`
+    alter table people
+    add column if not exists google_sub text
+  `
+
+  await sql`
+    alter table people
+    add column if not exists avatar_url text
+  `
+
+  await sql`
+    alter table people
+    add column if not exists created_by_person_id text references people(id) on delete set null
+  `
+
+  await sql`
+    alter table people
+    add column if not exists last_login_at timestamptz
   `
 
   await sql`
@@ -467,7 +497,7 @@ async function ensureSchema() {
 }
 
 async function seedDemoLedger() {
-  const peopleCount = peopleNames.length
+  const peopleCount = demoPeople.length
   const groupCount = demoGroups.length
   const billCount = demoGroups.reduce((sum, group) => sum + group.billSpecs.length, 0)
 
@@ -485,16 +515,18 @@ async function seedDemoLedger() {
     const peopleByName = new Map()
     let personIndex = 0
 
-    for (const name of peopleNames) {
+    for (const person of demoPeople) {
       personIndex += 1
       const id = randomUUID()
+      const createdAt = timestampMinutesAgo(5000 - personIndex)
+      const lastLoginAt = timestampMinutesAgo(60 - personIndex)
 
       await tx`
-        insert into people (id, name, created_at)
-        values (${id}, ${name}, ${timestampMinutesAgo(5000 - personIndex)})
+        insert into people (id, name, email, last_login_at, created_at)
+        values (${id}, ${person.name}, ${person.email}, ${lastLoginAt}, ${createdAt})
       `
 
-      peopleByName.set(name, id)
+      peopleByName.set(person.key, id)
     }
 
     let groupIndex = 0
