@@ -141,15 +141,22 @@ const visibleAnalysisFeed = computed(() =>
 )
 const analysisSource = computed(() => String(analysis.result.value?.source || '').trim())
 const awaitingSplitAnswer = computed(() => analysisSource.value === 'pi-agent-question' && !splitRows.value.length)
-const shouldAskSplitQuestion = computed(() =>
+const shouldRequestGroupQuestion = computed(() =>
   Boolean(
     analysis.chatId.value
-    && selectedGroup.value
     && parsedReceipt.value
+    && !selectedGroup.value
     && !splitRows.value.length
     && !awaitingSplitAnswer.value
     && !isRunning.value
-    && analysis.result.value?.openai?.used,
+    && availableGroups.value.length
+  ),
+)
+const showGroupPickerPrompt = computed(() =>
+  Boolean(
+    awaitingSplitAnswer.value
+    && !selectedGroup.value
+    && availableGroups.value.length,
   ),
 )
 const splitPeople = computed(() => {
@@ -161,7 +168,7 @@ const splitPeople = computed(() => {
     .map((membership) => String(membership?.person?.name || '').trim())
     .filter(Boolean)
 })
-const canPickReceipt = computed(() => Boolean(selectedGroup.value && !isRunning.value && !hasSavedChat.value))
+const canPickReceipt = computed(() => Boolean(availableGroups.value.length && !isRunning.value && !hasSavedChat.value))
 const canReset = computed(() =>
   Boolean(
     previewUrl.value
@@ -194,15 +201,17 @@ const headerStatus = computed(() => {
     return 'Ready'
   }
 
-  return 'Pick group'
+  return 'Ready to scan'
 })
 const introMessage = computed(() => {
   if (!availableGroups.value.length) {
-    return 'Which group is this for? Create a group first, then come back here.'
+    return 'Create a group first, then come back here to scan receipts.'
   }
 
   if (!selectedGroup.value) {
-    return 'Which group is this for? Type the name or tap one below. Upload comes next.'
+    return parsedReceipt.value
+      ? 'Receipt parsed.'
+      : 'Ready for a receipt.'
   }
 
   if (analysis.loadingChat.value) {
@@ -218,7 +227,7 @@ const introMessage = computed(() => {
       ? `Using ${selectedGroup.value.name}. Answer Penny's question so she can build the split.`
       : splitRows.value.length
       ? `Using ${selectedGroup.value.name}. Keep chatting to tweak the split or continue into the composer.`
-      : `Using ${selectedGroup.value.name}. The bill items are ready. Tell Penny how to split them.`
+      : `Using ${selectedGroup.value.name}. Penny has the receipt and is moving on to the split.`
   }
 
   if (hasSavedChat.value) {
@@ -233,7 +242,7 @@ const composerPlaceholder = computed(() => {
   }
 
   if (!selectedGroup.value) {
-    return 'Type the group name'
+    return 'Reply in chat'
   }
 
   if (isRunning.value) {
@@ -245,7 +254,7 @@ const composerPlaceholder = computed(() => {
       ? "Answer Penny's split question"
       : splitRows.value.length
       ? 'Tell Penny what to change about the split'
-      : 'Tell Penny how to split this receipt'
+      : 'Wait for Penny to draft the split'
   }
 
   if (hasSavedChat.value) {
@@ -260,7 +269,7 @@ const uploadLabel = computed(() => {
   }
 
   if (!selectedGroup.value) {
-    return 'Pick group'
+    return 'Upload'
   }
 
   if (isRunning.value) {
@@ -375,9 +384,23 @@ function resolveGroupFromMessage(message) {
   return null
 }
 
+function getGroupPeople(group) {
+  if (!group?.memberships?.length) {
+    return []
+  }
+
+  return group.memberships
+    .map((membership) => String(membership?.person?.name || '').trim())
+    .filter(Boolean)
+}
+
 function confirmGroup(group, userText) {
   localGroupId.value = group.id
   composerVisible.value = false
+
+  if (parsedReceipt.value) {
+    return
+  }
 
   if (userText) {
     pushLocalMessage('user', userText)
@@ -424,7 +447,14 @@ function onFileChange(event) {
   void startFileAnalysis(file)
 }
 
-function onPickGroup(group) {
+async function onPickGroup(group) {
+  if (parsedReceipt.value) {
+    localGroupId.value = group.id
+    composerVisible.value = false
+    await analysis.confirmGroupSelection(group.name, getGroupPeople(group), group.name)
+    return
+  }
+
   confirmGroup(group, group.name)
 }
 
@@ -441,12 +471,24 @@ async function onSend() {
 
   if (!selectedGroup.value) {
     if (matchingGroup) {
+      if (parsedReceipt.value) {
+        localGroupId.value = matchingGroup.id
+        composerVisible.value = false
+        await analysis.confirmGroupSelection(matchingGroup.name, getGroupPeople(matchingGroup), message)
+        return
+      }
+
       confirmGroup(matchingGroup, message)
       return
     }
 
     pushLocalMessage('user', message)
-    pushLocalMessage('assistant', 'I could not match that to a group. Type the exact group name or tap one below.')
+    pushLocalMessage(
+      'assistant',
+      parsedReceipt.value
+        ? 'I could not match that to a group. Type the exact group name or tap one below so Penny can split it.'
+        : 'I could not match that to a group. Upload a receipt first, then pick the group here.',
+    )
     return
   }
 
@@ -489,6 +531,13 @@ async function resetScan() {
 function clearGroup() {
   localGroupId.value = ''
   composerVisible.value = false
+
+  if (parsedReceipt.value) {
+    autoQuestionKey.value = ''
+    void analysis.requestGroupQuestion()
+    return
+  }
+
   pushLocalMessage('assistant', 'Pick the group for this receipt.')
 }
 
@@ -617,22 +666,21 @@ watch(
   [
     () => analysis.chatId.value,
     () => analysis.result.value?.runId,
-    () => shouldAskSplitQuestion.value,
-    () => splitPeople.value.join('|'),
+    () => shouldRequestGroupQuestion.value,
   ],
   () => {
-    if (!shouldAskSplitQuestion.value) {
+    if (!shouldRequestGroupQuestion.value) {
       return
     }
 
-    const questionKey = `${analysis.chatId.value}:${analysis.result.value?.runId || 'pending'}:${splitPeople.value.join('|')}`
+    const questionKey = `${analysis.chatId.value}:${analysis.result.value?.runId || 'pending'}:group`
 
     if (autoQuestionKey.value === questionKey) {
       return
     }
 
     autoQuestionKey.value = questionKey
-    void analysis.requestSplitQuestion(splitPeople.value)
+    void analysis.requestGroupQuestion()
   },
 )
 
@@ -746,17 +794,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-else-if="!selectedGroup" class="scan-choice-row scan-choice-row-inline">
-            <button
-              v-for="group in availableGroups"
-              :key="group.id"
-              class="scan-choice-button"
-              @click="onPickGroup(group)"
-            >
-              {{ group.name }}
-            </button>
-          </div>
-
           <div
             v-for="(entry, index) in leadMessages"
             :key="`lead-${entry.text}-${index}`"
@@ -803,6 +840,17 @@ onBeforeUnmount(() => {
             <div class="scan-bubble" :class="entry.who === 'penny' ? 'assistant' : entry.who === 'user' ? 'user' : 'system'">
               {{ entry.text }}
             </div>
+          </div>
+
+          <div v-if="showGroupPickerPrompt" class="scan-choice-row scan-choice-row-inline">
+            <button
+              v-for="group in availableGroups"
+              :key="group.id"
+              class="scan-choice-button"
+              @click="onPickGroup(group)"
+            >
+              {{ group.name }}
+            </button>
           </div>
 
           <div v-if="analysis.error.value" class="scan-chat-row system">

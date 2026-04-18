@@ -122,6 +122,17 @@ function buildClarificationRules() {
   ]
 }
 
+function buildGroupSelectionRules(people: string[]) {
+  if (people.length) {
+    return []
+  }
+
+  return [
+    '- If no participants are available yet, call select_group exactly once before you do any split work.',
+    '- Do not call ask_follow_up_question or submit_split_plan until the group is known.',
+  ]
+}
+
 function buildRevisionPrompt({ message, people, receipt, split, title }: {
   message: string
   people: string[]
@@ -184,7 +195,9 @@ function buildReceiptSplitPrompt({ message, people, receipt, title }: {
     '- Keep original receipt item names when practical, but you may add short adjustment items for shared tax, tip, or rounding.',
     '- Respect explicit user instructions when they do not break the receipt total.',
     '- Keep notes short and concrete.',
+    '- If the user only gave you the group or participant list, ask one short question about how the receipt should be split before you create the first split.',
     ...buildClarificationRules(),
+    ...buildGroupSelectionRules(people),
     ...buildParticipantRules(people),
     '',
     'User instruction:',
@@ -322,6 +335,38 @@ function defineFollowUpQuestionTool({
 
       return {
         content: [{ type: 'text', text: 'Question recorded.' }],
+        details: {},
+      }
+    },
+  })
+}
+
+function defineSelectGroupTool({
+  followUpQuestion,
+}: {
+  followUpQuestion: { value: string }
+}) {
+  return defineTool({
+    name: 'select_group',
+    label: 'Select Group',
+    description: 'Ask the user which group this receipt belongs to before you create the first split.',
+    parameters: Type.Object({
+      question: Type.String({ description: 'A single short question asking for the group.' }),
+    }),
+    execute: async (_toolCallId, params) => {
+      const question = String(params.question || '').trim()
+
+      if (!question) {
+        return {
+          content: [{ type: 'text', text: 'Provide a non-empty question.' }],
+          details: {},
+        }
+      }
+
+      followUpQuestion.value = question
+
+      return {
+        content: [{ type: 'text', text: 'Group question recorded.' }],
         details: {},
       }
     },
@@ -820,8 +865,11 @@ export async function runPiBillReceiptSplitAgent({
   const askFollowUpQuestion = defineFollowUpQuestionTool({
     followUpQuestion,
   })
+  const selectGroup = defineSelectGroupTool({
+    followUpQuestion,
+  })
 
-  const session = await createPiSession([logProgress, askFollowUpQuestion, submitSplitPlan])
+  const session = await createPiSession([logProgress, selectGroup, askFollowUpQuestion, submitSplitPlan])
   const stopHeartbeats = startHeartbeats({
     finalPlan,
     firstMessage: 'Penny is turning the parsed receipt into a first split.',

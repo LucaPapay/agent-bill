@@ -11,6 +11,27 @@ function trimFeed(feed: Array<{ text: string; who: string }>, entry: { text: str
   return [...feed, entry].slice(-120)
 }
 
+function resolveReceipt(value: any) {
+  if (value?.receipt) {
+    return value.receipt
+  }
+
+  if (!value) {
+    return null
+  }
+
+  return {
+    billDate: String(value.billDate || ''),
+    currency: String(value.currency || 'EUR'),
+    items: Array.isArray(value.items) ? value.items : [],
+    merchant: String(value.merchant || ''),
+    notes: Array.isArray(value.notes) ? value.notes : [],
+    taxCents: Number(value.taxCents || 0),
+    tipCents: Number(value.tipCents || 0),
+    totalCents: Number(value.totalCents || 0),
+  }
+}
+
 function fileToBase64(file: File) {
   return new Promise<string>((resolve) => {
     const reader = new FileReader()
@@ -70,7 +91,7 @@ export function useBillAnalysisStream() {
     error.value = ''
     feed.value = Array.isArray(nextResult?.history) ? nextResult.history : []
     jobId.value = nextResult?.runId || ''
-    receipt.value = nextResult?.receipt || null
+    receipt.value = resolveReceipt(nextResult)
     result.value = nextResult
     status.value = isPendingResult(nextResult) ? 'agent' : 'complete'
   }
@@ -220,14 +241,18 @@ export function useBillAnalysisStream() {
     })
   }
 
-  function openRevisionStream(message: string, people: string[] = [], options: { pushUserMessage?: boolean, statusMessage?: string } = {}) {
+  function openRevisionStream(
+    message: string,
+    people: string[] = [],
+    options: { displayUserMessage?: string, pushUserMessage?: boolean, statusMessage?: string } = {},
+  ) {
     stop()
     assistantText.value = ''
     error.value = ''
     status.value = 'starting'
 
     if (options.pushUserMessage !== false) {
-      pushFeed('user', message)
+      pushFeed('user', options.displayUserMessage || message)
     }
 
     if (options.statusMessage) {
@@ -244,7 +269,7 @@ export function useBillAnalysisStream() {
   async function revise(message: string, people: string[] = []) {
     const nextMessage = String(message || '').trim()
 
-    if (!nextMessage || !chatId.value || !receipt.value) {
+    if (!nextMessage || !chatId.value || !resolveReceipt(result.value || receipt.value)) {
       return null
     }
 
@@ -256,7 +281,7 @@ export function useBillAnalysisStream() {
   }
 
   async function requestSplitQuestion(people: string[] = []) {
-    if (!chatId.value || !receipt.value) {
+    if (!chatId.value || !resolveReceipt(result.value || receipt.value)) {
       return null
     }
 
@@ -266,6 +291,45 @@ export function useBillAnalysisStream() {
       {
         pushUserMessage: false,
         statusMessage: 'Penny is preparing the split question...',
+      },
+    )
+
+    return null
+  }
+
+  async function requestGroupQuestion() {
+    if (!chatId.value || !resolveReceipt(result.value || receipt.value)) {
+      return null
+    }
+
+    openRevisionStream(
+      'Ask me which group this receipt belongs to before you create any split. Do not guess the group and do not create the split yet.',
+      [],
+      {
+        pushUserMessage: false,
+        statusMessage: 'Penny is asking about the group...',
+      },
+    )
+
+    return null
+  }
+
+  async function confirmGroupSelection(groupName: string, people: string[] = [], displayUserMessage = '') {
+    const normalizedGroupName = String(groupName || '').trim()
+    const participantSummary = people.length
+      ? `The participants are ${people.join(', ')}.`
+      : 'Use the participants from that group.'
+
+    if (!normalizedGroupName || !chatId.value || !resolveReceipt(result.value || receipt.value)) {
+      return null
+    }
+
+    openRevisionStream(
+      `The selected group is "${normalizedGroupName}". ${participantSummary} Ask me one short question about how I want to split the receipt before you create the first split.`,
+      people,
+      {
+        displayUserMessage: String(displayUserMessage || normalizedGroupName).trim() || normalizedGroupName,
+        statusMessage: 'Penny is asking how to split it...',
       },
     )
 
@@ -285,7 +349,9 @@ export function useBillAnalysisStream() {
     recentChats,
     reset,
     result,
+    confirmGroupSelection,
     revise,
+    requestGroupQuestion,
     requestSplitQuestion,
     start,
     startFromFile,
