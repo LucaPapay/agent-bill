@@ -6,16 +6,11 @@ import {
 } from './bill-chat-history'
 
 describe('createBillChatSeed', () => {
-  it('creates a user seed message for receipt uploads', () => {
+  it('does not create a synthetic seed message for receipt uploads', () => {
     expect(createBillChatSeed({
       imageBase64: 'abc',
       title: 'Friday dinner',
-    })).toEqual([
-      {
-        text: 'Uploaded a receipt for Friday dinner.',
-        who: 'user',
-      },
-    ])
+    })).toEqual([])
   })
 })
 
@@ -32,12 +27,7 @@ describe('appendBillChatReply', () => {
 
 describe('appendBillChatEvent', () => {
   it('turns streamed agent events into persisted history entries', () => {
-    const history = [
-      {
-        text: 'Uploaded a receipt for Friday dinner.',
-        who: 'user',
-      },
-    ]
+    const history: Array<{ text: string; who: string }> = []
 
     expect(
       appendBillChatEvent(
@@ -60,10 +50,6 @@ describe('appendBillChatEvent', () => {
         },
       ),
     ).toEqual([
-      {
-        text: 'Uploaded a receipt for Friday dinner.',
-        who: 'user',
-      },
       {
         text: 'Analysis job queued.',
         who: 'log',

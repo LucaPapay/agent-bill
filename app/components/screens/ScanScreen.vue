@@ -28,7 +28,6 @@ const composerVisible = ref(false)
 const localGroupId = ref('')
 const leadMessages = ref([])
 const tailMessages = ref([])
-const previewOverlayReady = ref(false)
 
 const { ledger: ledgerData } = ledger
 const {
@@ -105,6 +104,16 @@ const parsedItemCount = computed(() => parsedItems.value.length)
 const resolvedCurrency = computed(() => parsedReceipt.value?.currency || 'EUR')
 const noteList = computed(() => parsedReceipt.value?.notes || [])
 const splitRows = computed(() => analysis.result.value?.split || [])
+const visibleAnalysisFeed = computed(() =>
+  analysis.feed.value.filter((entry) => {
+    const text = String(entry?.text || '').trim()
+    return text
+      && text !== `Uploaded a receipt for ${selectedGroup.value?.name || ''} receipt.`
+      && !/^Uploaded a receipt for .+\.$/.test(text)
+      && !/^Started a text-based receipt scan for .+\.$/.test(text)
+      && !/^Started a receipt scan for .+\.$/.test(text)
+  }),
+)
 const splitPeople = computed(() => {
   if (!selectedGroup.value?.memberships?.length) {
     return []
@@ -120,7 +129,7 @@ const canReset = computed(() =>
     previewUrl.value
     || analysis.chatId.value
     || analysis.result.value
-    || analysis.feed.value.length
+    || visibleAnalysisFeed.value.length
     || leadMessages.value.length
     || tailMessages.value.length,
   ),
@@ -256,7 +265,6 @@ function clearInputs() {
 function setFile(file) {
   revokePreview()
   selectedFile.value = file
-  previewOverlayReady.value = false
   previewUrl.value = URL.createObjectURL(file)
 }
 
@@ -268,7 +276,7 @@ function pushLocalMessage(who, text) {
   }
 
   const targetMessages =
-    previewUrl.value || analysis.feed.value.length || parsedReceipt.value || hasSavedChat.value
+    previewUrl.value || visibleAnalysisFeed.value.length || parsedReceipt.value || hasSavedChat.value
       ? tailMessages
       : leadMessages
 
@@ -285,13 +293,8 @@ function resetDraftInputs() {
   selectedFile.value = null
   leadMessages.value = []
   tailMessages.value = []
-  previewOverlayReady.value = false
   clearInputs()
   revokePreview()
-}
-
-function onPreviewAnimationFinished() {
-  previewOverlayReady.value = true
 }
 
 function initializeFreshScan() {
@@ -554,7 +557,7 @@ function scrollToBottom() {
 watch(
   [
     () => previewUrl.value,
-    () => analysis.feed.value.length,
+    () => visibleAnalysisFeed.value.length,
     () => parsedReceipt.value,
     () => analysis.error.value,
     () => leadMessages.value.length,
@@ -712,31 +715,12 @@ onBeforeUnmount(() => {
                 :status="analysis.status.value"
                 :title="selectedGroup ? `${selectedGroup.name} receipt` : 'Receipt preview'"
                 :total-label="parsedReceipt ? formatMoney(parsedReceipt.totalCents || 0, resolvedCurrency) : ''"
-                @animation-finished="onPreviewAnimationFinished"
               />
             </div>
           </div>
 
-          <div v-if="previewUrl && previewOverlayReady" class="scan-chat-row user">
-            <div class="scan-bubble user upload">
-              <img
-                :src="previewUrl"
-                alt="Receipt preview"
-                class="scan-upload-image"
-              >
-              <div class="scan-upload-copy">
-                <div class="scan-upload-title">
-                  Uploaded receipt
-                </div>
-                <div class="scan-upload-meta">
-                  {{ selectedGroup ? selectedGroup.name : 'No group selected' }}
-                </div>
-              </div>
-            </div>
-          </div>
-
           <div
-            v-for="(entry, index) in analysis.feed.value"
+            v-for="(entry, index) in visibleAnalysisFeed"
             :key="`${entry.text}-${index}`"
             class="scan-chat-row"
             :class="entry.who === 'user' ? 'user' : entry.who === 'penny' ? '' : 'system'"
@@ -783,7 +767,7 @@ onBeforeUnmount(() => {
                 {{ analysis.result.value?.summary || `Parsed ${parsedItemCount} bill items.` }}
               </div>
 
-              <div class="scan-split-list">
+              <div v-if="splitRows.length" class="scan-split-list">
                 <div
                   v-for="row in splitRows"
                   :key="row.person"
@@ -793,6 +777,18 @@ onBeforeUnmount(() => {
                     {{ row.person }}
                   </span>
                   <span>{{ formatMoney(row.amountCents || 0, resolvedCurrency) }}</span>
+                </div>
+              </div>
+
+              <div v-else class="scan-split-empty">
+                <div class="scan-split-empty-title">
+                  No split yet
+                </div>
+                <div class="scan-split-empty-copy">
+                  Tell Penny who ate what so she can assign these items.
+                </div>
+                <div class="scan-split-empty-example">
+                  Example: “Tempura Bento was Luca. Sushi Bento was Penny. Cola was shared by everyone.”
                 </div>
               </div>
 
@@ -962,15 +958,25 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .scan-chat-screen {
-  padding-bottom: 32px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  padding-bottom: 96px;
 }
 
 .scan-chat-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding-top: 18px;
 }
 
 .scan-chat-shell {
-  min-height: calc(100vh - 168px);
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   border-radius: 32px;
@@ -1082,12 +1088,6 @@ onBeforeUnmount(() => {
   color: var(--ink);
 }
 
-.scan-bubble.upload {
-  display: grid;
-  gap: 10px;
-  min-width: min(100%, 320px);
-}
-
 .scan-bubble.error {
   border: 1px solid rgba(255, 84, 54, 0.32);
   color: #ffd2ca;
@@ -1119,13 +1119,6 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
-.scan-upload-image {
-  width: 100%;
-  max-height: 280px;
-  object-fit: cover;
-  border-radius: 16px;
-}
-
 .scan-preview-stage {
   width: min(100%, 720px);
   border-radius: 24px;
@@ -1135,24 +1128,6 @@ onBeforeUnmount(() => {
 
 .scan-preview-stage :deep(.receipt-split-stage) {
   min-height: 320px;
-}
-
-.scan-upload-copy {
-  display: grid;
-  gap: 4px;
-}
-
-.scan-upload-title {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.scan-upload-meta {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: rgba(20, 18, 16, 0.62);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
 }
 
 .scan-receipt-card {
@@ -1221,6 +1196,35 @@ onBeforeUnmount(() => {
   padding: 12px;
   border-radius: 18px;
   background: rgba(20, 18, 16, 0.05);
+}
+
+.scan-split-empty {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(20, 18, 16, 0.05);
+}
+
+.scan-split-empty-title {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(20, 18, 16, 0.65);
+}
+
+.scan-split-empty-copy {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.scan-split-empty-example {
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(20, 18, 16, 0.68);
 }
 
 .scan-item-row,
@@ -1345,9 +1349,18 @@ onBeforeUnmount(() => {
   display: none;
 }
 
+@media (min-width: 768px) {
+  .scan-chat-screen {
+    min-height: calc(100vh - 120px);
+    min-height: calc(100dvh - 120px);
+    height: calc(100vh - 120px);
+    height: calc(100dvh - 120px);
+    padding-bottom: 48px;
+  }
+}
+
 @media (max-width: 720px) {
   .scan-chat-shell {
-    min-height: calc(100vh - 154px);
     border-radius: 24px;
   }
 
