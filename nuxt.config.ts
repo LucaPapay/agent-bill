@@ -8,6 +8,7 @@ export default defineNuxtConfig({
     databaseUrl: process.env.DATABASE_URL || 'postgresql://agent_bill:agent_bill@127.0.0.1:5432/agent_bill'
   },
   ssr: false,
+  spaLoadingTemplate: 'spa-loading-template.html',
   vite: {
     plugins: [tailwindcss()]
   }
