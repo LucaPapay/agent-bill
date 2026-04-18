@@ -26,7 +26,7 @@ describe('appendBillChatReply', () => {
 })
 
 describe('appendBillChatEvent', () => {
-  it('turns streamed agent events into persisted history entries', () => {
+  it('persists only visible chat entries from the stream', () => {
     const history: Array<{ text: string; who: string }> = []
 
     expect(
@@ -50,14 +50,6 @@ describe('appendBillChatEvent', () => {
         },
       ),
     ).toEqual([
-      {
-        text: 'Penny is warming up her little receipt engine.',
-        who: 'log',
-      },
-      {
-        text: 'Penny is reading the receipt.',
-        who: 'penny',
-      },
       {
         text: 'Split ready.',
         who: 'penny',

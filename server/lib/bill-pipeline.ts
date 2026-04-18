@@ -1,7 +1,6 @@
 import {
   appendBillChatEvent,
   appendBillChatReply,
-  appendBillChatSystemMessage,
   createBillChatSeed,
 } from './bill-chat-history'
 import {
@@ -220,7 +219,6 @@ export async function runBillAnalysisPipeline(input: any, personId: string, onEv
 export async function runBillRevisionPipeline(input: any, personId: string, onEvent = (_payload: any) => {}) {
   const requestedGroupId = String(input?.groupId || '').trim() || String(input?.selectedGroupId || '').trim()
   const message = String(input?.message || '').trim()
-  const systemMessage = String(input?.systemMessage || '').trim()
   const userMessage = String(input?.userMessage || '').trim()
 
   if (!message) {
@@ -257,12 +255,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
   const baseHistory = userMessage
     ? appendBillChatReply(Array.isArray(current?.history) ? current.history : [], userMessage)
     : Array.isArray(current?.history) ? current.history : []
-  const history = createHistoryRecorder(
-    onEvent,
-    systemMessage
-      ? appendBillChatSystemMessage(baseHistory, systemMessage)
-      : baseHistory,
-  )
+  const history = createHistoryRecorder(onEvent, baseHistory)
   const runSaver = createRunSaver()
   await saveBillRun({
     chatId: current.chatId,

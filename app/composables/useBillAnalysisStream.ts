@@ -126,21 +126,15 @@ export function useBillAnalysisStream() {
 
     if (payload.type === 'status') {
       status.value = payload.phase
-      pushFeed(payload.phase === 'agent' ? 'penny' : 'log', payload.message)
       return
     }
 
     if (payload.type === 'receipt_extracted') {
       receipt.value = payload.receipt
-      pushFeed(
-        'log',
-        `Penny parsed ${payload.receipt.items.length} items from ${payload.receipt.merchant || 'the receipt'}.`,
-      )
       return
     }
 
     if (payload.type === 'agent_progress') {
-      pushFeed('penny', payload.message)
       return
     }
 
@@ -251,7 +245,6 @@ export function useBillAnalysisStream() {
       displayUserMessage?: string
       groupId?: string
       pushUserMessage?: boolean
-      statusMessage?: string
       systemMessage?: string
     } = {},
   ) {
@@ -262,14 +255,6 @@ export function useBillAnalysisStream() {
 
     if (options.pushUserMessage !== false) {
       pushFeed('user', options.displayUserMessage || message)
-    }
-
-    if (options.systemMessage) {
-      pushFeed('log', options.systemMessage)
-    }
-
-    if (options.statusMessage) {
-      pushFeed('log', options.statusMessage)
     }
 
     openStream(useOrpc().reviseBillSplitStream({
@@ -293,7 +278,6 @@ export function useBillAnalysisStream() {
 
     openRevisionStream(nextMessage, people, {
       groupId,
-      statusMessage: 'Penny is revising the split...',
     })
 
     return null
@@ -310,7 +294,6 @@ export function useBillAnalysisStream() {
       {
         groupId,
         pushUserMessage: false,
-        statusMessage: 'Penny is preparing the split question...',
       },
     )
 
@@ -327,7 +310,6 @@ export function useBillAnalysisStream() {
       [],
       {
         pushUserMessage: false,
-        statusMessage: 'Penny is asking about the group...',
       },
     )
 
@@ -350,7 +332,6 @@ export function useBillAnalysisStream() {
       {
         displayUserMessage: String(displayUserMessage || normalizedGroupName).trim() || normalizedGroupName,
         groupId,
-        statusMessage: 'Penny is building the first split...',
         systemMessage: `Selected group: ${normalizedGroupName}`,
       },
     )
