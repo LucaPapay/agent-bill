@@ -977,17 +977,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-if="pinnedBottomFeedEntry && showGroupPickerPrompt" class="scan-choice-row scan-choice-row-inline">
-            <button
-              v-for="group in availableGroups"
-              :key="group.id"
-              class="scan-choice-button"
-              @click="onPickGroup(group)"
-            >
-              {{ group.name }}
-            </button>
-          </div>
-
           <div v-if="parsedReceipt && splitRows.length && ledgerSelectedGroup" class="scan-chat-row">
             <div class="scan-avatar">
               <IconGlyph name="sparkle" width="16" height="16" />
@@ -1015,6 +1004,17 @@ onBeforeUnmount(() => {
             >
               {{ pinnedBottomFeedEntry.text }}
             </div>
+          </div>
+
+          <div v-if="pinnedBottomFeedEntry && showGroupPickerPrompt" class="scan-choice-row scan-choice-row-inline">
+            <button
+              v-for="group in availableGroups"
+              :key="group.id"
+              class="scan-choice-button"
+              @click="onPickGroup(group)"
+            >
+              {{ group.name }}
+            </button>
           </div>
 
           <div
