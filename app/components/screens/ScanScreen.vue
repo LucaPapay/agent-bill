@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import IconGlyph from '../app/IconGlyph.vue'
+import BillComposer from '../ledger/BillComposer.vue'
 import ReceiptSplitPreview from '../scan/ReceiptSplitPreview.vue'
 import { avatarColors, people } from '../app/mockData'
 import { useBillAnalysisStream } from '../../composables/useBillAnalysisStream'
@@ -23,18 +24,33 @@ const selectedFile = ref(null)
 const showCameraCapture = ref(false)
 const title = ref('Dinner receipt')
 const peopleText = ref(people.join(', '))
+const composerVisible = ref(false)
 const scrollRef = ref(null)
 const {
+  addBillItem,
   billItems,
   billPaidByPersonId,
+  billPreviewShares,
+  billRemainingCents,
   billTip,
   billTitle,
   billTotal,
+  canCreateBill,
+  createBill,
+  errorMessage,
+  formatCents,
+  ledger: ledgerData,
+  removeBillItem,
   resetBillForm,
+  resultLayout,
+  saving,
+  selectedBill,
   selectedGroup,
   selectedGroupId,
   setSelectedGroup,
-  stageBillComposerDraft,
+  toggleBillItemAssignment,
+  updateBillItemAmount,
+  updateBillItemName,
 } = ledger
 
 const parsedPeople = computed(() =>
@@ -52,6 +68,7 @@ const isRunning = computed(() => ['starting', 'queued', 'extracting', 'agent'].i
 const canPickReceipt = computed(() => parsedPeople.value.length > 0 && !isRunning.value && !hasSavedChat.value)
 const extractedReceipt = computed(() => analysis.receipt.value || analysis.result.value?.receipt || null)
 const splitRows = computed(() => analysis.result.value?.split || [])
+const availableGroups = computed(() => ledgerData.value.groups || [])
 const assistantReply = computed(() => analysis.assistantText.value.trim())
 const pickerLabel = computed(() => showCameraCapture.value ? 'Use camera' : 'Upload receipt')
 const inputModeLabel = computed(() => {
@@ -83,9 +100,16 @@ const canOpenComposer = computed(() =>
     && composerRows.value.every(entry => entry.membership),
   ),
 )
+const showInlineComposer = computed(() =>
+  Boolean(composerVisible.value && canOpenComposer.value && selectedGroup.value),
+)
 const composerMessage = computed(() => {
   if (!splitRows.value.length) {
     return 'Save becomes available once Penny proposes a split.'
+  }
+
+  if (!availableGroups.value.length) {
+    return 'Create a ledger group first.'
   }
 
   if (!selectedGroup.value) {
@@ -247,7 +271,7 @@ async function submitReply() {
   await analysis.revise(message)
 }
 
-async function openComposer() {
+function applyComposerDraft() {
   if (!canOpenComposer.value || !selectedGroupId.value) {
     return
   }
@@ -272,16 +296,28 @@ async function openComposer() {
   billTip.value = formatAmountInput(analysis.result.value?.tipCents || extractedReceipt.value?.tipCents || 0)
   billItems.value = draftItems
   billPaidByPersonId.value = draftPaidByPersonId
-  stageBillComposerDraft({
-    billItems: draftItems,
-    billPaidByPersonId: draftPaidByPersonId,
-    billTip: billTip.value,
-    billTitle: billTitle.value,
-    billTotal: billTotal.value,
-    groupId: selectedGroupId.value,
-  })
+}
 
-  await navigateTo(`/groups/${selectedGroupId.value}/bills/new`)
+async function openComposer() {
+  if (!canOpenComposer.value) {
+    return
+  }
+
+  applyComposerDraft()
+  composerVisible.value = true
+  await nextTick()
+  document.getElementById('scan-bill-composer')?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  })
+}
+
+function saveComposerBill() {
+  createBill().then((value) => {
+    if (value?.billId && selectedGroupId.value) {
+      navigateTo(`/groups/${selectedGroupId.value}/bills/${value.billId}`)
+    }
+  })
 }
 
 function scrollToBottom() {
@@ -396,6 +432,26 @@ onBeforeUnmount(() => {
 
             <div class="scan-sidebar-dot" />
           </div>
+
+          <label class="scan-field">
+            <span class="scan-field-label">Ledger group</span>
+            <select
+              :value="selectedGroupId"
+              class="scan-input"
+              @change="setSelectedGroup($event.target.value)"
+            >
+              <option value="">
+                Select group
+              </option>
+              <option
+                v-for="group in availableGroups"
+                :key="group.id"
+                :value="group.id"
+              >
+                {{ group.name }} · {{ group.memberships.length }} people
+              </option>
+            </select>
+          </label>
 
           <label class="scan-field">
             <span class="scan-field-label">Bill title</span>
@@ -642,6 +698,53 @@ onBeforeUnmount(() => {
         </div>
       </section>
     </div>
+
+    <section
+      v-if="showInlineComposer"
+      id="scan-bill-composer"
+      class="scan-inline-composer"
+    >
+      <div class="scan-inline-composer-head">
+        <div>
+          <div class="scan-note-label">
+            Bill composer
+          </div>
+          <div class="scan-inline-composer-title">
+            Review and save the split in {{ selectedGroup.name }}
+          </div>
+        </div>
+      </div>
+
+      <BillComposer
+        :bill-items="billItems"
+        :bill-paid-by-person-id="billPaidByPersonId"
+        :bill-preview-shares="billPreviewShares"
+        :bill-remaining-cents="billRemainingCents"
+        :bill-tip="billTip"
+        :bill-title="billTitle"
+        :bill-total="billTotal"
+        :can-create-bill="canCreateBill"
+        :error-message="errorMessage"
+        :format-cents="formatCents"
+        :layout="resultLayout"
+        :save-label="'Save bill'"
+        :saving="saving"
+        :selected-bill="selectedBill"
+        :selected-group="selectedGroup"
+        @add-item="addBillItem"
+        @remove-item="removeBillItem"
+        @reset="applyComposerDraft"
+        @save="saveComposerBill"
+        @toggle-assignment="toggleBillItemAssignment"
+        @update:bill-paid-by-person-id="billPaidByPersonId = $event"
+        @update:bill-tip="billTip = $event"
+        @update:bill-title="billTitle = $event"
+        @update:bill-total="billTotal = $event"
+        @update:item-amount="updateBillItemAmount"
+        @update:item-name="updateBillItemName"
+        @update:layout="resultLayout = $event"
+      />
+    </section>
 
     <input
       ref="cameraInput"
@@ -1146,6 +1249,25 @@ onBeforeUnmount(() => {
   font-family: var(--mono);
   font-size: 15px;
   font-weight: 700;
+}
+
+.scan-inline-composer {
+  margin: 12px 16px 0;
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(20, 18, 16, 0.08);
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.scan-inline-composer-head {
+  padding: 18px 18px 0;
+}
+
+.scan-inline-composer-title {
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .scan-chat-composer {
