@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import PageShell from '../../../../components/layout/PageShell.vue'
-import BillItemsPanel from '../../../../components/ledger/BillItemsPanel.vue'
-import BillListPanel from '../../../../components/ledger/BillListPanel.vue'
-import BillReceiptCard from '../../../../components/ledger/BillReceiptCard.vue'
-import BillTransfersPanel from '../../../../components/ledger/BillTransfersPanel.vue'
-import GroupSettlementPanel from '../../../../components/ledger/GroupSettlementPanel.vue'
+import PageShell from '../../../../../components/layout/PageShell.vue'
+import BillItemsPanel from '../../../../../components/ledger/BillItemsPanel.vue'
+import BillListPanel from '../../../../../components/ledger/BillListPanel.vue'
+import BillReceiptCard from '../../../../../components/ledger/BillReceiptCard.vue'
+import BillTransfersPanel from '../../../../../components/ledger/BillTransfersPanel.vue'
+import GroupSettlementPanel from '../../../../../components/ledger/GroupSettlementPanel.vue'
 
 const route = useRoute()
 const groupId = computed(() => String(route.params.groupId || ''))
