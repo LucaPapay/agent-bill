@@ -243,6 +243,22 @@ Target example:
 
 That simplification exists in the backend and is rendered in the group detail and settled views.
 
+## Current automated coverage
+
+The repo now has a small backend-focused unit suite run with `npm test`.
+
+It currently checks the highest-risk pure logic pieces:
+
+- settlement simplification in `server/lib/group-simplification.ts`
+- bill share and transfer construction in `server/lib/group-ledger.ts`
+- local fallback analysis and receipt normalization in `server/lib/bill-analysis.ts`
+
+That coverage is deliberately narrow for now:
+
+- it protects the money math and normalization rules that are easiest to regress
+- it does not yet include full database integration tests or end-to-end UI tests
+- it gives fast feedback on the core local-first ledger and analysis calculations
+
 ## Next intended step
 
 Useful next work after this:

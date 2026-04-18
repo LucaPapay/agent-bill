@@ -12,7 +12,8 @@
     "dev": "docker compose up -d postgres && nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "test": "vitest run"
   },
   "dependencies": {
     "@mariozechner/pi-ai": "^0.67.68",
@@ -29,6 +30,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@vue/language-core": "^3.2.6"
+    "@vue/language-core": "^3.2.6",
+    "vitest": "^3.2.4"
   }
 }
