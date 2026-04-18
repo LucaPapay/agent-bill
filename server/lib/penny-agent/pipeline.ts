@@ -2,20 +2,20 @@ import {
   appendBillChatEvent,
   appendBillChatReply,
   createBillChatSeed,
-} from './bill-chat-history'
+} from '../bill-chat-history'
 import {
   createAgentAnalysis,
   createLocalAnalysis,
   normalizePeople,
-} from './bill-analysis'
+} from '../bill-analysis'
 import {
   assertPersonCanAccessGroup,
   createBillChat,
   getBillChat,
   getGroupMemberNames,
   saveBillRun,
-} from './db'
-import { runPiBillLoop } from './pi-bill-agent'
+} from '../db'
+import { runPennyAgent } from './run'
 
 function createHistoryRecorder(onEvent = (_payload: any) => {}, initialHistory: any[] = []) {
   let history = [...initialHistory]
@@ -34,10 +34,6 @@ function createHistoryRecorder(onEvent = (_payload: any) => {}, initialHistory: 
     },
     record(payload: any) {
       history = appendBillChatEvent(history, payload)
-    },
-    push(payload: any) {
-      history = appendBillChatEvent(history, payload)
-      onEvent(payload)
     },
   }
 }
@@ -92,13 +88,13 @@ function buildChatPayload({
       used: false,
     },
     people,
-    pi: base?.pi || {
+    penny: base?.penny || base?.pi || {
       model: null,
       used: false,
     },
     rawReceipt: base?.rawReceipt || rawReceipt,
     receipt,
-    source: String(base?.source || 'receipt-pending'),
+    source: String(base?.source || 'penny-pending'),
     split: Array.isArray(base?.split) ? base.split : [],
     summary,
     taxCents: Number(base?.taxCents || receipt?.taxCents || 0),
@@ -127,7 +123,7 @@ async function resolveParticipants({
   return normalizePeople(await getGroupMemberNames(normalizedGroupId))
 }
 
-export async function runBillAnalysisPipeline(input: any, personId: string, onEvent = (_payload: any) => {}) {
+export async function runPennyAnalysis(input: any, personId: string, onEvent = (_payload: any) => {}) {
   const groupId = String(input?.groupId || '').trim()
   const title = String(input?.title || 'Untitled bill').trim() || 'Untitled bill'
   const people = await resolveParticipants({
@@ -177,7 +173,7 @@ export async function runBillAnalysisPipeline(input: any, personId: string, onEv
   })
 
   if (process.env.OPENAI_API_KEY) {
-    const agentResult = await runPiBillLoop({
+    const agentResult = await runPennyAgent({
       chatId: chat.id,
       groupId,
       imageBase64: input?.imageBase64,
@@ -201,11 +197,11 @@ export async function runBillAnalysisPipeline(input: any, personId: string, onEv
               model: process.env.OPENAI_RECEIPT_MODEL || 'gpt-4.1-mini',
               used: Boolean(agentResult?.receipt),
             },
-            pi: {
-              model: process.env.PI_AGENT_MODEL || 'gpt-4.1-mini',
+            penny: {
+              model: process.env.PENNY_AGENT_MODEL || process.env.PI_AGENT_MODEL || 'gpt-4.1-mini',
               used: true,
             },
-            source: 'pi-agent-question',
+            source: 'penny-question',
             summary,
           },
           chatId: chat.id,
@@ -264,7 +260,7 @@ export async function runBillAnalysisPipeline(input: any, personId: string, onEv
   }
 }
 
-export async function runBillRevisionPipeline(input: any, personId: string, onEvent = (_payload: any) => {}) {
+export async function runPennyRevision(input: any, personId: string, onEvent = (_payload: any) => {}) {
   const requestedGroupId = String(input?.groupId || '').trim() || String(input?.selectedGroupId || '').trim()
   const message = String(input?.message || '').trim()
   const userMessage = String(input?.userMessage || '').trim()
@@ -352,7 +348,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
   }
 
   try {
-    const agentResult = await runPiBillLoop({
+    const agentResult = await runPennyAgent({
       chatId: current.chatId,
       groupId,
       message,
@@ -370,7 +366,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
         ...buildChatPayload({
           base: {
             ...current,
-            source: 'pi-agent-question',
+            source: 'penny-question',
             summary: String(agentResult?.question || 'Penny needs one more detail.').trim() || 'Penny needs one more detail.',
           },
           chatId: current.chatId,
@@ -413,7 +409,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
         receipt: agentResult.receipt,
         title,
       }),
-      source: split.length ? 'pi-agent-revision' : 'pi-agent-split',
+      source: split.length ? 'penny-revision' : 'penny-split',
     }
     const payload = {
       ...analysis,
@@ -451,7 +447,7 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
           summary: String(current?.summary || 'Penny could not revise the split.').trim() || 'Penny could not revise the split.',
           title,
         }),
-        source: 'pi-agent-revision-error',
+        source: 'penny-revision-error',
       },
       personId,
     })

@@ -77,7 +77,6 @@ export const revisionInputSchema = z.object({
   groupId: z.string().trim().optional(),
   message: z.string().trim().min(1),
   people: z.array(z.string().trim().min(1)).default([]),
-  systemMessage: z.string().trim().optional(),
   userMessage: z.string().trim().optional(),
 })
 
@@ -122,7 +121,7 @@ export const analysisResultSchema = z.object({
   notes: z.array(z.string()),
   openai: analysisEngineSchema,
   people: z.array(z.string()),
-  pi: analysisEngineSchema,
+  penny: analysisEngineSchema,
   receipt: extractedReceiptSchema.optional(),
   runId: z.string(),
   savedAt: z.union([z.string(), z.date()]),

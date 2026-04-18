@@ -37,6 +37,38 @@ export function normalizeSavedRunPayload(value: unknown) {
     normalizedPayload.billItems = []
   }
 
+  if (!normalizedPayload.penny && normalizedPayload.pi) {
+    normalizedPayload.penny = normalizedPayload.pi
+  }
+
+  if (normalizedPayload.source === 'pi-agent-pending' || normalizedPayload.source === 'receipt-pending') {
+    normalizedPayload.source = 'penny-pending'
+  }
+
+  if (normalizedPayload.source === 'pi-agent-question') {
+    normalizedPayload.source = 'penny-question'
+  }
+
+  if (normalizedPayload.source === 'pi-agent-split') {
+    normalizedPayload.source = 'penny-split'
+  }
+
+  if (normalizedPayload.source === 'pi-agent-revision') {
+    normalizedPayload.source = 'penny-revision'
+  }
+
+  if (normalizedPayload.source === 'pi-agent-revision-error') {
+    normalizedPayload.source = 'penny-revision-error'
+  }
+
+  if (normalizedPayload.source === 'openai-image+pi-agent') {
+    normalizedPayload.source = 'openai-image+penny'
+  }
+
+  if (normalizedPayload.source === 'openai-text+pi-agent') {
+    normalizedPayload.source = 'openai-text+penny'
+  }
+
   if ((payload as any).rawReceipt === null) {
     delete normalizedPayload.rawReceipt
   }

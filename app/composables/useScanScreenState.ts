@@ -142,7 +142,7 @@ export function useScanScreenState(props: { chatId?: string }) {
     return visibleAnalysisFeed.value.slice(0, -1)
   })
   const analysisSource = computed(() => String(analysis.result.value?.source || '').trim())
-  const awaitingSplitAnswer = computed(() => analysisSource.value === 'pi-agent-question' && !splitRows.value.length)
+  const awaitingSplitAnswer = computed(() => analysisSource.value === 'penny-question' && !splitRows.value.length)
   const shouldRequestGroupQuestion = computed(() =>
     Boolean(
       analysis.chatId.value

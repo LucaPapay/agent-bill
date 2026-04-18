@@ -4,7 +4,7 @@ let currentCancel: null | (() => Promise<void>) = null
 
 function isPendingResult(value: any) {
   const source = String(value?.source || '').trim()
-  return source === 'pi-agent-pending' || source === 'receipt-pending'
+  return source === 'penny-pending'
 }
 
 function normalizeFeedEntry(entry: any) {
@@ -287,7 +287,6 @@ export function useBillAnalysisStream() {
       displayUserMessage?: string
       groupId?: string
       pushUserMessage?: boolean
-      systemMessage?: string
     } = {},
   ) {
     stop()
@@ -303,7 +302,6 @@ export function useBillAnalysisStream() {
       groupId: String(options.groupId || '').trim() || undefined,
       message,
       people,
-      systemMessage: String(options.systemMessage || '').trim() || undefined,
       userMessage: options.pushUserMessage === false
         ? undefined
         : String(options.displayUserMessage || message).trim() || undefined,
@@ -356,7 +354,6 @@ export function useBillAnalysisStream() {
       {
         displayUserMessage: String(displayUserMessage || normalizedGroupName).trim() || normalizedGroupName,
         groupId,
-        systemMessage: `Selected group: ${normalizedGroupName}`,
       },
     )
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { rankPreviousSplitCandidates } from './split-memory'
+import { rankPreviousSplitCandidates } from './previous-splits'
 
 describe('rankPreviousSplitCandidates', () => {
   it('prefers same-group candidates with similar people and dishes', () => {

@@ -359,7 +359,7 @@ export function createLocalAnalysis({ title, people, rawText, imageProvided, not
       used: false,
     },
     people,
-    pi: {
+    penny: {
       model: null,
       used: false,
     },
@@ -369,45 +369,6 @@ export function createLocalAnalysis({ title, people, rawText, imageProvided, not
     taxCents,
     tipCents,
     totalCents: resolvedTotalCents,
-  }
-}
-
-export function normalizePiAnalysis({ title, people, imageProvided, notes = [] as string[], piAnalysis }: {
-  title: string
-  people: string[]
-  imageProvided: boolean
-  notes?: string[]
-  piAnalysis: any
-}) {
-  const items = normalizeItems(piAnalysis?.items || [])
-  const taxCents = toCents(piAnalysis?.taxCents)
-  const tipCents = toCents(piAnalysis?.tipCents)
-  const computedTotal = items.reduce((sum: number, item: any) => sum + item.amountCents, 0) + taxCents + tipCents
-  const totalCents = toCents(piAnalysis?.totalCents) || computedTotal
-
-  return {
-    billDate: '',
-    billItems: [],
-    currency: 'EUR',
-    title,
-    items,
-    merchant: title,
-    notes,
-    openai: {
-      model: process.env.OPENAI_RECEIPT_MODEL || 'gpt-4.1-mini',
-      used: false,
-    },
-    people,
-    pi: {
-      model: 'openai:gpt-4o-mini',
-      used: true,
-    },
-    source: imageProvided ? 'pi-image' : 'pi-text',
-    split: normalizeSplit(piAnalysis?.split, people, totalCents),
-    summary: String(piAnalysis?.summary || buildSummary(items.length, totalCents, 'Pi-assisted')).trim(),
-    taxCents,
-    tipCents,
-    totalCents,
   }
 }
 
@@ -488,13 +449,13 @@ export function createAgentAnalysis({ title, people, plan, rawReceipt, receipt, 
       used: true,
     },
     people,
-    pi: {
-      model: process.env.PI_AGENT_MODEL || 'gpt-4.1-mini',
+    penny: {
+      model: process.env.PENNY_AGENT_MODEL || process.env.PI_AGENT_MODEL || 'gpt-4.1-mini',
       used: true,
     },
     rawReceipt: rawReceipt || receipt,
     receipt,
-    source: imageProvided ? 'openai-image+pi-agent' : 'openai-text+pi-agent',
+    source: imageProvided ? 'openai-image+penny' : 'openai-text+penny',
     split: normalizeSplit(plan?.split, people, receipt.totalCents),
     summary: String(plan?.summary || buildSummary(receipt.items.length, receipt.totalCents, 'agentic')).trim(),
     taxCents: receipt.taxCents,

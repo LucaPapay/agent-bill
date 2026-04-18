@@ -91,12 +91,12 @@ describe('withRunMetadata', () => {
           used: false,
         },
         people: ['Jojo', 'Sarah'],
-        pi: {
+        penny: {
           model: null,
           used: false,
         },
         receipt: null,
-        source: 'pi-agent-pending',
+        source: 'penny-pending',
         split: [],
         summary: 'Penny is working on the receipt.',
         taxCents: 0,
