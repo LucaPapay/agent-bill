@@ -11,6 +11,27 @@ function trimFeed(feed: Array<{ text: string; who: string }>, entry: { text: str
   return [...feed, entry].slice(-120)
 }
 
+function resolveReceipt(value: any) {
+  if (value?.receipt) {
+    return value.receipt
+  }
+
+  if (!value) {
+    return null
+  }
+
+  return {
+    billDate: String(value.billDate || ''),
+    currency: String(value.currency || 'EUR'),
+    items: Array.isArray(value.items) ? value.items : [],
+    merchant: String(value.merchant || ''),
+    notes: Array.isArray(value.notes) ? value.notes : [],
+    taxCents: Number(value.taxCents || 0),
+    tipCents: Number(value.tipCents || 0),
+    totalCents: Number(value.totalCents || 0),
+  }
+}
+
 function fileToBase64(file: File) {
   return new Promise<string>((resolve) => {
     const reader = new FileReader()
@@ -70,7 +91,7 @@ export function useBillAnalysisStream() {
     error.value = ''
     feed.value = Array.isArray(nextResult?.history) ? nextResult.history : []
     jobId.value = nextResult?.runId || ''
-    receipt.value = nextResult?.receipt || null
+    receipt.value = resolveReceipt(nextResult)
     result.value = nextResult
     status.value = isPendingResult(nextResult) ? 'agent' : 'complete'
   }
@@ -244,7 +265,7 @@ export function useBillAnalysisStream() {
   async function revise(message: string, people: string[] = []) {
     const nextMessage = String(message || '').trim()
 
-    if (!nextMessage || !chatId.value || !receipt.value) {
+    if (!nextMessage || !chatId.value || !resolveReceipt(result.value || receipt.value)) {
       return null
     }
 
@@ -256,7 +277,7 @@ export function useBillAnalysisStream() {
   }
 
   async function requestSplitQuestion(people: string[] = []) {
-    if (!chatId.value || !receipt.value) {
+    if (!chatId.value || !resolveReceipt(result.value || receipt.value)) {
       return null
     }
 
@@ -266,6 +287,23 @@ export function useBillAnalysisStream() {
       {
         pushUserMessage: false,
         statusMessage: 'Penny is preparing the split question...',
+      },
+    )
+
+    return null
+  }
+
+  async function startInitialSplit(people: string[] = []) {
+    if (!chatId.value || !resolveReceipt(result.value || receipt.value)) {
+      return null
+    }
+
+    openRevisionStream(
+      'Use the selected group members and create the first split now. If one short follow-up question is truly necessary, ask it. Otherwise produce the split.',
+      people,
+      {
+        pushUserMessage: false,
+        statusMessage: 'Penny is creating the first split...',
       },
     )
 
@@ -287,6 +325,7 @@ export function useBillAnalysisStream() {
     result,
     revise,
     requestSplitQuestion,
+    startInitialSplit,
     start,
     startFromFile,
     status,

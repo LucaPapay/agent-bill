@@ -11,6 +11,7 @@
     "demo": "docker compose up -d postgres && node scripts/seed-demo.mjs && nuxt dev",
     "dev": "docker compose up -d postgres && nuxt dev",
     "generate": "nuxt generate",
+    "mcp": "tsx server/mcp/index.ts",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "test": "vitest run"
@@ -18,6 +19,7 @@
   "dependencies": {
     "@mariozechner/pi-ai": "^0.67.68",
     "@mariozechner/pi-coding-agent": "^0.67.68",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@orpc/client": "^1.13.14",
     "@orpc/server": "^1.13.14",
     "@tailwindcss/vite": "^4.2.2",

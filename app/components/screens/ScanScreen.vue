@@ -111,7 +111,7 @@ const noteList = computed(() => parsedReceipt.value?.notes || [])
 const splitRows = computed(() => analysis.result.value?.split || [])
 const analysisSource = computed(() => String(analysis.result.value?.source || '').trim())
 const awaitingSplitAnswer = computed(() => analysisSource.value === 'pi-agent-question' && !splitRows.value.length)
-const shouldAskSplitQuestion = computed(() =>
+const shouldStartInitialSplit = computed(() =>
   Boolean(
     analysis.chatId.value
     && selectedGroup.value
@@ -119,7 +119,14 @@ const shouldAskSplitQuestion = computed(() =>
     && !splitRows.value.length
     && !awaitingSplitAnswer.value
     && !isRunning.value
-    && analysis.result.value?.openai?.used,
+  ),
+)
+const showGroupPickerPrompt = computed(() =>
+  Boolean(
+    parsedReceipt.value
+    && !selectedGroup.value
+    && !isRunning.value
+    && availableGroups.value.length,
   ),
 )
 const splitPeople = computed(() => {
@@ -131,7 +138,7 @@ const splitPeople = computed(() => {
     .map((membership) => String(membership?.person?.name || '').trim())
     .filter(Boolean)
 })
-const canPickReceipt = computed(() => Boolean(selectedGroup.value && !isRunning.value && !hasSavedChat.value))
+const canPickReceipt = computed(() => Boolean(availableGroups.value.length && !isRunning.value && !hasSavedChat.value))
 const canReset = computed(() =>
   Boolean(
     previewUrl.value
@@ -164,15 +171,17 @@ const headerStatus = computed(() => {
     return 'Ready'
   }
 
-  return 'Pick group'
+  return 'Ready to scan'
 })
 const introMessage = computed(() => {
   if (!availableGroups.value.length) {
-    return 'Which group is this for? Create a group first, then come back here.'
+    return 'Create a group first, then come back here to scan receipts.'
   }
 
   if (!selectedGroup.value) {
-    return 'Which group is this for? Type the name or tap one below. Upload comes next.'
+    return parsedReceipt.value
+      ? 'Receipt parsed.'
+      : 'Upload a receipt whenever you are ready.'
   }
 
   if (analysis.loadingChat.value) {
@@ -188,7 +197,7 @@ const introMessage = computed(() => {
       ? `Using ${selectedGroup.value.name}. Answer Penny's question so she can build the split.`
       : splitRows.value.length
       ? `Using ${selectedGroup.value.name}. Keep chatting to tweak the split or continue into the composer.`
-      : `Using ${selectedGroup.value.name}. The bill items are ready. Tell Penny how to split them.`
+      : `Using ${selectedGroup.value.name}. Penny has the receipt and is moving on to the split.`
   }
 
   if (hasSavedChat.value) {
@@ -203,7 +212,7 @@ const composerPlaceholder = computed(() => {
   }
 
   if (!selectedGroup.value) {
-    return 'Type the group name'
+    return 'Reply in chat'
   }
 
   if (isRunning.value) {
@@ -215,7 +224,7 @@ const composerPlaceholder = computed(() => {
       ? "Answer Penny's split question"
       : splitRows.value.length
       ? 'Tell Penny what to change about the split'
-      : 'Tell Penny how to split this receipt'
+      : 'Wait for Penny to draft the split'
   }
 
   if (hasSavedChat.value) {
@@ -230,7 +239,7 @@ const uploadLabel = computed(() => {
   }
 
   if (!selectedGroup.value) {
-    return 'Pick group'
+    return 'Upload'
   }
 
   if (isRunning.value) {
@@ -359,6 +368,11 @@ function confirmGroup(group, userText) {
     pushLocalMessage('user', userText)
   }
 
+  if (parsedReceipt.value) {
+    pushLocalMessage('assistant', `Using ${group.name}. I can move on to the split now.`)
+    return
+  }
+
   pushLocalMessage('assistant', `Using ${group.name}. Upload a receipt and I’ll parse just the bill items.`)
 }
 
@@ -422,7 +436,12 @@ async function onSend() {
     }
 
     pushLocalMessage('user', message)
-    pushLocalMessage('assistant', 'I could not match that to a group. Type the exact group name or tap one below.')
+    pushLocalMessage(
+      'assistant',
+      parsedReceipt.value
+        ? 'I could not match that to a group. Type the exact group name or tap one below so Penny can split it.'
+        : 'I could not match that to a group. Upload a receipt first, then pick the group here.',
+    )
     return
   }
 
@@ -593,11 +612,11 @@ watch(
   [
     () => analysis.chatId.value,
     () => analysis.result.value?.runId,
-    () => shouldAskSplitQuestion.value,
+    () => shouldStartInitialSplit.value,
     () => splitPeople.value.join('|'),
   ],
   () => {
-    if (!shouldAskSplitQuestion.value) {
+    if (!shouldStartInitialSplit.value) {
       return
     }
 
@@ -608,7 +627,7 @@ watch(
     }
 
     autoQuestionKey.value = questionKey
-    void analysis.requestSplitQuestion(splitPeople.value)
+    void analysis.startInitialSplit(splitPeople.value)
   },
 )
 
@@ -720,17 +739,6 @@ onBeforeUnmount(() => {
                 </NuxtLink>
               </div>
             </div>
-          </div>
-
-          <div v-else-if="!selectedGroup" class="scan-choice-row scan-choice-row-inline">
-            <button
-              v-for="group in availableGroups"
-              :key="group.id"
-              class="scan-choice-button"
-              @click="onPickGroup(group)"
-            >
-              {{ group.name }}
-            </button>
           </div>
 
           <div
@@ -886,6 +894,35 @@ onBeforeUnmount(() => {
               </div>
 
             </div>
+          </div>
+
+          <div v-if="showGroupPickerPrompt" class="scan-chat-row system">
+            <div class="scan-avatar system">
+              <IconGlyph name="scan" width="16" height="16" />
+            </div>
+            <div class="scan-bubble system scan-tool-bubble">
+              Tool: select_group
+            </div>
+          </div>
+
+          <div v-if="showGroupPickerPrompt" class="scan-chat-row">
+            <div class="scan-avatar">
+              <IconGlyph name="sparkle" width="16" height="16" />
+            </div>
+            <div class="scan-bubble assistant">
+              Which group is this for?
+            </div>
+          </div>
+
+          <div v-if="showGroupPickerPrompt" class="scan-choice-row scan-choice-row-inline">
+            <button
+              v-for="group in availableGroups"
+              :key="group.id"
+              class="scan-choice-button"
+              @click="onPickGroup(group)"
+            >
+              {{ group.name }}
+            </button>
           </div>
 
           <div v-if="parsedReceipt && splitRows.length && ledgerSelectedGroup" class="scan-chat-row">
