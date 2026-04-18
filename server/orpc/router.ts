@@ -90,12 +90,13 @@ const addLedgerPersonToGroup = os
 
 const createLedgerBill = os
   .input(z.object({
+    billItems: z.array(z.object({
+      amountCents: z.number().int().min(0),
+      assignedPersonIds: z.array(z.string().trim().min(1)).min(1),
+      name: z.string().trim().min(1),
+    })),
     groupId: z.string().trim().min(1),
     paidByPersonId: z.string().trim().min(1),
-    splits: z.array(z.object({
-      itemAmountCents: z.number().int().min(0),
-      personId: z.string().trim().min(1),
-    })),
     tipAmountCents: z.number().int().min(0),
     title: z.string().trim().min(1),
     totalAmountCents: z.number().int().min(0),
@@ -103,14 +104,15 @@ const createLedgerBill = os
   .handler(async ({ input }) => {
     const groupMemberIds = await getGroupMemberIds(input.groupId)
     const { memberShares, transfers } = buildBillLedger({
+      billItems: input.billItems,
       groupMemberIds,
       paidByPersonId: input.paidByPersonId,
-      splitInputs: input.splits,
       tipAmountCents: input.tipAmountCents,
       totalAmountCents: input.totalAmountCents,
     })
 
     const bill = await createBillRecord({
+      billItems: input.billItems,
       groupId: input.groupId,
       memberShares,
       paidByPersonId: input.paidByPersonId,

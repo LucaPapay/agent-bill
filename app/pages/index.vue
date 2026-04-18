@@ -19,7 +19,14 @@ const billTitle = ref('Friday dinner')
 const billTotal = ref('0')
 const billTip = ref('0')
 const billPaidByPersonId = ref('')
-const billSplits = ref<Array<{ itemAmount: string; personId: string }>>([])
+const billItems = ref<Array<{
+  amount: string
+  assignedPersonIds: string[]
+  id: string
+  name: string
+}>>([])
+
+let billItemId = 0
 
 const selectedGroup = computed(() =>
   ledger.value.groups.find((group: any) => group.id === selectedGroupId.value) || null
@@ -41,18 +48,26 @@ const selectedGroupSimplifiedTotalCents = computed(() =>
   selectedGroupSimplifiedTransfers.value.reduce((sum: number, transfer: any) => sum + transfer.amountCents, 0)
 )
 
+const selectedGroupMemberIds = computed(() =>
+  (selectedGroup.value?.memberships || []).map((membership: any) => membership.personId)
+)
+
 const peopleNotInSelectedGroup = computed(() => {
-  const memberIds = new Set((selectedGroup.value?.memberships || []).map((membership: any) => membership.personId))
+  const memberIds = new Set(selectedGroupMemberIds.value)
   return ledger.value.people.filter((person: any) => !memberIds.has(person.id))
 })
 
-const billSubtotalCents = computed(() =>
-  billSplits.value.reduce((sum: number, split) => sum + toCents(split.itemAmount), 0)
+const billItemsSubtotalCents = computed(() =>
+  billItems.value.reduce((sum: number, item) => sum + toCents(item.amount), 0)
 )
 
 const billTipCents = computed(() => toCents(billTip.value))
 const billTotalCents = computed(() => toCents(billTotal.value))
-const billRemainingCents = computed(() => billTotalCents.value - billTipCents.value - billSubtotalCents.value)
+const billRemainingCents = computed(() => billTotalCents.value - billTipCents.value - billItemsSubtotalCents.value)
+
+const billPreviewShares = computed(() =>
+  buildPreviewShares(selectedGroup.value, billItems.value, billTipCents.value, billTotalCents.value)
+)
 
 watch(selectedGroup, (group) => {
   syncBillForm(group)
@@ -65,6 +80,11 @@ onMounted(() => {
 
   loadLedger()
 })
+
+function nextBillItemId() {
+  billItemId += 1
+  return `bill-item-${billItemId}`
+}
 
 function toCents(value: string | number | undefined | null) {
   const normalized = String(value || '')
@@ -87,16 +107,144 @@ function formatCents(cents: number) {
   }).format((cents || 0) / 100)
 }
 
-function syncBillForm(group: any) {
-  const members = group?.memberships || []
-  const previousValues = new Map(
-    billSplits.value.map(split => [split.personId, split.itemAmount]),
+function splitEvenly(amountCents: number, personIds: string[]) {
+  if (!personIds.length || amountCents <= 0) {
+    return new Map<string, number>()
+  }
+
+  const base = Math.floor(amountCents / personIds.length)
+  const remainder = amountCents % personIds.length
+  const result = new Map<string, number>()
+
+  for (const [index, personId] of personIds.entries()) {
+    result.set(personId, base + (index < remainder ? 1 : 0))
+  }
+
+  return result
+}
+
+function normalizeAssignedPersonIds(group: any, personIds: string[]) {
+  const allowedIds = new Set((group?.memberships || []).map((membership: any) => membership.personId))
+  const normalized: string[] = []
+
+  for (const personId of personIds) {
+    if (!allowedIds.has(personId) || normalized.includes(personId)) {
+      continue
+    }
+
+    normalized.push(personId)
+  }
+
+  return normalized
+}
+
+function createEmptyBillItem(group: any) {
+  const firstPersonId = group?.memberships?.[0]?.personId
+
+  return {
+    amount: '',
+    assignedPersonIds: firstPersonId ? [firstPersonId] : [],
+    id: nextBillItemId(),
+    name: '',
+  }
+}
+
+function buildPreviewShares(group: any, items: any[], tipAmountCents: number, totalAmountCents: number) {
+  const memberships = group?.memberships || []
+  const itemAmountsByPersonId = new Map<string, number>(
+    memberships.map((membership: any) => [membership.personId, 0]),
+  )
+  let hasAssignedItems = false
+
+  for (const item of items) {
+    const amountCents = toCents(item.amount)
+    const assignedPersonIds = normalizeAssignedPersonIds(group, item.assignedPersonIds || [])
+
+    if (amountCents <= 0 || !assignedPersonIds.length) {
+      continue
+    }
+
+    const splitAmounts = splitEvenly(amountCents, assignedPersonIds)
+    hasAssignedItems = true
+
+    for (const personId of assignedPersonIds) {
+      itemAmountsByPersonId.set(
+        personId,
+        (itemAmountsByPersonId.get(personId) || 0) + (splitAmounts.get(personId) || 0),
+      )
+    }
+  }
+
+  if (!hasAssignedItems && memberships.length) {
+    const evenItemAmounts = splitEvenly(Math.max(0, totalAmountCents - tipAmountCents), memberships.map((membership: any) => membership.personId))
+
+    for (const membership of memberships) {
+      itemAmountsByPersonId.set(membership.personId, evenItemAmounts.get(membership.personId) || 0)
+    }
+  }
+
+  const tipParticipants = memberships
+    .map((membership: any) => membership.personId)
+    .filter((personId: string) => (itemAmountsByPersonId.get(personId) || 0) > 0)
+  const sharedTip = splitEvenly(
+    tipAmountCents,
+    tipParticipants.length ? tipParticipants : memberships.map((membership: any) => membership.personId),
   )
 
-  billSplits.value = members.map((membership: any) => ({
-    itemAmount: previousValues.get(membership.personId) || '',
-    personId: membership.personId,
-  }))
+  return memberships.map((membership: any) => {
+    const itemAmountCents = itemAmountsByPersonId.get(membership.personId) ?? 0
+    const sharedTipCents = sharedTip.get(membership.personId) ?? 0
+
+    return {
+      itemAmountCents,
+      person: membership.person,
+      personId: membership.personId,
+      tipAmountCents: sharedTipCents,
+      totalAmountCents: itemAmountCents + sharedTipCents,
+    }
+  })
+}
+
+function formatAssignedPeople(item: any) {
+  const names = (item.assignedPeople || []).map((person: any) => person.name)
+
+  if (!names.length) {
+    return 'Unassigned'
+  }
+
+  return names.join(', ')
+}
+
+function formatItemSplit(item: any) {
+  const assignedPeople = item.assignedPeople || []
+
+  if (assignedPeople.length <= 1) {
+    return 'Single owner'
+  }
+
+  return `Split across ${assignedPeople.length} people`
+}
+
+function syncBillForm(group: any) {
+  const members = group?.memberships || []
+
+  if (!billItems.value.length) {
+    billItems.value = [createEmptyBillItem(group)]
+  }
+  else {
+    billItems.value = billItems.value.map(item => {
+      const assignedPersonIds = normalizeAssignedPersonIds(group, item.assignedPersonIds || [])
+
+      return {
+        amount: item.amount,
+        assignedPersonIds: assignedPersonIds.length || !members.length
+          ? assignedPersonIds
+          : [members[0].personId],
+        id: item.id || nextBillItemId(),
+        name: item.name,
+      }
+    })
+  }
 
   if (!members.some((membership: any) => membership.personId === billPaidByPersonId.value)) {
     billPaidByPersonId.value = members[0]?.personId || ''
@@ -129,7 +277,29 @@ function resetBillForm() {
   billTitle.value = 'Friday dinner'
   billTotal.value = '0'
   billTip.value = '0'
+  billItems.value = []
   syncBillForm(selectedGroup.value)
+}
+
+function addBillItem() {
+  billItems.value.push(createEmptyBillItem(selectedGroup.value))
+}
+
+function removeBillItem(itemId: string) {
+  billItems.value = billItems.value.filter(item => item.id !== itemId)
+
+  if (!billItems.value.length) {
+    billItems.value = [createEmptyBillItem(selectedGroup.value)]
+  }
+}
+
+function toggleBillItemAssignment(item: any, personId: string) {
+  if (item.assignedPersonIds.includes(personId)) {
+    item.assignedPersonIds = item.assignedPersonIds.filter((value: string) => value !== personId)
+    return
+  }
+
+  item.assignedPersonIds = [...item.assignedPersonIds, personId]
 }
 
 function loadLedger() {
@@ -213,13 +383,18 @@ function createBill() {
   errorMessage.value = ''
   saving.value = true
 
+  const payloadItems = billItems.value
+    .map(item => ({
+      amountCents: toCents(item.amount),
+      assignedPersonIds: normalizeAssignedPersonIds(selectedGroup.value, item.assignedPersonIds || []),
+      name: item.name.trim(),
+    }))
+    .filter(item => item.name || item.amountCents > 0)
+
   api.createLedgerBill({
+    billItems: payloadItems,
     groupId: selectedGroupId.value,
     paidByPersonId: billPaidByPersonId.value,
-    splits: billSplits.value.map(split => ({
-      itemAmountCents: toCents(split.itemAmount),
-      personId: split.personId,
-    })),
     tipAmountCents: billTipCents.value,
     title: billTitle.value,
     totalAmountCents: billTotalCents.value,
@@ -249,10 +424,10 @@ function createBill() {
                 Manual split ledger
               </p>
               <h1 class="max-w-xl font-serif text-4xl leading-tight sm:text-5xl">
-                Build groups, enter bills by hand, and keep the raw shares visible.
+                Build groups, enter receipt items, and keep the owed amounts transparent.
               </h1>
               <p class="mt-4 max-w-2xl text-sm leading-6 text-muted sm:text-base">
-                This flow stores local groups, group members, bills, per-person bill shares, and the
+                This flow stores local groups, bill items, item assignees, per-person shares, and the
                 derived who-owes-whom transfers that later simplification can work from.
               </p>
             </div>
@@ -424,7 +599,7 @@ function createBill() {
                     class="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm"
                   >
                     <span>{{ membership.person.name }}</span>
-                    <span class="text-muted">ready for bills</span>
+                    <span class="text-muted">ready for items</span>
                   </div>
                 </div>
               </div>
@@ -434,7 +609,7 @@ function createBill() {
                   <div>
                     <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Create bill</p>
                     <p class="mt-2 text-sm text-muted">
-                      Enter one food share per group member and one shared tip line. The bill creates raw shares and derived transfers.
+                      Add each receipt item, assign it to one or more people, and the app will derive per-person shares and transfers.
                     </p>
                   </div>
                   <button
@@ -490,25 +665,104 @@ function createBill() {
 
                 <div class="rounded-[1.5rem] bg-paper p-4">
                   <div class="flex flex-wrap items-center justify-between gap-3">
-                    <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Food shares</p>
-                    <p class="text-sm text-muted">Remaining: {{ formatCents(billRemainingCents) }}</p>
+                    <div>
+                    <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Receipt items</p>
+                      <p class="mt-1 text-sm text-muted">Assign each item to one or more people. Shared items are split evenly. Leave everything blank to split the bill evenly.</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <p class="text-sm text-muted">Remaining: {{ formatCents(billRemainingCents) }}</p>
+                      <button
+                        type="button"
+                        class="rounded-full bg-white px-4 py-2 text-sm font-medium text-ink transition hover:bg-accent hover:text-white"
+                        @click="addBillItem"
+                      >
+                        Add item
+                      </button>
+                    </div>
                   </div>
 
                   <div class="mt-4 grid gap-3">
-                    <label
-                      v-for="split in billSplits"
-                      :key="split.personId"
-                      class="grid gap-2 sm:grid-cols-[1fr_140px] sm:items-center"
+                    <div
+                      v-for="item in billItems"
+                      :key="item.id"
+                      class="rounded-[1.5rem] border border-stone-200 bg-white p-4"
                     >
-                      <span class="text-sm">
-                        {{ selectedGroup.memberships.find((membership: any) => membership.personId === split.personId)?.person.name }}
-                      </span>
-                      <input
-                        v-model="split.itemAmount"
-                        class="rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm outline-none focus:border-accent"
-                        placeholder="0.00"
-                      >
-                    </label>
+                      <div class="grid gap-3 md:grid-cols-[1fr_140px_auto] md:items-end">
+                        <label class="grid gap-2 text-sm">
+                          <span>Item name</span>
+                          <input
+                            v-model="item.name"
+                            class="rounded-2xl border border-stone-200 bg-paper px-4 py-3 outline-none focus:border-accent"
+                            placeholder="Margherita pizza"
+                          >
+                        </label>
+
+                        <label class="grid gap-2 text-sm">
+                          <span>Amount</span>
+                          <input
+                            v-model="item.amount"
+                            class="rounded-2xl border border-stone-200 bg-paper px-4 py-3 outline-none focus:border-accent"
+                            placeholder="12.50"
+                          >
+                        </label>
+
+                        <button
+                          type="button"
+                          class="rounded-full border border-stone-200 px-4 py-3 text-sm text-muted transition hover:border-red-300 hover:text-red-700"
+                          @click="removeBillItem(item.id)"
+                        >
+                          Remove
+                        </button>
+                      </div>
+
+                      <div class="mt-4 grid gap-2">
+                        <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Assign to</p>
+                        <div class="flex flex-wrap gap-2">
+                          <button
+                            v-for="membership in selectedGroup.memberships"
+                            :key="`${item.id}-${membership.personId}`"
+                            type="button"
+                            class="rounded-full border px-3 py-2 text-sm transition"
+                            :class="item.assignedPersonIds.includes(membership.personId)
+                              ? 'border-accent bg-accent text-white'
+                              : 'border-stone-200 bg-paper text-muted hover:border-accent/40 hover:text-ink'"
+                            @click="toggleBillItemAssignment(item, membership.personId)"
+                          >
+                            {{ membership.person.name }}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rounded-[1.5rem] border border-stone-200 bg-paper/60 p-4">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Derived per-person preview</p>
+                    <p class="text-sm text-muted">Based on the item assignments above, or an even split when no items are filled in</p>
+                  </div>
+
+                  <div class="mt-4 grid gap-3">
+                    <div
+                      v-for="share in billPreviewShares"
+                      :key="share.personId"
+                      class="rounded-2xl bg-white px-4 py-4"
+                    >
+                      <div class="flex items-center justify-between gap-4">
+                        <span class="font-medium">{{ share.person.name }}</span>
+                        <span class="text-lg font-semibold">{{ formatCents(share.totalAmountCents) }}</span>
+                      </div>
+                      <div class="mt-3 grid gap-2 text-sm text-muted">
+                        <div class="flex items-center justify-between gap-4">
+                          <span>Items</span>
+                          <span>{{ formatCents(share.itemAmountCents) }}</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-4">
+                          <span>Shared tip</span>
+                          <span>{{ formatCents(share.tipAmountCents) }}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -629,12 +883,44 @@ function createBill() {
                   <p class="mt-2 text-2xl font-semibold">{{ formatCents(selectedBill.tipAmountCents) }}</p>
                 </div>
                 <div class="rounded-[1.5rem] bg-paper px-4 py-4">
-                  <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">People</p>
-                  <p class="mt-2 text-2xl font-semibold">{{ selectedBill.shares.length }}</p>
+                  <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Items</p>
+                  <p class="mt-2 text-2xl font-semibold">{{ selectedBill.items.length }}</p>
                 </div>
                 <div class="rounded-[1.5rem] bg-paper px-4 py-4">
                   <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Transfers</p>
                   <p class="mt-2 text-2xl font-semibold">{{ selectedBill.transfers.length }}</p>
+                </div>
+              </div>
+
+              <div class="rounded-[1.75rem] border border-stone-200 bg-white p-5">
+                <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Receipt items</p>
+                <div v-if="selectedBill.items.length" class="mt-4 grid gap-3">
+                  <div
+                    v-for="item in selectedBill.items"
+                    :key="item.id"
+                    class="rounded-2xl bg-paper px-4 py-4"
+                  >
+                    <div class="flex items-center justify-between gap-4">
+                      <span class="font-medium">{{ item.name }}</span>
+                      <span class="text-lg font-semibold">{{ formatCents(item.amountCents) }}</span>
+                    </div>
+                    <div class="mt-3 grid gap-2 text-sm text-muted">
+                      <div class="flex items-center justify-between gap-4">
+                        <span>Assigned to</span>
+                        <span>{{ formatAssignedPeople(item) }}</span>
+                      </div>
+                      <div class="flex items-center justify-between gap-4">
+                        <span>Split</span>
+                        <span>{{ formatItemSplit(item) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  v-else
+                  class="mt-4 rounded-2xl bg-paper px-4 py-4 text-sm text-muted"
+                >
+                  This older bill does not have saved item rows yet.
                 </div>
               </div>
 
@@ -652,7 +938,7 @@ function createBill() {
                     </div>
                     <div class="mt-3 grid gap-2 text-sm text-muted">
                       <div class="flex items-center justify-between gap-4">
-                        <span>Food</span>
+                        <span>Items</span>
                         <span>{{ formatCents(share.itemAmountCents) }}</span>
                       </div>
                       <div class="flex items-center justify-between gap-4">
@@ -689,7 +975,7 @@ function createBill() {
               v-else
               class="rounded-[1.75rem] border border-dashed border-stone-300 bg-paper/70 px-5 py-8 text-sm leading-6 text-muted"
             >
-              Pick a saved bill to inspect each person&apos;s food share, shared tip share, and the stored transfers.
+              Pick a saved bill to inspect its items, per-person shares, and stored transfers.
             </div>
           </div>
         </div>

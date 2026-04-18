@@ -19,7 +19,7 @@ The manual ledger track is the important base for the next step, because simplif
 - A bill belongs to exactly one group.
 - A bill has one payer.
 - A bill stores the total amount and the tip amount separately.
-- A bill stores explicit receipt items.
+- A bill can store explicit receipt items, but items are optional.
 - Each bill item can be assigned to one or more group members.
 - Tip is entered once per bill, then split automatically across bill participants.
 - We still want bill detail to show the raw breakdown per person:
@@ -34,12 +34,14 @@ When creating a bill:
 
 - the UI renders one editable receipt item row at a time
 - each item can be assigned to one or more people in the selected group
+- the user can also leave the item list blank and fall back to an even split
 - the UI renders one bill-level tip amount
 - the user chooses who paid
 
 When saving a bill:
 
 - each item amount is split evenly across its assigned people
+- if there are no saved items, the bill subtotal is split evenly across the full group
 - the sum of all item amounts plus the tip must equal the bill total
 - tip is split evenly across members who have a positive item share
 - if nobody has a positive item share, tip falls back to being split evenly across all group members

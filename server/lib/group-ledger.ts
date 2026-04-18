@@ -15,18 +15,19 @@ function splitEvenly(amountCents: number, personIds: string[]) {
 }
 
 export function buildBillLedger({
+  billItems,
   groupMemberIds,
   paidByPersonId,
-  splitInputs,
   tipAmountCents,
   totalAmountCents,
 }: {
+  billItems: Array<{
+    amountCents: number
+    assignedPersonIds: string[]
+    name: string
+  }>
   groupMemberIds: string[]
   paidByPersonId: string
-  splitInputs: Array<{
-    itemAmountCents: number
-    personId: string
-  }>
   tipAmountCents: number
   totalAmountCents: number
 }) {
@@ -38,24 +39,72 @@ export function buildBillLedger({
     throw new Error('The bill payer must belong to the selected group.')
   }
 
-  const byPersonId = new Map(
-    splitInputs.map(split => [
-      split.personId,
-      Math.max(0, Math.round(split.itemAmountCents)),
-    ]),
-  )
+  if (tipAmountCents > totalAmountCents) {
+    throw new Error('Tip cannot be greater than the bill total.')
+  }
+
+  const groupMemberIdsSet = new Set(groupMemberIds)
+  const itemAmountsByPersonId = new Map<string, number>(groupMemberIds.map(personId => [personId, 0]))
+  const itemSubtotalCents = totalAmountCents - tipAmountCents
+
+  if (itemSubtotalCents < 0) {
+    throw new Error('Item subtotal cannot be negative.')
+  }
+
+  if (!billItems.length) {
+    const evenItemAmounts = splitEvenly(itemSubtotalCents, groupMemberIds)
+
+    for (const personId of groupMemberIds) {
+      itemAmountsByPersonId.set(personId, evenItemAmounts.get(personId) || 0)
+    }
+  }
+
+  for (const item of billItems) {
+    const name = item.name.trim()
+
+    if (!name) {
+      throw new Error('Each bill item needs a name.')
+    }
+
+    const amountCents = Math.max(0, Math.round(item.amountCents))
+
+    if (amountCents <= 0) {
+      throw new Error(`"${name}" needs an amount greater than zero.`)
+    }
+
+    const assignedPersonIds = [...new Set(item.assignedPersonIds)]
+
+    if (!assignedPersonIds.length) {
+      throw new Error(`Assign "${name}" to at least one person.`)
+    }
+
+    for (const personId of assignedPersonIds) {
+      if (!groupMemberIdsSet.has(personId)) {
+        throw new Error(`"${name}" is assigned to someone outside the selected group.`)
+      }
+    }
+
+    const splitAmounts = splitEvenly(amountCents, assignedPersonIds)
+
+    for (const personId of assignedPersonIds) {
+      itemAmountsByPersonId.set(
+        personId,
+        (itemAmountsByPersonId.get(personId) || 0) + (splitAmounts.get(personId) || 0),
+      )
+    }
+  }
 
   const memberShares = groupMemberIds.map((personId: string) => ({
-    itemAmountCents: byPersonId.get(personId) || 0,
+    itemAmountCents: itemAmountsByPersonId.get(personId) || 0,
     personId,
     tipAmountCents: 0,
     totalAmountCents: 0,
   }))
 
-  const itemAmountCents = memberShares.reduce((sum: number, share) => sum + share.itemAmountCents, 0)
+  const assignedItemAmountCents = memberShares.reduce((sum: number, share) => sum + share.itemAmountCents, 0)
 
-  if (itemAmountCents + tipAmountCents !== totalAmountCents) {
-    throw new Error('Food splits plus tip must add up to the bill total.')
+  if (assignedItemAmountCents + tipAmountCents !== totalAmountCents) {
+    throw new Error('Item amounts plus tip must add up to the bill total.')
   }
 
   const tipParticipants = memberShares

@@ -77,6 +77,25 @@ async function ensureSchema() {
       `
 
       await db()`
+        create table if not exists bill_items (
+          id text primary key,
+          bill_id text not null references bills(id) on delete cascade,
+          name text not null,
+          amount_cents integer not null,
+          sort_order integer not null
+        )
+      `
+
+      await db()`
+        create table if not exists bill_item_assignments (
+          id text primary key,
+          bill_item_id text not null references bill_items(id) on delete cascade,
+          person_id text not null references people(id),
+          unique (bill_item_id, person_id)
+        )
+      `
+
+      await db()`
         create table if not exists bill_transfers (
           id text primary key,
           bill_id text not null references bills(id) on delete cascade,
@@ -194,6 +213,7 @@ export async function getGroupMemberIds(groupId: string) {
 
 export async function createBillRecord({
   groupId,
+  billItems,
   paidByPersonId,
   tipAmountCents,
   title,
@@ -202,6 +222,11 @@ export async function createBillRecord({
   transfers,
 }: {
   groupId: string
+  billItems: Array<{
+    amountCents: number
+    assignedPersonIds: string[]
+    name: string
+  }>
   paidByPersonId: string
   tipAmountCents: number
   title: string
@@ -243,6 +268,22 @@ export async function createBillRecord({
       `
     }
 
+    for (const [index, item] of billItems.entries()) {
+      const billItemId = randomUUID()
+
+      await sql`
+        insert into bill_items (id, bill_id, name, amount_cents, sort_order)
+        values (${billItemId}, ${id}, ${item.name}, ${item.amountCents}, ${index})
+      `
+
+      for (const personId of item.assignedPersonIds) {
+        await sql`
+          insert into bill_item_assignments (id, bill_item_id, person_id)
+          values (${randomUUID()}, ${billItemId}, ${personId})
+        `
+      }
+    }
+
     for (const transfer of transfers) {
       await sql`
         insert into bill_transfers (id, bill_id, group_id, from_person_id, to_person_id, amount_cents)
@@ -269,12 +310,14 @@ export async function createBillRecord({
 export async function getLedgerSnapshot() {
   await ensureSchema()
 
-  const [peopleRows, groupRows, membershipRows, billRows, shareRows, transferRows] = await Promise.all([
+  const [peopleRows, groupRows, membershipRows, billRows, shareRows, itemRows, itemAssignmentRows, transferRows] = await Promise.all([
     db()`select id, name, created_at from people order by lower(name) asc, created_at asc`,
     db()`select id, name, created_at from groups order by created_at desc`,
     db()`select id, group_id, person_id, created_at from group_memberships order by created_at asc`,
     db()`select id, group_id, title, total_amount_cents, tip_amount_cents, paid_by_person_id, created_at from bills order by created_at desc`,
     db()`select id, bill_id, person_id, item_amount_cents, tip_amount_cents, total_amount_cents from bill_member_shares`,
+    db()`select id, bill_id, name, amount_cents, sort_order from bill_items order by sort_order asc, id asc`,
+    db()`select id, bill_item_id, person_id from bill_item_assignments`,
     db()`select id, bill_id, group_id, from_person_id, to_person_id, amount_cents from bill_transfers`,
   ])
 
@@ -311,6 +354,7 @@ export async function getLedgerSnapshot() {
     const bill = {
       createdAt: row.created_at,
       id: row.id,
+      items: [] as any[],
       paidByPerson: peopleById.get(row.paid_by_person_id) || null,
       paidByPersonId: row.paid_by_person_id,
       shares: [] as any[],
@@ -325,6 +369,41 @@ export async function getLedgerSnapshot() {
     const bills = billsByGroupId.get(row.group_id) || []
     bills.push(bill)
     billsByGroupId.set(row.group_id, bills)
+  }
+
+  const itemsById = new Map<string, any>()
+
+  for (const row of itemRows) {
+    const bill = billsById.get(row.bill_id)
+
+    if (!bill) {
+      continue
+    }
+
+    const item = {
+      amountCents: row.amount_cents,
+      assignedPeople: [] as any[],
+      assignedPersonIds: [] as string[],
+      billId: row.bill_id,
+      id: row.id,
+      name: row.name,
+      sortOrder: row.sort_order,
+    }
+
+    itemsById.set(row.id, item)
+    bill.items.push(item)
+  }
+
+  for (const row of itemAssignmentRows) {
+    const item = itemsById.get(row.bill_item_id)
+    const person = peopleById.get(row.person_id)
+
+    if (!item || !person) {
+      continue
+    }
+
+    item.assignedPeople.push(person)
+    item.assignedPersonIds.push(row.person_id)
   }
 
   for (const row of shareRows) {
@@ -358,6 +437,7 @@ export async function getLedgerSnapshot() {
 
     const transfer = {
       amountCents: row.amount_cents,
+      billId: row.bill_id,
       fromPerson,
       fromPersonId: row.from_person_id,
       id: row.id,
