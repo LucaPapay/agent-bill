@@ -55,6 +55,11 @@ See [app explanation.md](</Users/lucapapay/dev/agent-bill/app explanation.md>) f
 - `Groups`, `Assign`, and `Settled` are the screens currently wired to real ledger data.
 - `Scan` and `Chat Split` currently act as design/demo flow and are not yet connected back into saved itemized bills.
 
+## Demo Seed
+
+- Run `npm run db:seed-demo` to reset the manual-ledger tables and load 3 groups, 10 people, and 20 demo bills.
+- The seed data is intentionally fun and deterministic so local demos always look the same.
+
 ## Next Good Steps
 
 - Add real OCR fallback for image-only mode without Pi.

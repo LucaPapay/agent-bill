@@ -199,6 +199,11 @@ The scan-first design flow is only partially connected today:
 - they do not yet create saved ledger bills
 - the durable manual workflow still runs through `Groups` -> `Assign` -> `Settled`
 
+For local demos:
+
+- `npm run db:seed-demo` resets the manual-ledger tables
+- it inserts 3 groups, 10 people, and 20 saved bills with deterministic fun sample data
+
 ## Group settlement behavior
 
 The selected group exposes a simplified settlement view:

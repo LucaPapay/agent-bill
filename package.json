@@ -6,6 +6,7 @@
     "build": "nuxt build",
     "check": "nuxt typecheck",
     "db:logs": "docker compose logs -f postgres",
+    "db:seed-demo": "docker compose up -d postgres && node scripts/seed-demo.mjs",
     "db:stop": "docker compose stop postgres",
     "dev": "docker compose up -d postgres && nuxt dev",
     "generate": "nuxt generate",
