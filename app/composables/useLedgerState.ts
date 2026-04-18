@@ -82,15 +82,16 @@ export function useLedgerState() {
     return ledger.value.people.filter((person: any) => !memberIds.has(person.id))
   })
 
-  const billItemsSubtotalCents = computed(() =>
-    billItems.value.reduce((sum: number, item) => sum + toCents(item.amount), 0),
-  )
-
   const billTipCents = computed(() => toCents(billTip.value))
   const billTotalCents = computed(() => toCents(billTotal.value))
-  const billRemainingCents = computed(() => billTotalCents.value - billTipCents.value - billItemsSubtotalCents.value)
   const preparedBillItems = computed(() =>
     prepareBillItems(selectedGroup.value, billItems.value),
+  )
+  const assignedBillItemsSubtotalCents = computed(() =>
+    preparedBillItems.value.payloadItems.reduce((sum: number, item: any) => sum + item.amountCents, 0),
+  )
+  const billRemainingCents = computed(() =>
+    billTotalCents.value - billTipCents.value - assignedBillItemsSubtotalCents.value,
   )
 
   const billPreviewShares = computed(() =>
