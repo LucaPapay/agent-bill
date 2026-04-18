@@ -7,8 +7,22 @@ function isPendingResult(value: any) {
   return source === 'pi-agent-pending' || source === 'receipt-pending'
 }
 
-function trimFeed(feed: Array<{ text: string; who: string }>, entry: { text: string; who: string }) {
-  return [...feed, entry].slice(-120)
+function normalizeFeedEntry(entry: any) {
+  const text = String(entry?.text || '').trim()
+  const toolName = String(entry?.toolName || '').trim()
+    || (/^Tool:\s*/.test(text) ? text.replace(/^Tool:\s*/, '').trim() : '')
+
+  return {
+    kind: toolName ? 'tool' : 'message',
+    text,
+    toolName,
+    toolState: toolName ? String(entry?.toolState || 'done') : '',
+    who: String(entry?.who || 'log'),
+  }
+}
+
+function trimFeed(feed: any[], entry: any) {
+  return [...feed, normalizeFeedEntry(entry)].slice(-120)
 }
 
 function resolveReceipt(value: any) {
@@ -50,7 +64,7 @@ export function useBillAnalysisStream() {
   const assistantText = useState('bill-analysis:assistant-text', () => '')
   const chatId = useState('bill-analysis:chat-id', () => '')
   const error = useState('bill-analysis:error', () => '')
-  const feed = useState<Array<{ text: string; who: string }>>('bill-analysis:feed', () => [])
+  const feed = useState<any[]>('bill-analysis:feed', () => [])
   const jobId = useState('bill-analysis:job-id', () => '')
   const loadingChat = useState('bill-analysis:loading-chat', () => false)
   const receipt = useState<any>('bill-analysis:receipt', () => null)
@@ -81,15 +95,41 @@ export function useBillAnalysisStream() {
     clearCurrent()
   }
 
-  function pushFeed(who: string, text: string) {
-    feed.value = trimFeed(feed.value, { text, who })
+  function pushFeed(entryOrWho: any, text = '') {
+    const entry = typeof entryOrWho === 'string'
+      ? { text, who: entryOrWho }
+      : entryOrWho
+
+    feed.value = trimFeed(feed.value, entry)
+  }
+
+  function markToolFeed(toolName: string, isError: boolean) {
+    for (let index = feed.value.length - 1; index >= 0; index -= 1) {
+      const entry = feed.value[index]
+
+      if (entry?.kind !== 'tool' || entry.toolName !== toolName || entry.toolState !== 'running') {
+        continue
+      }
+
+      feed.value = [
+        ...feed.value.slice(0, index),
+        {
+          ...entry,
+          toolState: isError ? 'error' : 'done',
+        },
+        ...feed.value.slice(index + 1),
+      ]
+      return
+    }
   }
 
   function applyResult(nextResult: any) {
     assistantText.value = ''
     chatId.value = nextResult?.chatId || ''
     error.value = ''
-    feed.value = Array.isArray(nextResult?.history) ? nextResult.history : []
+    feed.value = Array.isArray(nextResult?.history)
+      ? nextResult.history.map((entry: any) => normalizeFeedEntry(entry))
+      : []
     jobId.value = nextResult?.runId || ''
     receipt.value = resolveReceipt(nextResult)
     result.value = nextResult
@@ -144,7 +184,17 @@ export function useBillAnalysisStream() {
     }
 
     if (payload.type === 'agent_tool_start') {
-      pushFeed('log', `Tool: ${payload.toolName}`)
+      pushFeed({
+        text: `Tool: ${payload.toolName}`,
+        toolName: payload.toolName,
+        toolState: 'running',
+        who: 'log',
+      })
+      return
+    }
+
+    if (payload.type === 'agent_tool_end') {
+      markToolFeed(payload.toolName, payload.isError)
       return
     }
 
