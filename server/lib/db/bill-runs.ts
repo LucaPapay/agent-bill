@@ -1,39 +1,10 @@
 import { randomUUID } from 'node:crypto'
+import {
+  normalizePeople,
+  normalizeSavedRunPayload,
+  withRunMetadata,
+} from '../bill-run-payload'
 import { db, ensureSchema } from './client'
-
-function parseJsonValue(value: unknown) {
-  if (typeof value !== 'string') {
-    return value
-  }
-
-  try {
-    return JSON.parse(value)
-  } catch {
-    return value
-  }
-}
-
-function normalizePeople(value: unknown) {
-  const parsedValue = parseJsonValue(value)
-
-  if (!Array.isArray(parsedValue)) {
-    return []
-  }
-
-  return parsedValue
-    .map(entry => String(entry || '').trim())
-    .filter(Boolean)
-}
-
-function withRunMetadata(row: any) {
-  const payload = parseJsonValue(row.payload)
-
-  return {
-    ...(payload && typeof payload === 'object' ? payload : {}),
-    runId: row.id,
-    savedAt: row.created_at,
-  }
-}
 
 export async function createBillChat({
   people,
@@ -73,12 +44,13 @@ export async function saveBillRun({
   await ensureSchema()
 
   const id = randomUUID()
-  const normalizedPeople = normalizePeople(payload?.people)
+  const normalizedPayload = normalizeSavedRunPayload(payload)
+  const normalizedPeople = normalizePeople(normalizedPayload.people)
   const insertedRow = await db().begin(async (sql: any) => {
     const updatedChats = await sql`
       update bill_chats
       set
-        title = ${payload.title},
+        title = ${normalizedPayload.title},
         people = ${sql.json(normalizedPeople)},
         updated_at = now()
       where id = ${chatId}
@@ -92,7 +64,7 @@ export async function saveBillRun({
 
     const insertedRuns = await sql`
       insert into bill_runs (id, chat_id, person_id, title, payload)
-      values (${id}, ${chatId}, ${personId}, ${payload.title}, ${sql.json(payload)})
+      values (${id}, ${chatId}, ${personId}, ${normalizedPayload.title}, ${sql.json(normalizedPayload)})
       returning id, created_at
     `
 
@@ -156,7 +128,7 @@ export async function listBillChats(personId: string) {
   `
 
   return rows.map((row: any) => {
-    const payload = parseJsonValue(row.payload) || {}
+    const payload = normalizeSavedRunPayload(row.payload)
 
     return {
       chatId: row.id,
