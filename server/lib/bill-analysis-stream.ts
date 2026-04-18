@@ -1,6 +1,6 @@
-import { runBillAnalysisPipeline } from './bill-pipeline'
+import { runBillAnalysisPipeline, runBillRevisionPipeline } from './bill-pipeline'
 
-export async function* streamBillAnalysis(input: any) {
+async function* streamPipeline(run: (push: (event: any) => void) => Promise<any>) {
   const queue: any[] = [{
     type: 'status',
     phase: 'queued',
@@ -15,7 +15,7 @@ export async function* streamBillAnalysis(input: any) {
     waitForEvent = null
   }
 
-  void runBillAnalysisPipeline(input, push)
+  void run(push)
     .then((result) => {
       done = true
       push({
@@ -41,4 +41,12 @@ export async function* streamBillAnalysis(input: any) {
 
     yield queue.shift()
   }
+}
+
+export async function* streamBillAnalysis(input: any, personId: string) {
+  yield* streamPipeline((push) => runBillAnalysisPipeline(input, personId, push))
+}
+
+export async function* streamBillRevision(input: any, personId: string) {
+  yield* streamPipeline((push) => runBillRevisionPipeline(input, personId, push))
 }

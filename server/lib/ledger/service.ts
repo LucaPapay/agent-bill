@@ -1,7 +1,7 @@
 import {
   addPersonToGroup,
-  assertGroupMembership,
-  assertPersonExists,
+  assertPersonCanAccessGroup,
+  assertPersonCanAccessVisiblePerson,
   createBillRecord,
   createGroup,
   createPerson,
@@ -11,44 +11,38 @@ import {
   getGroupMemberIds,
   getLedgerSnapshot,
   getSettlementPaymentGroupId,
-  listPeople,
   updateBillRecord,
   voidSettlementPayment,
 } from '../db'
 import { buildBillLedger } from '../group-ledger'
 
-export async function listLedgerUsers() {
-  return await listPeople()
+export async function getLedger(personId: string) {
+  return await getLedgerSnapshot(personId)
 }
 
-export async function getLedger(currentUserId: string) {
-  await assertPersonExists(currentUserId)
-  return await getLedgerSnapshot(currentUserId)
+export async function createLedgerPerson(name: string, personId: string) {
+  await createPerson(name, personId)
+  return await getLedgerSnapshot(personId)
 }
 
-export async function createLedgerPerson(name: string, currentUserId?: string) {
-  await createPerson(name)
-  return await getLedgerSnapshot(currentUserId)
-}
-
-export async function createLedgerGroup(name: string, currentUserId: string) {
-  await assertPersonExists(currentUserId)
+export async function createLedgerGroup(name: string, personId: string) {
   const group = await createGroup(name)
-  await addPersonToGroup(group.id, currentUserId)
+  await addPersonToGroup(group.id, personId)
 
   return {
     groupId: group.id,
-    ledger: await getLedgerSnapshot(currentUserId),
+    ledger: await getLedgerSnapshot(personId),
   }
 }
 
-export async function addLedgerPersonToGroup(groupId: string, personId: string, currentUserId: string) {
-  await assertGroupMembership(groupId, currentUserId)
+export async function addLedgerPersonToGroup(authPersonId: string, groupId: string, personId: string) {
+  await assertPersonCanAccessGroup(authPersonId, groupId)
+  await assertPersonCanAccessVisiblePerson(authPersonId, personId)
   await addPersonToGroup(groupId, personId)
-  return await getLedgerSnapshot(currentUserId)
+  return await getLedgerSnapshot(authPersonId)
 }
 
-export async function createLedgerBill(input: {
+export async function createLedgerBill(authPersonId: string, input: {
   billItems: Array<{
     amountCents: number
     assignedPersonIds: string[]
@@ -59,9 +53,9 @@ export async function createLedgerBill(input: {
   tipAmountCents: number
   title: string
   totalAmountCents: number
-  currentUserId: string
 }) {
-  await assertGroupMembership(input.groupId, input.currentUserId)
+  await assertPersonCanAccessGroup(authPersonId, input.groupId)
+
   const groupMemberIds = await getGroupMemberIds(input.groupId)
   const { memberShares, transfers } = buildBillLedger({
     billItems: input.billItems,
@@ -84,11 +78,11 @@ export async function createLedgerBill(input: {
 
   return {
     billId: bill.id,
-    ledger: await getLedgerSnapshot(input.currentUserId),
+    ledger: await getLedgerSnapshot(authPersonId),
   }
 }
 
-export async function updateLedgerBill(input: {
+export async function updateLedgerBill(authPersonId: string, input: {
   billId: string
   billItems: Array<{
     amountCents: number
@@ -100,10 +94,14 @@ export async function updateLedgerBill(input: {
   tipAmountCents: number
   title: string
   totalAmountCents: number
-  currentUserId: string
 }) {
   const billGroupId = await getBillGroupId(input.billId)
-  await assertGroupMembership(billGroupId, input.currentUserId)
+
+  if (billGroupId !== input.groupId) {
+    throw new Error('Bill does not belong to the selected group.')
+  }
+
+  await assertPersonCanAccessGroup(authPersonId, billGroupId)
 
   const groupMemberIds = await getGroupMemberIds(billGroupId)
   const { memberShares, transfers } = buildBillLedger({
@@ -127,37 +125,36 @@ export async function updateLedgerBill(input: {
 
   return {
     billId: bill.id,
-    ledger: await getLedgerSnapshot(input.currentUserId),
+    ledger: await getLedgerSnapshot(authPersonId),
   }
 }
 
-export async function deleteLedgerBill(billId: string, currentUserId: string) {
+export async function deleteLedgerBill(authPersonId: string, billId: string) {
   const groupId = await getBillGroupId(billId)
-  await assertGroupMembership(groupId, currentUserId)
+  await assertPersonCanAccessGroup(authPersonId, groupId)
   const deleted = await deleteBillRecord(billId)
 
   return {
     billId: deleted.id,
     groupId: deleted.groupId,
-    ledger: await getLedgerSnapshot(currentUserId),
+    ledger: await getLedgerSnapshot(authPersonId),
   }
 }
 
-export async function recordSettlementPayment(input: {
+export async function recordSettlementPayment(authPersonId: string, input: {
   amountCents: number
   fromPersonId: string
   groupId: string
   toPersonId: string
-  currentUserId: string
 }) {
-  await assertGroupMembership(input.groupId, input.currentUserId)
+  await assertPersonCanAccessGroup(authPersonId, input.groupId)
   await createSettlementPayment(input)
-  return await getLedgerSnapshot(input.currentUserId)
+  return await getLedgerSnapshot(authPersonId)
 }
 
-export async function undoSettlementPayment(paymentId: string, currentUserId: string) {
+export async function undoSettlementPayment(authPersonId: string, paymentId: string) {
   const groupId = await getSettlementPaymentGroupId(paymentId)
-  await assertGroupMembership(groupId, currentUserId)
+  await assertPersonCanAccessGroup(authPersonId, groupId)
   await voidSettlementPayment(paymentId)
-  return await getLedgerSnapshot(currentUserId)
+  return await getLedgerSnapshot(authPersonId)
 }

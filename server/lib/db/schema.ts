@@ -12,8 +12,29 @@ export async function createSchema(sql: any) {
     create table if not exists people (
       id text primary key,
       name text not null,
+      email text,
+      google_sub text,
+      avatar_url text,
+      created_by_person_id text references people(id) on delete set null,
+      last_login_at timestamptz,
       created_at timestamptz not null default now()
     )
+  `
+
+  await sql`
+    create table if not exists bill_chats (
+      id text primary key,
+      person_id text not null references people(id) on delete cascade,
+      title text not null,
+      people jsonb not null default '[]'::jsonb,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    )
+  `
+
+  await sql`
+    create index if not exists bill_chats_person_id_updated_at_idx
+    on bill_chats (person_id, updated_at desc)
   `
 
   await sql`
@@ -125,5 +146,67 @@ export async function createSchema(sql: any) {
   await sql`
     create index if not exists settlement_payments_group_id_idx
     on settlement_payments (group_id, created_at desc)
+  `
+
+  await sql`
+    alter table people
+    add column if not exists email text
+  `
+
+  await sql`
+    alter table people
+    add column if not exists google_sub text
+  `
+
+  await sql`
+    alter table people
+    add column if not exists avatar_url text
+  `
+
+  await sql`
+    alter table people
+    add column if not exists created_by_person_id text references people(id) on delete set null
+  `
+
+  await sql`
+    alter table people
+    add column if not exists last_login_at timestamptz
+  `
+
+  await sql`
+    create unique index if not exists people_google_sub_unique_idx
+    on people (google_sub)
+    where google_sub is not null
+  `
+
+  await sql`
+    create unique index if not exists people_email_unique_idx
+    on people (email)
+    where email is not null
+  `
+
+  await sql`
+    create index if not exists people_created_by_person_id_idx
+    on people (created_by_person_id)
+  `
+
+  await sql`
+    alter table bill_runs
+    add column if not exists person_id text references people(id) on delete cascade
+  `
+
+  await sql`
+    alter table bill_runs
+    add column if not exists chat_id text references bill_chats(id) on delete cascade
+  `
+
+  await sql`
+    create index if not exists bill_runs_person_id_idx
+    on bill_runs (person_id, created_at desc)
+  `
+
+  await sql`
+    create index if not exists bill_runs_chat_id_idx
+    on bill_runs (chat_id, created_at desc)
   `
 }

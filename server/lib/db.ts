@@ -1,4 +1,9 @@
-export { saveBillRun } from './db/bill-runs'
+export {
+  createBillChat,
+  getBillChat,
+  listBillChats,
+  saveBillRun,
+} from './db/bill-runs'
 export {
   createBillRecord,
   deleteBillRecord,
@@ -7,12 +12,12 @@ export {
 } from './db/bills'
 export {
   addPersonToGroup,
-  assertGroupMembership,
-  assertPersonExists,
+  assertPersonCanAccessGroup,
+  assertPersonCanAccessVisiblePerson,
   createGroup,
   createPerson,
+  findOrCreateGooglePerson,
   getGroupMemberIds,
-  listPeople,
 } from './db/groups'
 export { getLedgerSnapshot } from './db/ledger-snapshot'
 export {

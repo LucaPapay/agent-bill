@@ -1,4 +1,3 @@
-import { os } from '@orpc/server'
 import { z } from 'zod'
 import {
   addLedgerPersonToGroup,
@@ -7,11 +6,11 @@ import {
   createLedgerPerson,
   deleteLedgerBill,
   getLedger,
-  listLedgerUsers,
   recordSettlementPayment,
   undoSettlementPayment,
   updateLedgerBill,
 } from '../../lib/ledger/service'
+import { protectedRpc } from '../base'
 
 const billItemInputSchema = z.object({
   amountCents: z.number().int().min(0),
@@ -19,103 +18,87 @@ const billItemInputSchema = z.object({
   name: z.string().trim().min(1),
 })
 
-export const listLedgerUsersProcedure = os.handler(async () => {
-  return await listLedgerUsers()
+export const getLedgerProcedure = protectedRpc.handler(async ({ context }) => {
+  return await getLedger(context.personId)
 })
 
-export const getLedgerProcedure = os
+export const createLedgerPersonProcedure = protectedRpc
   .input(z.object({
-    currentUserId: z.string().trim().min(1),
-  }))
-  .handler(async ({ input }) => {
-    return await getLedger(input.currentUserId)
-  })
-
-export const createLedgerPersonProcedure = os
-  .input(z.object({
-    currentUserId: z.string().trim().min(1).optional(),
     name: z.string().trim().min(1),
   }))
-  .handler(async ({ input }) => {
-    return await createLedgerPerson(input.name, input.currentUserId)
+  .handler(async ({ context, input }) => {
+    return await createLedgerPerson(input.name, context.personId)
   })
 
-export const createLedgerGroupProcedure = os
+export const createLedgerGroupProcedure = protectedRpc
   .input(z.object({
-    currentUserId: z.string().trim().min(1),
     name: z.string().trim().min(1),
   }))
-  .handler(async ({ input }) => {
-    return await createLedgerGroup(input.name, input.currentUserId)
+  .handler(async ({ context, input }) => {
+    return await createLedgerGroup(input.name, context.personId)
   })
 
-export const addLedgerPersonToGroupProcedure = os
+export const addLedgerPersonToGroupProcedure = protectedRpc
   .input(z.object({
-    currentUserId: z.string().trim().min(1),
     groupId: z.string().trim().min(1),
     personId: z.string().trim().min(1),
   }))
-  .handler(async ({ input }) => {
-    return await addLedgerPersonToGroup(input.groupId, input.personId, input.currentUserId)
+  .handler(async ({ context, input }) => {
+    return await addLedgerPersonToGroup(context.personId, input.groupId, input.personId)
   })
 
-export const createLedgerBillProcedure = os
+export const createLedgerBillProcedure = protectedRpc
   .input(z.object({
     billItems: z.array(billItemInputSchema),
-    currentUserId: z.string().trim().min(1),
     groupId: z.string().trim().min(1),
     paidByPersonId: z.string().trim().min(1),
     tipAmountCents: z.number().int().min(0),
     title: z.string().trim().min(1),
     totalAmountCents: z.number().int().min(0),
   }))
-  .handler(async ({ input }) => {
-    return await createLedgerBill(input)
+  .handler(async ({ context, input }) => {
+    return await createLedgerBill(context.personId, input)
   })
 
-export const updateLedgerBillProcedure = os
+export const updateLedgerBillProcedure = protectedRpc
   .input(z.object({
     billId: z.string().trim().min(1),
     billItems: z.array(billItemInputSchema),
-    currentUserId: z.string().trim().min(1),
     groupId: z.string().trim().min(1),
     paidByPersonId: z.string().trim().min(1),
     tipAmountCents: z.number().int().min(0),
     title: z.string().trim().min(1),
     totalAmountCents: z.number().int().min(0),
   }))
-  .handler(async ({ input }) => {
-    return await updateLedgerBill(input)
+  .handler(async ({ context, input }) => {
+    return await updateLedgerBill(context.personId, input)
   })
 
-export const deleteLedgerBillProcedure = os
+export const deleteLedgerBillProcedure = protectedRpc
   .input(z.object({
     billId: z.string().trim().min(1),
-    currentUserId: z.string().trim().min(1),
   }))
-  .handler(async ({ input }) => {
-    return await deleteLedgerBill(input.billId, input.currentUserId)
+  .handler(async ({ context, input }) => {
+    return await deleteLedgerBill(context.personId, input.billId)
   })
 
-export const recordSettlementPaymentProcedure = os
+export const recordSettlementPaymentProcedure = protectedRpc
   .input(z.object({
     amountCents: z.number().int().positive(),
-    currentUserId: z.string().trim().min(1),
     fromPersonId: z.string().trim().min(1),
     groupId: z.string().trim().min(1),
     toPersonId: z.string().trim().min(1),
   }))
-  .handler(async ({ input }) => {
-    return await recordSettlementPayment(input)
+  .handler(async ({ context, input }) => {
+    return await recordSettlementPayment(context.personId, input)
   })
 
-export const undoSettlementPaymentProcedure = os
+export const undoSettlementPaymentProcedure = protectedRpc
   .input(z.object({
-    currentUserId: z.string().trim().min(1),
     paymentId: z.string().trim().min(1),
   }))
-  .handler(async ({ input }) => {
-    return await undoSettlementPayment(input.paymentId, input.currentUserId)
+  .handler(async ({ context, input }) => {
+    return await undoSettlementPayment(context.personId, input.paymentId)
   })
 
 export const ledgerRouter = {
@@ -125,7 +108,6 @@ export const ledgerRouter = {
   createLedgerPerson: createLedgerPersonProcedure,
   deleteLedgerBill: deleteLedgerBillProcedure,
   getLedger: getLedgerProcedure,
-  listLedgerUsers: listLedgerUsersProcedure,
   recordSettlementPayment: recordSettlementPaymentProcedure,
   undoSettlementPayment: undoSettlementPaymentProcedure,
   updateLedgerBill: updateLedgerBillProcedure,

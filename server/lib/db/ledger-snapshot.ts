@@ -1,7 +1,7 @@
 import { buildOpenGroupTransfers } from '../group-simplification'
 import { db, ensureSchema } from './client'
 
-export async function getLedgerSnapshot(currentUserId?: string) {
+export async function getLedgerSnapshot(personId: string) {
   await ensureSchema()
 
   const [
@@ -15,26 +15,126 @@ export async function getLedgerSnapshot(currentUserId?: string) {
     transferRows,
     paymentRows,
   ] = await Promise.all([
-    db()`select id, name, created_at from people order by lower(name) asc, created_at asc`,
-    db()`select id, name, created_at from groups order by created_at desc`,
-    db()`select id, group_id, person_id, created_at from group_memberships order by created_at asc`,
-    db()`select id, group_id, title, total_amount_cents, tip_amount_cents, paid_by_person_id, created_at from bills order by created_at desc`,
-    db()`select id, bill_id, person_id, item_amount_cents, tip_amount_cents, total_amount_cents from bill_member_shares`,
-    db()`select id, bill_id, name, amount_cents, sort_order from bill_items order by sort_order asc, id asc`,
-    db()`select id, bill_item_id, person_id from bill_item_assignments`,
-    db()`select id, bill_id, group_id, from_person_id, to_person_id, amount_cents from bill_transfers`,
-    db()`select id, group_id, from_person_id, to_person_id, amount_cents, created_at, voided_at from settlement_payments order by created_at desc`,
+    db()`
+      select id, name, email, google_sub, avatar_url, created_at
+      from people
+      where id = ${personId}
+        or created_by_person_id = ${personId}
+        or exists (
+          select 1
+          from group_memberships member
+          join group_memberships viewer
+            on viewer.group_id = member.group_id
+          where member.person_id = people.id
+            and viewer.person_id = ${personId}
+        )
+      order by lower(name) asc, created_at asc
+    `,
+    db()`
+      select id, name, created_at
+      from groups
+      where exists (
+        select 1
+        from group_memberships
+        where group_id = groups.id
+          and person_id = ${personId}
+      )
+      order by created_at desc
+    `,
+    db()`
+      select id, group_id, person_id, created_at
+      from group_memberships
+      where exists (
+        select 1
+        from group_memberships viewer
+        where viewer.group_id = group_memberships.group_id
+          and viewer.person_id = ${personId}
+      )
+      order by created_at asc
+    `,
+    db()`
+      select id, group_id, title, total_amount_cents, tip_amount_cents, paid_by_person_id, created_at
+      from bills
+      where exists (
+        select 1
+        from group_memberships viewer
+        where viewer.group_id = bills.group_id
+          and viewer.person_id = ${personId}
+      )
+      order by created_at desc
+    `,
+    db()`
+      select id, bill_id, person_id, item_amount_cents, tip_amount_cents, total_amount_cents
+      from bill_member_shares
+      where exists (
+        select 1
+        from bills
+        join group_memberships viewer
+          on viewer.group_id = bills.group_id
+        where bills.id = bill_member_shares.bill_id
+          and viewer.person_id = ${personId}
+      )
+    `,
+    db()`
+      select id, bill_id, name, amount_cents, sort_order
+      from bill_items
+      where exists (
+        select 1
+        from bills
+        join group_memberships viewer
+          on viewer.group_id = bills.group_id
+        where bills.id = bill_items.bill_id
+          and viewer.person_id = ${personId}
+      )
+      order by sort_order asc, id asc
+    `,
+    db()`
+      select id, bill_item_id, person_id
+      from bill_item_assignments
+      where exists (
+        select 1
+        from bill_items
+        join bills
+          on bills.id = bill_items.bill_id
+        join group_memberships viewer
+          on viewer.group_id = bills.group_id
+        where bill_items.id = bill_item_assignments.bill_item_id
+          and viewer.person_id = ${personId}
+      )
+    `,
+    db()`
+      select id, bill_id, group_id, from_person_id, to_person_id, amount_cents
+      from bill_transfers
+      where exists (
+        select 1
+        from group_memberships viewer
+        where viewer.group_id = bill_transfers.group_id
+          and viewer.person_id = ${personId}
+      )
+    `,
+    db()`
+      select id, group_id, from_person_id, to_person_id, amount_cents, created_at, voided_at
+      from settlement_payments
+      where exists (
+        select 1
+        from group_memberships viewer
+        where viewer.group_id = settlement_payments.group_id
+          and viewer.person_id = ${personId}
+      )
+      order by created_at desc
+    `,
   ])
 
   const people = peopleRows.map((row: any) => ({
+    avatarUrl: row.avatar_url || '',
     createdAt: row.created_at,
+    email: row.email || '',
     id: row.id,
     name: row.name,
   }))
 
   const peopleById = new Map(people.map((person: any) => [person.id, person]))
   const membershipsByGroupId = new Map<string, any[]>()
-  const visibleGroupIds = new Set<string>()
 
   for (const row of membershipRows) {
     const person = peopleById.get(row.person_id)
@@ -51,10 +151,6 @@ export async function getLedgerSnapshot(currentUserId?: string) {
       personId: row.person_id,
     })
     membershipsByGroupId.set(row.group_id, memberships)
-
-    if (!currentUserId || row.person_id === currentUserId) {
-      visibleGroupIds.add(row.group_id)
-    }
   }
 
   const billsByGroupId = new Map<string, any[]>()
@@ -189,9 +285,7 @@ export async function getLedgerSnapshot(currentUserId?: string) {
     settlementPaymentsByGroupId.set(row.group_id, payments)
   }
 
-  const groups = groupRows
-    .filter((row: any) => !currentUserId || visibleGroupIds.has(row.id))
-    .map((row: any) => {
+  const groups = groupRows.map((row: any) => {
     const billTransfers = billTransfersByGroupId.get(row.id) || []
     const settlementPayments = settlementPaymentsByGroupId.get(row.id) || []
     const simplifiedTransfers = buildOpenGroupTransfers(billTransfers, settlementPayments)
@@ -224,7 +318,7 @@ export async function getLedgerSnapshot(currentUserId?: string) {
       settlementPayments,
       simplifiedTransfers,
     }
-    })
+  })
 
   return {
     groups,
