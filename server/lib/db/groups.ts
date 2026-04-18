@@ -1,6 +1,36 @@
 import { randomUUID } from 'node:crypto'
 import { db, ensureSchema } from './client'
 
+export async function listPeople() {
+  await ensureSchema()
+
+  const rows = await db()`
+    select id, name, created_at
+    from people
+    order by lower(name) asc, created_at asc
+  `
+
+  return rows.map((row: any) => ({
+    createdAt: row.created_at,
+    id: row.id,
+    name: row.name,
+  }))
+}
+
+export async function assertPersonExists(personId: string) {
+  await ensureSchema()
+
+  const [row] = await db()`
+    select id
+    from people
+    where id = ${personId}
+  `
+
+  if (!row) {
+    throw new Error('Current user not found. Choose a user again.')
+  }
+}
+
 export async function createPerson(name: string) {
   await ensureSchema()
 
@@ -46,6 +76,21 @@ export async function addPersonToGroup(groupId: string, personId: string) {
     values (${id}, ${groupId}, ${personId})
     on conflict (group_id, person_id) do nothing
   `
+}
+
+export async function assertGroupMembership(groupId: string, personId: string) {
+  await ensureSchema()
+
+  const [row] = await db()`
+    select id
+    from group_memberships
+    where group_id = ${groupId}
+      and person_id = ${personId}
+  `
+
+  if (!row) {
+    throw new Error('You do not have access to that group.')
+  }
 }
 
 export async function getGroupMemberIds(groupId: string) {

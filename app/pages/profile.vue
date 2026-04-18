@@ -2,11 +2,16 @@
 import PageShell from '../components/layout/PageShell.vue'
 import ProfileScreen from '../components/screens/ProfileScreen.vue'
 
-const { health, ledger } = useLedgerState()
+const { clearCurrentUser, currentUser, health, ledger } = useLedgerState()
+
+function switchUser() {
+  clearCurrentUser()
+  navigateTo('/login')
+}
 </script>
 
 <template>
   <PageShell>
-    <ProfileScreen :health="health" :ledger="ledger" />
+    <ProfileScreen :current-user="currentUser" :health="health" :ledger="ledger" @switch-user="switchUser" />
   </PageShell>
 </template>

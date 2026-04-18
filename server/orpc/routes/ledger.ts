@@ -7,6 +7,7 @@ import {
   createLedgerPerson,
   deleteLedgerBill,
   getLedger,
+  listLedgerUsers,
   recordSettlementPayment,
   undoSettlementPayment,
   updateLedgerBill,
@@ -18,38 +19,50 @@ const billItemInputSchema = z.object({
   name: z.string().trim().min(1),
 })
 
-export const getLedgerProcedure = os.handler(async () => {
-  return await getLedger()
+export const listLedgerUsersProcedure = os.handler(async () => {
+  return await listLedgerUsers()
 })
+
+export const getLedgerProcedure = os
+  .input(z.object({
+    currentUserId: z.string().trim().min(1),
+  }))
+  .handler(async ({ input }) => {
+    return await getLedger(input.currentUserId)
+  })
 
 export const createLedgerPersonProcedure = os
   .input(z.object({
+    currentUserId: z.string().trim().min(1).optional(),
     name: z.string().trim().min(1),
   }))
   .handler(async ({ input }) => {
-    return await createLedgerPerson(input.name)
+    return await createLedgerPerson(input.name, input.currentUserId)
   })
 
 export const createLedgerGroupProcedure = os
   .input(z.object({
+    currentUserId: z.string().trim().min(1),
     name: z.string().trim().min(1),
   }))
   .handler(async ({ input }) => {
-    return await createLedgerGroup(input.name)
+    return await createLedgerGroup(input.name, input.currentUserId)
   })
 
 export const addLedgerPersonToGroupProcedure = os
   .input(z.object({
+    currentUserId: z.string().trim().min(1),
     groupId: z.string().trim().min(1),
     personId: z.string().trim().min(1),
   }))
   .handler(async ({ input }) => {
-    return await addLedgerPersonToGroup(input.groupId, input.personId)
+    return await addLedgerPersonToGroup(input.groupId, input.personId, input.currentUserId)
   })
 
 export const createLedgerBillProcedure = os
   .input(z.object({
     billItems: z.array(billItemInputSchema),
+    currentUserId: z.string().trim().min(1),
     groupId: z.string().trim().min(1),
     paidByPersonId: z.string().trim().min(1),
     tipAmountCents: z.number().int().min(0),
@@ -64,6 +77,7 @@ export const updateLedgerBillProcedure = os
   .input(z.object({
     billId: z.string().trim().min(1),
     billItems: z.array(billItemInputSchema),
+    currentUserId: z.string().trim().min(1),
     groupId: z.string().trim().min(1),
     paidByPersonId: z.string().trim().min(1),
     tipAmountCents: z.number().int().min(0),
@@ -77,14 +91,16 @@ export const updateLedgerBillProcedure = os
 export const deleteLedgerBillProcedure = os
   .input(z.object({
     billId: z.string().trim().min(1),
+    currentUserId: z.string().trim().min(1),
   }))
   .handler(async ({ input }) => {
-    return await deleteLedgerBill(input.billId)
+    return await deleteLedgerBill(input.billId, input.currentUserId)
   })
 
 export const recordSettlementPaymentProcedure = os
   .input(z.object({
     amountCents: z.number().int().positive(),
+    currentUserId: z.string().trim().min(1),
     fromPersonId: z.string().trim().min(1),
     groupId: z.string().trim().min(1),
     toPersonId: z.string().trim().min(1),
@@ -95,10 +111,11 @@ export const recordSettlementPaymentProcedure = os
 
 export const undoSettlementPaymentProcedure = os
   .input(z.object({
+    currentUserId: z.string().trim().min(1),
     paymentId: z.string().trim().min(1),
   }))
   .handler(async ({ input }) => {
-    return await undoSettlementPayment(input.paymentId)
+    return await undoSettlementPayment(input.paymentId, input.currentUserId)
   })
 
 export const ledgerRouter = {
@@ -108,6 +125,7 @@ export const ledgerRouter = {
   createLedgerPerson: createLedgerPersonProcedure,
   deleteLedgerBill: deleteLedgerBillProcedure,
   getLedger: getLedgerProcedure,
+  listLedgerUsers: listLedgerUsersProcedure,
   recordSettlementPayment: recordSettlementPaymentProcedure,
   undoSettlementPayment: undoSettlementPaymentProcedure,
   updateLedgerBill: updateLedgerBillProcedure,

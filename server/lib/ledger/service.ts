@@ -1,38 +1,51 @@
 import {
   addPersonToGroup,
+  assertGroupMembership,
+  assertPersonExists,
   createBillRecord,
   createGroup,
   createPerson,
   createSettlementPayment,
   deleteBillRecord,
+  getBillGroupId,
   getGroupMemberIds,
   getLedgerSnapshot,
+  getSettlementPaymentGroupId,
+  listPeople,
   updateBillRecord,
   voidSettlementPayment,
 } from '../db'
 import { buildBillLedger } from '../group-ledger'
 
-export async function getLedger() {
-  return await getLedgerSnapshot()
+export async function listLedgerUsers() {
+  return await listPeople()
 }
 
-export async function createLedgerPerson(name: string) {
+export async function getLedger(currentUserId: string) {
+  await assertPersonExists(currentUserId)
+  return await getLedgerSnapshot(currentUserId)
+}
+
+export async function createLedgerPerson(name: string, currentUserId?: string) {
   await createPerson(name)
-  return await getLedgerSnapshot()
+  return await getLedgerSnapshot(currentUserId)
 }
 
-export async function createLedgerGroup(name: string) {
+export async function createLedgerGroup(name: string, currentUserId: string) {
+  await assertPersonExists(currentUserId)
   const group = await createGroup(name)
+  await addPersonToGroup(group.id, currentUserId)
 
   return {
     groupId: group.id,
-    ledger: await getLedgerSnapshot(),
+    ledger: await getLedgerSnapshot(currentUserId),
   }
 }
 
-export async function addLedgerPersonToGroup(groupId: string, personId: string) {
+export async function addLedgerPersonToGroup(groupId: string, personId: string, currentUserId: string) {
+  await assertGroupMembership(groupId, currentUserId)
   await addPersonToGroup(groupId, personId)
-  return await getLedgerSnapshot()
+  return await getLedgerSnapshot(currentUserId)
 }
 
 export async function createLedgerBill(input: {
@@ -46,7 +59,9 @@ export async function createLedgerBill(input: {
   tipAmountCents: number
   title: string
   totalAmountCents: number
+  currentUserId: string
 }) {
+  await assertGroupMembership(input.groupId, input.currentUserId)
   const groupMemberIds = await getGroupMemberIds(input.groupId)
   const { memberShares, transfers } = buildBillLedger({
     billItems: input.billItems,
@@ -69,7 +84,7 @@ export async function createLedgerBill(input: {
 
   return {
     billId: bill.id,
-    ledger: await getLedgerSnapshot(),
+    ledger: await getLedgerSnapshot(input.currentUserId),
   }
 }
 
@@ -85,8 +100,12 @@ export async function updateLedgerBill(input: {
   tipAmountCents: number
   title: string
   totalAmountCents: number
+  currentUserId: string
 }) {
-  const groupMemberIds = await getGroupMemberIds(input.groupId)
+  const billGroupId = await getBillGroupId(input.billId)
+  await assertGroupMembership(billGroupId, input.currentUserId)
+
+  const groupMemberIds = await getGroupMemberIds(billGroupId)
   const { memberShares, transfers } = buildBillLedger({
     billItems: input.billItems,
     groupMemberIds,
@@ -108,17 +127,19 @@ export async function updateLedgerBill(input: {
 
   return {
     billId: bill.id,
-    ledger: await getLedgerSnapshot(),
+    ledger: await getLedgerSnapshot(input.currentUserId),
   }
 }
 
-export async function deleteLedgerBill(billId: string) {
+export async function deleteLedgerBill(billId: string, currentUserId: string) {
+  const groupId = await getBillGroupId(billId)
+  await assertGroupMembership(groupId, currentUserId)
   const deleted = await deleteBillRecord(billId)
 
   return {
     billId: deleted.id,
     groupId: deleted.groupId,
-    ledger: await getLedgerSnapshot(),
+    ledger: await getLedgerSnapshot(currentUserId),
   }
 }
 
@@ -127,12 +148,16 @@ export async function recordSettlementPayment(input: {
   fromPersonId: string
   groupId: string
   toPersonId: string
+  currentUserId: string
 }) {
+  await assertGroupMembership(input.groupId, input.currentUserId)
   await createSettlementPayment(input)
-  return await getLedgerSnapshot()
+  return await getLedgerSnapshot(input.currentUserId)
 }
 
-export async function undoSettlementPayment(paymentId: string) {
+export async function undoSettlementPayment(paymentId: string, currentUserId: string) {
+  const groupId = await getSettlementPaymentGroupId(paymentId)
+  await assertGroupMembership(groupId, currentUserId)
   await voidSettlementPayment(paymentId)
-  return await getLedgerSnapshot()
+  return await getLedgerSnapshot(currentUserId)
 }

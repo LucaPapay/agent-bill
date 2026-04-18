@@ -44,6 +44,22 @@ export async function getGroupSettlementState(groupId: string) {
   }
 }
 
+export async function getSettlementPaymentGroupId(paymentId: string) {
+  await ensureSchema()
+
+  const [row] = await db()`
+    select group_id
+    from settlement_payments
+    where id = ${paymentId}
+  `
+
+  if (!row) {
+    throw new Error('Payment not found or already undone.')
+  }
+
+  return row.group_id as string
+}
+
 export async function createSettlementPayment({
   amountCents,
   fromPersonId,

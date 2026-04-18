@@ -3,6 +3,10 @@ import AvatarBadge from '../app/AvatarBadge.vue'
 import IconGlyph from '../app/IconGlyph.vue'
 
 const props = defineProps({
+  currentUser: {
+    type: Object,
+    default: null,
+  },
   health: {
     type: Object,
     default: null,
@@ -12,6 +16,8 @@ const props = defineProps({
     required: true,
   },
 })
+
+const emit = defineEmits(['switch-user'])
 
 const savedBills = computed(() =>
   props.ledger.groups.reduce((sum, group) => sum + group.bills.length, 0)
@@ -39,17 +45,19 @@ const settings = computed(() => [
         <AvatarBadge name="Local" size="lg" />
         <div style="flex: 1;">
           <div style="font-weight: 700; font-size: 18px;">
-            Local workspace
+            {{ currentUser?.name || 'Local workspace' }}
           </div>
           <div style="font-size: 12px; color: var(--muted);">
-            Manual ledger mode · no auth yet
+            Fake login mode · pick a saved user
           </div>
           <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
             <span class="chip chip-muted">Postgres-backed</span>
             <span class="chip chip-muted">Device-local workflow</span>
           </div>
         </div>
-        <IconGlyph name="chevron" width="18" height="18" />
+        <button class="btn btn-ghost" style="padding: 8px 12px;" @click="emit('switch-user')">
+          Switch user
+        </button>
       </div>
 
       <div>

@@ -1,7 +1,7 @@
 import { buildOpenGroupTransfers } from '../group-simplification'
 import { db, ensureSchema } from './client'
 
-export async function getLedgerSnapshot() {
+export async function getLedgerSnapshot(currentUserId?: string) {
   await ensureSchema()
 
   const [
@@ -34,6 +34,7 @@ export async function getLedgerSnapshot() {
 
   const peopleById = new Map(people.map((person: any) => [person.id, person]))
   const membershipsByGroupId = new Map<string, any[]>()
+  const visibleGroupIds = new Set<string>()
 
   for (const row of membershipRows) {
     const person = peopleById.get(row.person_id)
@@ -50,6 +51,10 @@ export async function getLedgerSnapshot() {
       personId: row.person_id,
     })
     membershipsByGroupId.set(row.group_id, memberships)
+
+    if (!currentUserId || row.person_id === currentUserId) {
+      visibleGroupIds.add(row.group_id)
+    }
   }
 
   const billsByGroupId = new Map<string, any[]>()
@@ -184,7 +189,9 @@ export async function getLedgerSnapshot() {
     settlementPaymentsByGroupId.set(row.group_id, payments)
   }
 
-  const groups = groupRows.map((row: any) => {
+  const groups = groupRows
+    .filter((row: any) => !currentUserId || visibleGroupIds.has(row.id))
+    .map((row: any) => {
     const billTransfers = billTransfersByGroupId.get(row.id) || []
     const settlementPayments = settlementPaymentsByGroupId.get(row.id) || []
     const simplifiedTransfers = buildOpenGroupTransfers(billTransfers, settlementPayments)
@@ -217,7 +224,7 @@ export async function getLedgerSnapshot() {
       settlementPayments,
       simplifiedTransfers,
     }
-  })
+    })
 
   return {
     groups,

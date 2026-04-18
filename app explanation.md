@@ -7,12 +7,14 @@
 There are two active tracks in the codebase:
 
 - a receipt-analysis track that can use Pi/OpenAI or a local fallback parser
-- a manual ledger track for groups, members, itemized bills, bill shares, raw transfers, and simplified group settlement
+- a manual ledger track for fake-login users, groups, members, itemized bills, bill shares, raw transfers, and simplified group settlement
 
 The manual ledger track is still the stable storage base. The newer frontend design now wraps that functionality in a more app-like route-based shell.
 
 ## Core product assumptions
 
+- A local session picks one current user from saved people.
+- The current user is not real auth yet; it is a local selected person persisted in the client.
 - A person can belong to many groups.
 - A group can contain many people.
 - A group can contain many bills.
@@ -30,11 +32,13 @@ The manual ledger track is still the stable storage base. The newer frontend des
 
 ## Current flow
 
-1. The user creates people and groups locally.
-2. The user adds existing people into a selected group.
-3. The user creates a bill for that group, either itemized or as an even split fallback.
-4. The app stores saved bill items, bill member shares, and bill transfers in Postgres.
-5. The selected group also exposes a simplified settlement view derived from all transfers in that group.
+1. If no current user is selected, the app redirects to `/login`.
+2. The user picks an existing person as a fake login, or creates a new person there first.
+3. The selected user is stored locally in the browser.
+4. The app only loads groups that current user belongs to.
+5. The user creates groups, adds existing people, and creates bills inside those visible groups.
+6. The app stores saved bill items, bill member shares, and bill transfers in Postgres.
+7. The selected group also exposes a simplified settlement view derived from all transfers in that group.
 
 Separately:
 
@@ -87,7 +91,7 @@ The later simplification step needs obligations, not just percentages. So every 
 
 ### `people`
 
-Global people records reused across groups.
+Global people records reused across groups and used as the current fake-login identity.
 
 - `id`
 - `name`
@@ -183,6 +187,7 @@ The app now uses real Nuxt pages with a shared route shell and shared client led
 
 The stable routes are:
 
+- `/login` for choosing the current local user
 - `/` for the home view
 - `/groups` for creating people and groups and browsing all groups
 - `/groups/:groupId` for one group, its members, settlement, and saved bills
@@ -194,8 +199,15 @@ The stable routes are:
 
 The route shell keeps navigation and client-side ledger loading alive even on direct deep links.
 
+There is also a global auth-style guard for the fake login flow:
+
+- when no current user is stored, any app route redirects to `/login`
+- when a current user exists, opening `/login` redirects back to `/`
+- the current user can be cleared from the profile screen to switch users
+
 The real manual-ledger functionality is now connected into the route structure like this:
 
+- `Login` picks the current local user on `/login`
 - `Groups` list and creation happen on `/groups`
 - group detail and settlement happen on `/groups/:groupId`
 - bill creation happens on `/groups/:groupId/bills/new`
@@ -214,7 +226,7 @@ The route split also changed how the frontend code is organized:
 
 - `app/pages/` now owns the route-level files
 - `app/components/layout/PageShell.vue` owns the shared app shell
-- `app/composables/useLedgerState.ts` owns shared client ledger state, selection state, and ledger mutations
+- `app/composables/useLedgerState.ts` owns shared client ledger state, current-user selection state, and ledger mutations
 - extracted ledger UI lives in `app/components/ledger/`
 
 This keeps route files thin and makes direct routes like a single group or single bill work without rebuilding the old one-page screen machine.
@@ -243,6 +255,14 @@ Target example:
 
 That simplification exists in the backend and is rendered in the group detail and settled views.
 
+## Current user scoping rules
+
+- `getLedger` now takes the current user id and only returns groups where that person is a member
+- group creation automatically adds the current user as a member
+- add-person, create-bill, update-bill, delete-bill, record-payment, and undo-payment all require current-user membership in that group
+- people are still global so existing saved people can be added to a visible group
+- this is intentionally a fake login layer for now, not real authentication
+
 ## Current automated coverage
 
 The repo now has a small backend-focused unit suite run with `npm test`.
@@ -265,5 +285,5 @@ Useful next work after this:
 
 - connect receipt-analysis output into saved itemized bills
 - add image OCR fallback for no-key local mode
-- add household/session concepts before auth
-- add payment settlement state once simplified group obligations are visible
+- replace choose-a-user with real auth/session handling
+- add household/session concepts once real auth exists

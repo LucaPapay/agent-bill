@@ -20,7 +20,7 @@ export type BillTransferRecord = {
   toPersonId: string
 }
 
-async function getBillGroupId(billId: string) {
+export async function getBillGroupId(billId: string) {
   await ensureSchema()
 
   const [row] = await db()`
