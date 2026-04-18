@@ -41,8 +41,14 @@ export async function createSchema(sql: any) {
     create table if not exists groups (
       id text primary key,
       name text not null,
+      icon text,
       created_at timestamptz not null default now()
     )
+  `
+
+  await sql`
+    alter table groups
+    add column if not exists icon text
   `
 
   await sql`

@@ -1,4 +1,5 @@
 import { computed } from 'vue'
+import { defaultGroupIcon } from '../../shared/group-icons'
 
 let loadingPromise: Promise<void> | null = null
 
@@ -21,6 +22,7 @@ export function useLedgerState() {
 
   const personName = useState('ledger-state:person-name', () => '')
   const groupName = useState('ledger-state:group-name', () => '')
+  const groupIcon = useState('ledger-state:group-icon', () => defaultGroupIcon)
   const personToAddId = useState('ledger-state:person-to-add-id', () => '')
 
   const billTitle = useState('ledger-state:bill-title', () => 'Friday dinner')
@@ -140,19 +142,35 @@ export function useLedgerState() {
           directionLabel: outgoingCents ? 'You owe' : incomingCents ? 'Owed to you' : 'Settled',
           groupId: group.id,
           groupName: group.name,
-          helperLabel: paymentCount ? `${paymentCount} open ${paymentCount === 1 ? 'payment' : 'payments'}` : `${group.bills.length} saved ${group.bills.length === 1 ? 'bill' : 'bills'}`,
+          helperLabel: paymentCount
+            ? `${paymentCount} open ${paymentCount === 1 ? 'payment' : 'payments'}`
+            : `${group.bills.length} saved ${group.bills.length === 1 ? 'bill' : 'bills'}`,
           incomingCents,
           outgoingCents,
           openCents,
           tone: outgoingCents ? 'tomato' : incomingCents ? 'mint' : 'muted',
         }
       })
-      .sort((left: any, right: any) => right.openCents - left.openCents || left.groupName.localeCompare(right.groupName))
+      .sort((left: any, right: any) => {
+        if (right.openCents !== left.openCents) {
+          return right.openCents - left.openCents
+        }
+
+        return left.groupName.localeCompare(right.groupName)
+      })
   })
 
-  const totalYouOweCents = computed(() => homeGroupBalances.value.reduce((sum: number, group: any) => sum + group.outgoingCents, 0))
-  const totalOwedToYouCents = computed(() => homeGroupBalances.value.reduce((sum: number, group: any) => sum + group.incomingCents, 0))
-  const homeNetBalanceCents = computed(() => totalOwedToYouCents.value - totalYouOweCents.value)
+  const totalYouOweCents = computed(() =>
+    homeGroupBalances.value.reduce((sum: number, group: any) => sum + group.outgoingCents, 0),
+  )
+
+  const totalOwedToYouCents = computed(() =>
+    homeGroupBalances.value.reduce((sum: number, group: any) => sum + group.incomingCents, 0),
+  )
+
+  const homeNetBalanceCents = computed(() =>
+    totalOwedToYouCents.value - totalYouOweCents.value,
+  )
 
   const totalBills = computed(() => allBills.value.length)
 
@@ -169,14 +187,24 @@ export function useLedgerState() {
       0,
     ),
     netBalanceLabel: formatCents(Math.abs(homeNetBalanceCents.value)),
-    netBalanceTitle: homeNetBalanceCents.value > 0 ? 'You are owed' : homeNetBalanceCents.value < 0 ? 'You owe' : 'All settled',
+    netBalanceTitle: homeNetBalanceCents.value > 0
+      ? 'You are owed'
+      : homeNetBalanceCents.value < 0
+        ? 'You owe'
+        : 'All settled',
     netBalanceTone: homeNetBalanceCents.value > 0 ? 'mint' : homeNetBalanceCents.value < 0 ? 'tomato' : 'muted',
     owedToYouLabel: formatCents(totalOwedToYouCents.value),
     peopleCount: ledger.value.people.length,
     totalBills: totalBills.value,
     youOweLabel: formatCents(totalYouOweCents.value),
-    yourOpenGroupsCount: homeGroupBalances.value.reduce((sum: number, group: any) => sum + (group.openCents ? 1 : 0), 0),
-    yourOutgoingPayments: homeGroupBalances.value.reduce((sum: number, group: any) => sum + (group.outgoingCents ? 1 : 0), 0),
+    yourOpenGroupsCount: homeGroupBalances.value.reduce(
+      (sum: number, group: any) => sum + (group.openCents ? 1 : 0),
+      0,
+    ),
+    yourOutgoingPayments: homeGroupBalances.value.reduce(
+      (sum: number, group: any) => sum + (group.outgoingCents ? 1 : 0),
+      0,
+    ),
   }))
 
   const canAddPersonToGroup = computed(() =>
@@ -529,6 +557,7 @@ export function useLedgerState() {
     pendingBillComposerDraft.value = null
     personName.value = ''
     groupName.value = ''
+    groupIcon.value = defaultGroupIcon
     personToAddId.value = ''
     billItemId.value = 0
     resetBillForm()
@@ -577,10 +606,12 @@ export function useLedgerState() {
     saving.value = true
 
     return api.createLedgerGroup({
+      icon: groupIcon.value || defaultGroupIcon,
       name: groupName.value,
     }).then(
       (value: any) => {
         groupName.value = ''
+        groupIcon.value = defaultGroupIcon
         selectedGroupId.value = value.groupId
         applyLedger(value.ledger)
         return value
@@ -797,6 +828,7 @@ export function useLedgerState() {
     formatCents,
     getBillById,
     getGroupById,
+    groupIcon,
     groupName,
     health,
     homeSummary,

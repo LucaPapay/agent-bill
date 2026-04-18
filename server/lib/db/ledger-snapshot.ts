@@ -31,7 +31,7 @@ export async function getLedgerSnapshot(personId: string) {
       order by lower(name) asc, created_at asc
     `,
     db()`
-      select id, name, created_at
+      select id, name, icon, created_at
       from groups
       where exists (
         select 1
@@ -313,6 +313,7 @@ export async function getLedgerSnapshot(personId: string) {
       bills: billsByGroupId.get(row.id) || [],
       createdAt: row.created_at,
       id: row.id,
+      icon: row.icon || '',
       memberships: membershipsByGroupId.get(row.id) || [],
       name: row.name,
       settlementPayments,

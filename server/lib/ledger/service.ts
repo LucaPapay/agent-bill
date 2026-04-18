@@ -25,8 +25,8 @@ export async function createLedgerPerson(name: string, personId: string) {
   return await getLedgerSnapshot(personId)
 }
 
-export async function createLedgerGroup(name: string, personId: string) {
-  const group = await createGroup(name)
+export async function createLedgerGroup(name: string, icon: string, personId: string) {
+  const group = await createGroup(name, icon)
   await addPersonToGroup(group.id, personId)
 
   return {

@@ -32,10 +32,11 @@ export const createLedgerPersonProcedure = protectedRpc
 
 export const createLedgerGroupProcedure = protectedRpc
   .input(z.object({
+    icon: z.string().trim().min(1).max(16),
     name: z.string().trim().min(1),
   }))
   .handler(async ({ context, input }) => {
-    return await createLedgerGroup(input.name, context.personId)
+    return await createLedgerGroup(input.name, input.icon, context.personId)
   })
 
 export const addLedgerPersonToGroupProcedure = protectedRpc

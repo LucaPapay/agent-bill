@@ -1,5 +1,11 @@
 <script setup>
+import GroupIconPicker from './GroupIconPicker.vue'
+
 defineProps({
+  groupIcon: {
+    type: String,
+    default: '',
+  },
   groupName: {
     type: String,
     default: '',
@@ -7,7 +13,7 @@ defineProps({
   saving: Boolean,
 })
 
-const emit = defineEmits(['submit', 'update:groupName'])
+const emit = defineEmits(['submit', 'update:groupIcon', 'update:groupName'])
 </script>
 
 <template>
@@ -25,6 +31,7 @@ const emit = defineEmits(['submit', 'update:groupName'])
       style="width: 100%; margin-top: 14px; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
       @input="emit('update:groupName', $event.target.value)"
     >
+    <GroupIconPicker :model-value="groupIcon" @update:model-value="emit('update:groupIcon', $event)" />
     <button class="btn btn-accent btn-block" style="margin-top: 12px;" :disabled="saving || !groupName.trim()">
       Add group
     </button>

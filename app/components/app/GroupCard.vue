@@ -63,7 +63,8 @@ const emit = defineEmits(['select'])
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: '16px',
+          fontSize: '24px',
+          lineHeight: 1,
           fontWeight: 700,
           border: '1.5px solid var(--ink)',
         }"

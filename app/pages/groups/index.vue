@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import GroupCard from '../../components/app/GroupCard.vue'
+import GroupIconPicker from '../../components/ledger/GroupIconPicker.vue'
 import PageShell from '../../components/layout/PageShell.vue'
+import { getGroupIconLabel } from '../../../shared/group-icons'
 
-const { errorMessage, formatCents, createGroup, groupName, ledger, saving } = useLedgerState()
+const { errorMessage, formatCents, createGroup, groupIcon, groupName, ledger, saving } = useLedgerState()
 
 function groupOpenAmount(group: any) {
   const cents = (group.simplifiedTransfers || []).reduce((sum: number, transfer: any) => sum + transfer.amountCents, 0)
@@ -75,7 +77,7 @@ function submitGroup() {
           :key="group.id"
           :amount-label="groupOpenAmount(group)"
           :avatar-names="groupMemberNames(group)"
-          :icon-label="group.name.charAt(0).toUpperCase()"
+          :icon-label="getGroupIconLabel(group)"
           :subtitle="`${group.bills.length} bills · ${group.memberships.length} people`"
           :title="group.name"
           @select="openGroup(group.id)"
@@ -91,7 +93,7 @@ function submitGroup() {
               <div
                 style="width: 52px; height: 52px; border-radius: 16px; background: var(--cream-2); color: var(--ink); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; border: 1.5px dashed rgba(20,18,16,0.35);"
               >
-                +
+                {{ groupIcon }}
               </div>
 
               <div style="flex: 1; min-width: 0;">
@@ -111,6 +113,8 @@ function submitGroup() {
               style="width: 100%; margin-top: 16px; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
               @input="updateGroupName"
             >
+
+            <GroupIconPicker :model-value="groupIcon" @update:model-value="groupIcon = $event" />
 
             <div
               v-if="errorMessage"

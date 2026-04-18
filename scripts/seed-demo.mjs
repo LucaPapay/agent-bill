@@ -96,6 +96,7 @@ const demoGroups = [
         title: 'Neon Sushi Sprint',
       },
     ],
+    icon: '🍷',
     members: ['Jojo', 'Alice', 'Bob', 'Cara', 'Diego'],
     name: 'Moonlight Supper Club',
   },
@@ -167,6 +168,7 @@ const demoGroups = [
         title: 'Detergent & Disco Lights',
       },
     ],
+    icon: '🏠',
     members: ['Jojo', 'Esme', 'Farah', 'Gus'],
     name: 'Studio House League',
   },
@@ -231,6 +233,7 @@ const demoGroups = [
         title: 'Summit Sunrise Breakfast',
       },
     ],
+    icon: '🏔️',
     members: ['Bob', 'Cara', 'Hana', 'Ivo', 'Jojo'],
     name: 'Alpine Escape 2026',
   },
@@ -389,8 +392,14 @@ async function ensureSchema() {
     create table if not exists groups (
       id text primary key,
       name text not null,
+      icon text,
       created_at timestamptz not null default now()
     )
+  `
+
+  await sql`
+    alter table groups
+    add column if not exists icon text
   `
 
   await sql`
@@ -497,8 +506,8 @@ async function seedDemoLedger() {
       const groupId = randomUUID()
 
       await tx`
-        insert into groups (id, name, created_at)
-        values (${groupId}, ${group.name}, ${timestampMinutesAgo(3000 - (groupIndex * 10))})
+        insert into groups (id, name, icon, created_at)
+        values (${groupId}, ${group.name}, ${group.icon}, ${timestampMinutesAgo(3000 - (groupIndex * 10))})
       `
 
       for (const memberName of group.members) {
