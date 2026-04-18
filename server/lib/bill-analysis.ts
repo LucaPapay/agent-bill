@@ -1,3 +1,5 @@
+import { normalizeBillDate } from './bill-date'
+
 function toCents(value: string | number | undefined | null) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.max(0, Math.round(value))
@@ -143,6 +145,9 @@ export function createLocalAnalysis({ title, people, rawText, imageProvided, not
     .split('\n')
     .map(line => line.trim())
     .filter(Boolean)
+  const billDate = lines
+    .map(line => normalizeBillDate(line))
+    .find(Boolean) || ''
 
   const items = []
   let taxCents = 0
@@ -196,7 +201,7 @@ export function createLocalAnalysis({ title, people, rawText, imageProvided, not
   }
 
   return {
-    billDate: '',
+    billDate,
     currency: 'EUR',
     title,
     items: normalizedItems,
@@ -316,7 +321,7 @@ export function normalizeExtractedReceipt(receipt: any) {
   }
 
   return {
-    billDate: String(receipt?.billDate || '').trim(),
+    billDate: normalizeBillDate(receipt?.billDate),
     currency: String(receipt?.currency || 'EUR').trim() || 'EUR',
     items,
     merchant: String(receipt?.merchant || '').trim(),

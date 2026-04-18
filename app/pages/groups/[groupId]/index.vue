@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import PageShell from '../../components/layout/PageShell.vue'
-import BillListPanel from '../../components/ledger/BillListPanel.vue'
-import GroupMembersPanel from '../../components/ledger/GroupMembersPanel.vue'
-import GroupSettlementPanel from '../../components/ledger/GroupSettlementPanel.vue'
-import { getGroupIconBackground, getGroupIconLabel } from '../../../shared/group-icons'
+import PageShell from '../../../components/layout/PageShell.vue'
+import BillListPanel from '../../../components/ledger/BillListPanel.vue'
+import GroupMembersPanel from '../../../components/ledger/GroupMembersPanel.vue'
+import GroupSettlementPanel from '../../../components/ledger/GroupSettlementPanel.vue'
+import { getGroupIconBackground, getGroupIconLabel } from '../../../../shared/group-icons'
 
 const route = useRoute()
 const groupId = computed(() => String(route.params.groupId || ''))

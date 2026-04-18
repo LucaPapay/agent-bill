@@ -11,6 +11,7 @@ const {
   addBillItem,
   billItems,
   billPaidByPersonId,
+  billDate,
   billPreviewShares,
   billRemainingCents,
   billTip,
@@ -77,6 +78,7 @@ function saveBill() {
       v-if="group && bill"
       :bill-items="billItems"
       :bill-paid-by-person-id="billPaidByPersonId"
+      :bill-date="billDate"
       :bill-preview-shares="billPreviewShares"
       :bill-remaining-cents="billRemainingCents"
       :bill-tip="billTip"
@@ -96,6 +98,7 @@ function saveBill() {
       @save="saveBill"
       @toggle-assignment="toggleBillItemAssignment"
       @update:bill-paid-by-person-id="billPaidByPersonId = $event"
+      @update:bill-date="billDate = $event"
       @update:bill-tip="billTip = $event"
       @update:bill-title="billTitle = $event"
       @update:bill-total="billTotal = $event"

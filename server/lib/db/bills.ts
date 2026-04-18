@@ -52,6 +52,7 @@ async function assertNoActiveSettlementPayments(groupId: string) {
 }
 
 export async function createBillRecord({
+  billDate,
   billItems,
   groupId,
   memberShares,
@@ -61,6 +62,7 @@ export async function createBillRecord({
   totalAmountCents,
   transfers,
 }: {
+  billDate: string
   billItems: BillItemRecord[]
   groupId: string
   memberShares: BillMemberShareRecord[]
@@ -75,8 +77,8 @@ export async function createBillRecord({
   const id = randomUUID()
   const billRow = await db().begin(async (sql: any) => {
     const insertedBills = await sql`
-      insert into bills (id, group_id, title, total_amount_cents, tip_amount_cents, paid_by_person_id)
-      values (${id}, ${groupId}, ${title}, ${totalAmountCents}, ${tipAmountCents}, ${paidByPersonId})
+      insert into bills (id, group_id, title, bill_date, total_amount_cents, tip_amount_cents, paid_by_person_id)
+      values (${id}, ${groupId}, ${title}, ${billDate || null}, ${totalAmountCents}, ${tipAmountCents}, ${paidByPersonId})
       returning id, created_at
     `
     const insertedBill = insertedBills[0]!
@@ -136,6 +138,7 @@ export async function createBillRecord({
 
 export async function updateBillRecord({
   billId,
+  billDate,
   billItems,
   memberShares,
   paidByPersonId,
@@ -145,6 +148,7 @@ export async function updateBillRecord({
   transfers,
 }: {
   billId: string
+  billDate: string
   billItems: BillItemRecord[]
   memberShares: BillMemberShareRecord[]
   paidByPersonId: string
@@ -163,6 +167,7 @@ export async function updateBillRecord({
       update bills
       set
         title = ${title},
+        bill_date = ${billDate || null},
         total_amount_cents = ${totalAmountCents},
         tip_amount_cents = ${tipAmountCents},
         paid_by_person_id = ${paidByPersonId}

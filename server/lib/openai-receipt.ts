@@ -26,6 +26,7 @@ function buildPrompt({ title, people, rawText }: {
     `Extract a restaurant receipt for "${title}".`,
     'Return merchant, bill date, currency, items, subtotal, tax, tip, total, and short extraction notes.',
     'Rules:',
+    '- Return billDate as YYYY-MM-DD when the receipt shows a date.',
     '- Use integer cents for every money field.',
     '- Convert decimal currency values to cents exactly once. Example: EUR 112.10 -> 11210.',
     '- Keep quantity as an integer.',

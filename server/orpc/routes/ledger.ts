@@ -55,6 +55,7 @@ export const addLedgerPersonToAllGroupsProcedure = protectedRpc
 
 export const createLedgerBillProcedure = protectedRpc
   .input(z.object({
+    billDate: z.string().trim(),
     billItems: z.array(billItemInputSchema),
     groupId: z.string().trim().min(1),
     paidByPersonId: z.string().trim().min(1),
@@ -69,6 +70,7 @@ export const createLedgerBillProcedure = protectedRpc
 export const updateLedgerBillProcedure = protectedRpc
   .input(z.object({
     billId: z.string().trim().min(1),
+    billDate: z.string().trim(),
     billItems: z.array(billItemInputSchema),
     groupId: z.string().trim().min(1),
     paidByPersonId: z.string().trim().min(1),

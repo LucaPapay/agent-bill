@@ -11,6 +11,10 @@ defineProps({
     type: String,
     default: '',
   },
+  billDate: {
+    type: String,
+    default: '',
+  },
   billPreviewShares: {
     type: Array,
     default: () => [],
@@ -66,6 +70,7 @@ const emit = defineEmits([
   'save',
   'toggle-assignment',
   'update:bill-paid-by-person-id',
+  'update:bill-date',
   'update:bill-tip',
   'update:bill-title',
   'update:bill-total',
@@ -196,6 +201,16 @@ const layoutOptions = [
                 placeholder="Friday dinner"
                 style="width: 100%; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
                 @input="emit('update:bill-title', $event.target.value)"
+              >
+            </label>
+
+            <label style="display: grid; gap: 6px;">
+              <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Date</span>
+              <input
+                :value="billDate"
+                type="date"
+                style="width: 100%; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
+                @input="emit('update:bill-date', $event.target.value)"
               >
             </label>
 

@@ -4,6 +4,7 @@ import {
   normalizeExtractedReceipt,
   normalizePeople,
 } from './bill-analysis'
+import { normalizeBillDate } from './bill-date'
 
 describe('normalizePeople', () => {
   it('trims names, removes blanks, and deduplicates while keeping order', () => {
@@ -49,6 +50,28 @@ describe('createLocalAnalysis', () => {
     expect(analysis.notes).toContain('An image was uploaded, but no AI key was available, so image-only analysis was skipped.')
     expect(analysis.notes).toContain('Paste OCR text or add OPENAI_API_KEY if you want the app to read receipt images.')
     expect(analysis.source).toBe('local-empty')
+  })
+
+  it('pulls a visible receipt date out of OCR text', () => {
+    expect(createLocalAnalysis({
+      imageProvided: false,
+      people: ['Alice', 'Bob'],
+      rawText: [
+        'Cafe Sample',
+        '18/04/2026',
+        'Pasta 12.50',
+        'Total 12.50',
+      ].join('\n'),
+      title: 'Dinner',
+    }).billDate).toBe('2026-04-18')
+  })
+})
+
+describe('normalizeBillDate', () => {
+  it('normalizes common receipt date formats into YYYY-MM-DD', () => {
+    expect(normalizeBillDate('2026-04-18')).toBe('2026-04-18')
+    expect(normalizeBillDate('18/04/2026')).toBe('2026-04-18')
+    expect(normalizeBillDate('Apr 18, 2026')).toBe('2026-04-18')
   })
 })
 

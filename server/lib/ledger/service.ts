@@ -15,6 +15,7 @@ import {
   updateBillRecord,
   voidSettlementPayment,
 } from '../db'
+import { normalizeBillDate } from '../bill-date'
 import { buildBillLedger } from '../group-ledger'
 import { generateGroupPresentation } from '../openai-group-presentation'
 
@@ -51,6 +52,7 @@ export async function addLedgerPersonToAllGroups(personId: string) {
 }
 
 export async function createLedgerBill(authPersonId: string, input: {
+  billDate: string
   billItems: Array<{
     amountCents: number
     assignedPersonIds: string[]
@@ -63,6 +65,11 @@ export async function createLedgerBill(authPersonId: string, input: {
   totalAmountCents: number
 }) {
   await assertPersonCanAccessGroup(authPersonId, input.groupId)
+  const billDate = normalizeBillDate(input.billDate)
+
+  if (input.billDate && !billDate) {
+    throw new Error('Bill date must be a real calendar date.')
+  }
 
   const groupMemberIds = await getGroupMemberIds(input.groupId)
   const { memberShares, transfers } = buildBillLedger({
@@ -74,6 +81,7 @@ export async function createLedgerBill(authPersonId: string, input: {
   })
 
   const bill = await createBillRecord({
+    billDate,
     billItems: input.billItems,
     groupId: input.groupId,
     memberShares,
@@ -92,6 +100,7 @@ export async function createLedgerBill(authPersonId: string, input: {
 
 export async function updateLedgerBill(authPersonId: string, input: {
   billId: string
+  billDate: string
   billItems: Array<{
     amountCents: number
     assignedPersonIds: string[]
@@ -104,6 +113,11 @@ export async function updateLedgerBill(authPersonId: string, input: {
   totalAmountCents: number
 }) {
   const billGroupId = await getBillGroupId(input.billId)
+  const billDate = normalizeBillDate(input.billDate)
+
+  if (input.billDate && !billDate) {
+    throw new Error('Bill date must be a real calendar date.')
+  }
 
   if (billGroupId !== input.groupId) {
     throw new Error('Bill does not belong to the selected group.')
@@ -122,6 +136,7 @@ export async function updateLedgerBill(authPersonId: string, input: {
 
   const bill = await updateBillRecord({
     billId: input.billId,
+    billDate,
     billItems: input.billItems,
     memberShares,
     paidByPersonId: input.paidByPersonId,

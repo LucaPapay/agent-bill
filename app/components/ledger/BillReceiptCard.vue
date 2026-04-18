@@ -1,6 +1,20 @@
 <script setup>
 import AvatarBadge from '../app/AvatarBadge.vue'
 
+function formatBillDate(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+
+  if (!match) {
+    return ''
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12))
+}
+
 defineProps({
   bill: {
     type: Object,
@@ -28,6 +42,9 @@ defineProps({
       </div>
       <div style="font-size: 10px; letter-spacing: 0.08em; color: var(--muted);">
         {{ bill.items.length }} ITEMS · {{ bill.shares.length }} PEOPLE · PAID BY {{ bill.paidByPerson?.name || 'UNKNOWN' }}
+      </div>
+      <div v-if="bill.billDate" style="font-size: 10px; letter-spacing: 0.08em; color: var(--muted); margin-top: 4px;">
+        {{ formatBillDate(bill.billDate) }}
       </div>
     </div>
 

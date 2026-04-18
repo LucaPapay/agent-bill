@@ -53,7 +53,7 @@ export async function getLedgerSnapshot(personId: string) {
       order by created_at asc
     `,
     db()`
-      select id, group_id, title, total_amount_cents, tip_amount_cents, paid_by_person_id, created_at
+      select id, group_id, title, bill_date, total_amount_cents, tip_amount_cents, paid_by_person_id, created_at
       from bills
       where exists (
         select 1
@@ -158,6 +158,7 @@ export async function getLedgerSnapshot(personId: string) {
 
   for (const row of billRows) {
     const bill = {
+      billDate: row.bill_date ? String(row.bill_date).slice(0, 10) : '',
       createdAt: row.created_at,
       id: row.id,
       items: [] as any[],

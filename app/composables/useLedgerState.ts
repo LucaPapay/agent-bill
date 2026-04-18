@@ -2,6 +2,15 @@ import { computed } from 'vue'
 
 let loadingPromise: Promise<void> | null = null
 
+function todayBillDate() {
+  const value = new Date()
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
 export function useLedgerState() {
   const api = useOrpc()
   const { clear, user } = useUserSession()
@@ -24,6 +33,7 @@ export function useLedgerState() {
   const personToAddId = useState('ledger-state:person-to-add-id', () => '')
 
   const billTitle = useState('ledger-state:bill-title', () => 'Friday dinner')
+  const billDate = useState('ledger-state:bill-date', () => todayBillDate())
   const billTotal = useState('ledger-state:bill-total', () => '0')
   const billTip = useState('ledger-state:bill-tip', () => '0')
   const billPaidByPersonId = useState('ledger-state:bill-paid-by-person-id', () => '')
@@ -414,6 +424,7 @@ export function useLedgerState() {
 
   function resetBillForm() {
     billTitle.value = 'Friday dinner'
+    billDate.value = todayBillDate()
     billTotal.value = '0'
     billTip.value = '0'
     billItems.value = []
@@ -430,6 +441,7 @@ export function useLedgerState() {
     setSelectedGroup(groupId)
     selectedBillId.value = bill.id
     billTitle.value = options?.duplicate ? `${bill.title} copy` : bill.title
+    billDate.value = bill.billDate || todayBillDate()
     billTotal.value = String((bill.totalAmountCents || 0) / 100)
     billTip.value = String((bill.tipAmountCents || 0) / 100)
     billPaidByPersonId.value = bill.paidByPersonId
@@ -459,6 +471,7 @@ export function useLedgerState() {
     pendingBillComposerDraft.value = null
     setSelectedGroup(groupId)
     billTitle.value = draft.billTitle || 'Friday dinner'
+    billDate.value = draft.billDate || todayBillDate()
     billTotal.value = draft.billTotal || '0'
     billTip.value = draft.billTip || '0'
     billItems.value = Array.isArray(draft.billItems) && draft.billItems.length
@@ -689,6 +702,7 @@ export function useLedgerState() {
       .filter(item => item.name || item.amountCents > 0)
 
     return api.createLedgerBill({
+      billDate: billDate.value,
       billItems: payloadItems,
       groupId: selectedGroupId.value,
       paidByPersonId: billPaidByPersonId.value,
@@ -729,6 +743,7 @@ export function useLedgerState() {
 
     return api.updateLedgerBill({
       billId,
+      billDate: billDate.value,
       billItems: payloadItems,
       groupId: selectedGroupId.value,
       paidByPersonId: billPaidByPersonId.value,
@@ -830,6 +845,7 @@ export function useLedgerState() {
     addCurrentUserToAllGroups,
     addPersonToGroup,
     allBills,
+    billDate,
     billItems,
     billPaidByPersonId,
     billPreviewShares,

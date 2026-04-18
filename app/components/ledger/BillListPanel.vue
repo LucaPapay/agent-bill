@@ -1,4 +1,18 @@
 <script setup>
+function formatBillDate(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+
+  if (!match) {
+    return ''
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12))
+}
+
 defineProps({
   bills: {
     type: Array,
@@ -48,7 +62,7 @@ defineProps({
           {{ bill.title }}
         </div>
         <div class="mono" style="font-size: 12px; margin-top: 4px; opacity: 0.7;">
-          {{ formatCents(bill.totalAmountCents) }} · {{ bill.transfers.length }} bill transfers
+          {{ formatBillDate(bill.billDate) || 'No date' }} · {{ formatCents(bill.totalAmountCents) }} · {{ bill.transfers.length }} bill transfers
         </div>
       </NuxtLink>
     </div>

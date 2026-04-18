@@ -410,6 +410,7 @@ async function continueToSplit() {
   }
 
   stageBillComposerDraft({
+    billDate: parsedReceipt.value.billDate || '',
     billItems: parsedItems.value.length
       ? parsedItems.value.map((item, index) => ({
           amount: formatAmountInput(item.amountCents || 0),

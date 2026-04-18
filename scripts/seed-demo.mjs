@@ -344,7 +344,17 @@ function timestampMinutesAgo(minutesAgo) {
   return new Date(Date.now() - (minutesAgo * 60 * 1000))
 }
 
-function normalizeBillSpec(groupName, billSpec, peopleByName) {
+function formatRelativeBillDate(daysAgo) {
+  const value = new Date()
+  value.setHours(12, 0, 0, 0)
+  value.setDate(value.getDate() - daysAgo)
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function normalizeBillSpec(groupName, billSpec, peopleByName, billDate) {
   const billItems = (billSpec.items || []).map(item => ({
     amountCents: item.amountCents,
     assignedPersonIds: item.assignedPeople.map(name => {
@@ -365,6 +375,7 @@ function normalizeBillSpec(groupName, billSpec, peopleByName) {
     : subtotalFromItems
 
   return {
+    billDate,
     billItems,
     paidByPersonId: peopleByName.get(billSpec.paidBy),
     tipAmountCents: billSpec.tipAmountCents,
@@ -456,11 +467,23 @@ async function ensureSchema() {
       id text primary key,
       group_id text not null references groups(id) on delete cascade,
       title text not null,
+      bill_date date,
       total_amount_cents integer not null,
       tip_amount_cents integer not null default 0,
       paid_by_person_id text not null references people(id),
       created_at timestamptz not null default now()
     )
+  `
+
+  await sql`
+    alter table bills
+    add column if not exists bill_date date
+  `
+
+  await sql`
+    update bills
+    set bill_date = created_at::date
+    where bill_date is null
   `
 
   await sql`
@@ -573,10 +596,15 @@ async function seedDemoLedger() {
 
       const groupMemberIds = group.members.map(name => peopleByName.get(name))
 
-      for (const billSpec of group.billSpecs) {
+      for (const [billOffset, billSpec] of group.billSpecs.entries()) {
         billIndex += 1
 
-        const bill = normalizeBillSpec(group.name, billSpec, peopleByName)
+        const bill = normalizeBillSpec(
+          group.name,
+          billSpec,
+          peopleByName,
+          formatRelativeBillDate((groupIndex * 9) + (billOffset * 4) + 1),
+        )
         const { memberShares, transfers } = buildBillLedger({
           billItems: bill.billItems,
           groupMemberIds,
@@ -592,6 +620,7 @@ async function seedDemoLedger() {
             id,
             group_id,
             title,
+            bill_date,
             total_amount_cents,
             tip_amount_cents,
             paid_by_person_id,
@@ -601,6 +630,7 @@ async function seedDemoLedger() {
             ${billId},
             ${groupId},
             ${bill.title},
+            ${bill.billDate},
             ${bill.totalAmountCents},
             ${bill.tipAmountCents},
             ${bill.paidByPersonId},

@@ -77,6 +77,7 @@ function buildReceiptSummary(receipt: any) {
 
   return [
     `Merchant: ${receipt?.merchant || 'Unknown merchant'}`,
+    `Date: ${receipt?.billDate || 'Unknown date'}`,
     `Total: ${formatMoney(receipt?.totalCents || 0, receipt?.currency || 'EUR')}`,
     `Tax: ${formatMoney(receipt?.taxCents || 0, receipt?.currency || 'EUR')}`,
     `Tip: ${formatMoney(receipt?.tipCents || 0, receipt?.currency || 'EUR')}`,
