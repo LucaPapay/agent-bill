@@ -1,5 +1,6 @@
 <script setup>
 import AvatarBadge from '../app/AvatarBadge.vue'
+import GroupCard from '../app/GroupCard.vue'
 import IconGlyph from '../app/IconGlyph.vue'
 
 const props = defineProps({
@@ -58,6 +59,18 @@ function groupOpenAmount(group) {
   }
 
   return `${props.formatCents(cents)} open`
+}
+
+function groupMemberNames(group) {
+  return (group.memberships || []).map(membership => membership.person.name)
+}
+
+function groupIconBackground(group) {
+  return props.selectedGroup?.id === group.id ? 'var(--ink)' : 'var(--marigold)'
+}
+
+function groupIconColor(group) {
+  return props.selectedGroup?.id === group.id ? 'var(--cream)' : 'var(--ink)'
 }
 </script>
 
@@ -130,69 +143,19 @@ function groupOpenAmount(group) {
     </div>
 
     <div class="section-pad groups-grid">
-      <button
+      <GroupCard
         v-for="group in groups"
         :key="group.id"
-        class="surface-panel"
-        :style="{
-          padding: '16px 18px',
-          textAlign: 'left',
-          borderColor: selectedGroup?.id === group.id ? 'var(--ink)' : 'rgba(20,18,16,0.08)',
-          boxShadow: selectedGroup?.id === group.id ? '0 0 0 2px rgba(20,18,16,0.06)' : '',
-        }"
-        @click="emit('select-group', group.id)"
-      >
-        <div style="display: flex; align-items: center; gap: 12px;">
-          <div
-            :style="{
-              width: '52px',
-              height: '52px',
-              borderRadius: '16px',
-              background: selectedGroup?.id === group.id ? 'var(--ink)' : 'var(--marigold)',
-              color: selectedGroup?.id === group.id ? 'var(--cream)' : 'var(--ink)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '16px',
-              fontWeight: 700,
-              border: '1.5px solid var(--ink)',
-            }"
-          >
-            {{ group.name.charAt(0).toUpperCase() }}
-          </div>
-
-          <div style="flex: 1; min-width: 0;">
-            <div style="font-weight: 700; font-size: 17px;">
-              {{ group.name }}
-            </div>
-            <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
-              {{ group.bills.length }} bills · {{ group.memberships.length }} people
-            </div>
-          </div>
-
-          <div class="mono" style="font-weight: 700; font-size: 13px; text-align: right;">
-            {{ groupOpenAmount(group) }}
-          </div>
-        </div>
-
-        <div style="display: flex; margin-top: 16px; padding-left: 4px;">
-          <div
-            v-for="(membership, index) in group.memberships.slice(0, 4)"
-            :key="membership.id"
-            :style="{ marginLeft: index === 0 ? 0 : '-10px' }"
-          >
-            <AvatarBadge :name="membership.person.name" size="sm" />
-          </div>
-
-          <div
-            v-if="group.memberships.length > 4"
-            class="avatar sm"
-            style="margin-left: -10px; background: var(--cream-2);"
-          >
-            +{{ group.memberships.length - 4 }}
-          </div>
-        </div>
-      </button>
+        :amount-label="groupOpenAmount(group)"
+        :avatar-names="groupMemberNames(group)"
+        :icon-background="groupIconBackground(group)"
+        :icon-color="groupIconColor(group)"
+        :icon-label="group.name.charAt(0).toUpperCase()"
+        :selected="selectedGroup?.id === group.id"
+        :subtitle="`${group.bills.length} bills · ${group.memberships.length} people`"
+        :title="group.name"
+        @select="emit('select-group', group.id)"
+      />
     </div>
 
     <div v-if="selectedGroup" class="section-pad" style="padding-top: 20px; padding-bottom: 92px;">

@@ -26,6 +26,7 @@ See [app explanation.md](</Users/lucapapay/dev/agent-bill/app explanation.md>) f
 - Other agents may be working in parallel; ignore unrelated changes you did not make.
 - Work in a way that does not interrupt or overwrite another agent's in-flight changes.
 - Do not change branches without asking; the user manages branches.
+- Do not force-push, rebase published work, or rewrite history; only add new commits on top and push normally.
 
 ## App Shape
 
