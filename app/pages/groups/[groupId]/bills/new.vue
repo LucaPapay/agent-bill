@@ -26,7 +26,6 @@ const {
   loadBillFormFromBill,
   removeBillItem,
   resetBillForm,
-  resultLayout,
   saving,
   selectedBill,
   selectedGroup,
@@ -81,7 +80,6 @@ function saveBill() {
       :can-create-bill="canCreateBill"
       :error-message="errorMessage"
       :format-cents="formatCents"
-      :layout="resultLayout"
       :save-label="'Save bill'"
       :saving="saving"
       :selected-bill="selectedBill"
@@ -98,7 +96,6 @@ function saveBill() {
       @update:bill-total="billTotal = $event"
       @update:item-amount="updateBillItemAmount"
       @update:item-name="updateBillItemName"
-      @update:layout="resultLayout = $event"
     />
 
     <div v-else-if="ledgerLoaded" class="screen">
