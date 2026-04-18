@@ -108,6 +108,27 @@ const parsedItemCount = computed(() => parsedItems.value.length)
 const resolvedCurrency = computed(() => parsedReceipt.value?.currency || 'EUR')
 const noteList = computed(() => parsedReceipt.value?.notes || [])
 const splitRows = computed(() => analysis.result.value?.split || [])
+const billTimeLabel = computed(() => {
+  const note = noteList.value.find(note => /^Bill time\b/i.test(note))
+  return String(note || '').replace(/^Bill time\b/i, '').trim()
+})
+const vatLabel = computed(() => {
+  const note = noteList.value.find(note => /^Contains\b.*\bVAT\b/i.test(note))
+  return String(note || '').replace(/^Contains\b/i, '').trim()
+})
+const taxRowLabel = computed(() => (
+  vatLabel.value ? `Tax (${vatLabel.value})` : 'Tax'
+))
+const hasVerifiedTotal = computed(() => (
+  noteList.value.some(note => /^Total matches sum of subtotal and tax\.?$/i.test(note))
+))
+const visibleReceiptNotes = computed(() => (
+  noteList.value.filter(note =>
+    !/^Bill time\b/i.test(note)
+    && !/^Contains\b.*\bVAT\b/i.test(note)
+    && !/^Total matches sum of subtotal and tax\.?$/i.test(note),
+  )
+))
 const visibleAnalysisFeed = computed(() =>
   analysis.feed.value.filter((entry) => {
     const text = String(entry?.text || '').trim()
@@ -809,8 +830,13 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
 
-                <div class="scan-receipt-total">
-                  {{ formatMoney(parsedReceipt.totalCents || 0, resolvedCurrency) }}
+                <div class="scan-receipt-head-side">
+                  <div class="scan-receipt-total">
+                    {{ formatMoney(parsedReceipt.totalCents || 0, resolvedCurrency) }}
+                  </div>
+                  <div v-if="billTimeLabel" class="scan-receipt-time">
+                    Bill time {{ billTimeLabel }}
+                  </div>
                 </div>
               </div>
 
@@ -858,7 +884,7 @@ onBeforeUnmount(() => {
 
               <div class="scan-receipt-totals">
                 <div class="scan-mini-row">
-                  <span>Tax</span>
+                  <span>{{ taxRowLabel }}</span>
                   <span>{{ formatMoney(parsedReceipt.taxCents || 0, resolvedCurrency) }}</span>
                 </div>
                 <div class="scan-mini-row">
@@ -866,14 +892,17 @@ onBeforeUnmount(() => {
                   <span>{{ formatMoney(parsedReceipt.tipCents || 0, resolvedCurrency) }}</span>
                 </div>
                 <div class="scan-mini-row total">
-                  <span>Total</span>
+                  <span class="scan-total-label">
+                    <span>Total</span>
+                    <span v-if="hasVerifiedTotal" class="scan-total-check" aria-label="Total verified">✓</span>
+                  </span>
                   <span>{{ formatMoney(parsedReceipt.totalCents || 0, resolvedCurrency) }}</span>
                 </div>
               </div>
 
-              <div v-if="noteList.length" class="scan-receipt-notes">
+              <div v-if="visibleReceiptNotes.length" class="scan-receipt-notes">
                 <div
-                  v-for="note in noteList"
+                  v-for="note in visibleReceiptNotes"
                   :key="note"
                   class="scan-note-row"
                 >
@@ -1205,6 +1234,12 @@ onBeforeUnmount(() => {
   align-items: flex-start;
 }
 
+.scan-receipt-head-side {
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
 .scan-receipt-kicker {
   font-family: var(--mono);
   font-size: 10px;
@@ -1225,6 +1260,14 @@ onBeforeUnmount(() => {
   font-family: var(--mono);
   font-size: 12px;
   color: var(--muted);
+}
+
+.scan-receipt-time {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(20, 18, 16, 0.58);
 }
 
 .scan-receipt-summary {
@@ -1308,6 +1351,25 @@ onBeforeUnmount(() => {
 .scan-mini-row.total {
   font-weight: 700;
   color: var(--ink);
+}
+
+.scan-total-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scan-total-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(143, 197, 106, 0.18);
+  color: #4d7f31;
+  font-size: 12px;
+  line-height: 1;
 }
 
 .scan-receipt-notes {
