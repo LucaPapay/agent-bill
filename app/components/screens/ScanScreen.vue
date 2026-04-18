@@ -260,6 +260,14 @@ const uploadLabel = computed(() => {
 
   return 'Upload'
 })
+const showShellTitle = computed(() =>
+  !previewUrl.value
+  && !hasSavedChat.value
+  && !parsedReceipt.value
+  && !leadMessages.value.some(entry => entry.who === 'user')
+  && !tailMessages.value.some(entry => entry.who === 'user')
+  && !visibleAnalysisFeed.value.some(entry => entry.who === 'user'),
+)
 
 function formatMoney(amountCents, currency = 'EUR') {
   return new Intl.NumberFormat('en-US', {
@@ -715,7 +723,7 @@ onBeforeUnmount(() => {
             <div class="scan-panel-kicker scan-panel-kicker-on-dark">
               Scan chat
             </div>
-            <div class="scan-chat-shell-title">
+            <div v-if="showShellTitle" class="scan-chat-shell-title">
               Chat first. Receipt next.
             </div>
           </div>
