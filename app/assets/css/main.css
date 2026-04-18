@@ -118,9 +118,6 @@ input::placeholder {
 
 .tab-inner {
   width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
 }
 
 .tab-brand {
@@ -128,11 +125,14 @@ input::placeholder {
 }
 
 .tab-links {
-  display: contents;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) 64px repeat(2, minmax(0, 1fr));
+  align-items: center;
+  gap: 2px;
 }
 
 .tab {
-  flex: 1;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -144,6 +144,9 @@ input::placeholder {
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  min-width: 0;
+  padding: 0 4px;
+  text-align: center;
 }
 
 .tab.active {
@@ -166,6 +169,7 @@ input::placeholder {
   background: var(--tomato);
   color: var(--cream);
   box-shadow: 0 8px 20px rgba(255, 84, 54, 0.5), inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+  justify-self: center;
 }
 
 .tab-fab.active {
@@ -510,6 +514,8 @@ input::placeholder {
 
   .tab-inner {
     width: min(1320px, 100%);
+    display: flex;
+    align-items: center;
     justify-content: space-between;
     gap: 16px;
     margin: 0 auto;

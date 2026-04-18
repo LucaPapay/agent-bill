@@ -32,6 +32,7 @@ export function useLedgerState() {
     id: string
     name: string
   }>>('ledger-state:bill-items', () => [])
+  const pendingBillComposerDraft = useState<any>('ledger-state:pending-bill-composer-draft', () => null)
   const resultLayout = useState('ledger-state:result-layout', () => 'cards')
   const billItemId = useState('ledger-state:bill-item-id', () => 0)
 
@@ -370,6 +371,35 @@ export function useLedgerState() {
     return true
   }
 
+  function stageBillComposerDraft(draft: any) {
+    pendingBillComposerDraft.value = draft
+  }
+
+  function consumeBillComposerDraft(groupId: string) {
+    const draft = pendingBillComposerDraft.value
+
+    if (!draft || draft.groupId !== groupId) {
+      return false
+    }
+
+    pendingBillComposerDraft.value = null
+    setSelectedGroup(groupId)
+    billTitle.value = draft.billTitle || 'Friday dinner'
+    billTotal.value = draft.billTotal || '0'
+    billTip.value = draft.billTip || '0'
+    billItems.value = Array.isArray(draft.billItems) && draft.billItems.length
+      ? draft.billItems.map((item: any) => ({
+          amount: item.amount || '',
+          assignedPersonIds: [...(item.assignedPersonIds || [])],
+          id: item.id || nextBillItemId(),
+          name: item.name || '',
+        }))
+      : [createEmptyBillItem(selectedGroup.value)]
+    billPaidByPersonId.value = draft.billPaidByPersonId || selectedGroup.value?.memberships?.[0]?.personId || ''
+    syncBillForm(selectedGroup.value)
+    return true
+  }
+
   function addBillItem() {
     billItems.value.push(createEmptyBillItem(selectedGroup.value))
   }
@@ -448,6 +478,7 @@ export function useLedgerState() {
     healthLoaded.value = false
     selectedGroupId.value = ''
     selectedBillId.value = ''
+    pendingBillComposerDraft.value = null
     personName.value = ''
     groupName.value = ''
     personToAddId.value = ''
@@ -708,6 +739,7 @@ export function useLedgerState() {
     billTotalCents,
     canAddPersonToGroup,
     canCreateBill,
+    consumeBillComposerDraft,
     createBill,
     createGroup,
     createPerson,
@@ -743,6 +775,7 @@ export function useLedgerState() {
     selectedGroupSimplifiedTransfers,
     setSelectedBill,
     setSelectedGroup,
+    stageBillComposerDraft,
     toggleBillItemAssignment,
     undoSettlementPayment,
     updateBill,
