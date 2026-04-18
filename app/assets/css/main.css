@@ -600,6 +600,7 @@ input::placeholder {
 .groups-grid {
   display: grid;
   gap: 12px;
+  align-items: start;
 }
 
 .profile-grid {
