@@ -313,18 +313,24 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
   try {
     const agentResult = split.length
       ? await runPiBillRevisionAgent({
+        chatId: current.chatId,
+        groupId,
         message,
         onEvent: recordAndEmit,
         people,
+        personId,
         rawReceipt,
         receipt,
         split,
         title,
       })
       : await runPiBillReceiptSplitAgent({
+        chatId: current.chatId,
+        groupId,
         message,
         onEvent: recordAndEmit,
         people: participantHints,
+        personId,
         rawReceipt,
         receipt,
         title,
