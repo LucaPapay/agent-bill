@@ -61,11 +61,9 @@ function fileToBase64(file: File) {
 }
 
 export function useBillAnalysisStream() {
-  const assistantText = useState('bill-analysis:assistant-text', () => '')
   const chatId = useState('bill-analysis:chat-id', () => '')
   const error = useState('bill-analysis:error', () => '')
   const feed = useState<any[]>('bill-analysis:feed', () => [])
-  const jobId = useState('bill-analysis:job-id', () => '')
   const loadingChat = useState('bill-analysis:loading-chat', () => false)
   const receipt = useState<any>('bill-analysis:receipt', () => null)
   const recentChats = useState<any[]>('bill-analysis:recent-chats', () => [])
@@ -80,11 +78,9 @@ export function useBillAnalysisStream() {
   }
 
   function clearCurrent() {
-    assistantText.value = ''
     chatId.value = ''
     error.value = ''
     feed.value = []
-    jobId.value = ''
     receipt.value = null
     result.value = null
     status.value = 'idle'
@@ -124,13 +120,11 @@ export function useBillAnalysisStream() {
   }
 
   function applyResult(nextResult: any) {
-    assistantText.value = ''
     chatId.value = nextResult?.chatId || ''
     error.value = ''
     feed.value = Array.isArray(nextResult?.history)
       ? nextResult.history.map((entry: any) => normalizeFeedEntry(entry))
       : []
-    jobId.value = nextResult?.runId || ''
     receipt.value = resolveReceipt(nextResult)
     result.value = nextResult
     status.value = isPendingResult(nextResult) ? 'agent' : 'complete'
@@ -179,7 +173,6 @@ export function useBillAnalysisStream() {
     }
 
     if (payload.type === 'agent_text_delta') {
-      assistantText.value += payload.delta
       return
     }
 
@@ -261,7 +254,6 @@ export function useBillAnalysisStream() {
   async function start(input: any) {
     reset()
     status.value = 'starting'
-    pushFeed('log', 'Penny is opening the analysis stream and buckling in.')
 
     openStream(useOrpc().analyzeBillStream(input))
 
@@ -299,7 +291,6 @@ export function useBillAnalysisStream() {
     } = {},
   ) {
     stop()
-    assistantText.value = ''
     error.value = ''
     status.value = 'starting'
 
@@ -329,23 +320,6 @@ export function useBillAnalysisStream() {
     openRevisionStream(nextMessage, people, {
       groupId,
     })
-
-    return null
-  }
-
-  async function requestSplitQuestion(people: string[] = [], groupId = '') {
-    if (!chatId.value || !resolveReceipt(result.value || receipt.value)) {
-      return null
-    }
-
-    openRevisionStream(
-      'Ask me one short question that will give you enough information to create the split for this receipt. Do not create the split yet.',
-      people,
-      {
-        groupId,
-        pushUserMessage: false,
-      },
-    )
 
     return null
   }
@@ -390,11 +364,9 @@ export function useBillAnalysisStream() {
   }
 
   return {
-    assistantText,
     chatId,
     error,
     feed,
-    jobId,
     loadChat,
     loadChats,
     loadingChat,
@@ -405,7 +377,6 @@ export function useBillAnalysisStream() {
     confirmGroupSelection,
     revise,
     requestGroupQuestion,
-    requestSplitQuestion,
     start,
     startFromFile,
     status,

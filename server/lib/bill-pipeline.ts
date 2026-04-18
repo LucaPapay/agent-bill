@@ -18,7 +18,7 @@ import {
   saveBillRun,
 } from './db'
 import { extractReceiptWithOpenAI } from './openai-receipt'
-import { runPiBillReceiptSplitAgent, runPiBillRevisionAgent } from './pi-bill-agent'
+import { runPiBillAgent, runPiBillReceiptSplitAgent, runPiBillRevisionAgent } from './pi-bill-agent'
 
 function createHistoryRecorder(onEvent = (_payload: any) => {}, initialHistory: any[] = []) {
   let history = [...initialHistory]
@@ -179,23 +179,42 @@ export async function runBillAnalysisPipeline(input: any, personId: string, onEv
       rawText: input?.rawText,
       title,
     })
-    : await extractReceiptWithOpenAI({
-      imageBase64: input?.imageBase64,
-      mimeType: input?.mimeType,
-      onEvent: (payload: any) => {
-        history.record(payload)
-        onEvent(payload)
-      },
-      people,
-      rawText: input?.rawText,
-      title,
-    }).then((rawReceipt: any) => createReceiptAnalysis({
-      imageProvided: Boolean(input?.imageBase64),
-      people,
-      rawReceipt,
-      receipt: normalizeExtractedReceipt(rawReceipt),
-      title,
-    }))
+    : !people.length
+      ? await extractReceiptWithOpenAI({
+        imageBase64: input?.imageBase64,
+        mimeType: input?.mimeType,
+        onEvent: (payload: any) => {
+          history.record(payload)
+          onEvent(payload)
+        },
+        people,
+        rawText: input?.rawText,
+        title,
+      }).then((rawReceipt: any) => createReceiptAnalysis({
+        imageProvided: Boolean(input?.imageBase64),
+        people,
+        rawReceipt,
+        receipt: normalizeExtractedReceipt(rawReceipt),
+        title,
+      }))
+      : await runPiBillAgent({
+        imageBase64: input?.imageBase64,
+        mimeType: input?.mimeType,
+        onEvent: (payload: any) => {
+          history.record(payload)
+          onEvent(payload)
+        },
+        people,
+        rawText: input?.rawText,
+        title,
+      }).then((agentResult: any) => createAgentAnalysis({
+        imageProvided: Boolean(input?.imageBase64),
+        people,
+        plan: agentResult.plan,
+        rawReceipt: agentResult.rawReceipt,
+        receipt: agentResult.receipt,
+        title,
+      }))
 
   const payload = {
     ...analysis,
