@@ -621,8 +621,66 @@ input::placeholder {
   gap: 14px;
 }
 
+.assign-summary-stack {
+  display: grid;
+  gap: 14px;
+}
+
 .assign-items-card {
   min-width: 0;
+}
+
+.assign-remaining-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--ink);
+  color: var(--cream);
+  box-shadow: 0 16px 32px rgba(20, 18, 16, 0.18);
+}
+
+.assign-remaining-copy {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.assign-remaining-label {
+  font-size: 11px;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.6;
+}
+
+.assign-remaining-amount {
+  font-family: var(--display);
+  font-size: 28px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.assign-remaining-note {
+  font-size: 11px;
+  font-family: var(--mono);
+  opacity: 0.55;
+}
+
+.assign-remaining-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.assign-inline-button {
+  padding: 10px 16px;
+  min-height: 40px;
 }
 
 @media (min-width: 900px) {
@@ -646,12 +704,37 @@ input::placeholder {
   }
 
   .assign-layout {
-    grid-template-columns: minmax(0, 1.25fr) 320px;
+    grid-template-columns: minmax(0, 1fr);
     align-items: start;
   }
 
   .assign-sidebar {
+    position: static;
+  }
+
+  .assign-items-card {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .assign-summary-stack {
     position: sticky;
-    top: 110px;
+    top: 88px;
+    z-index: 5;
+  }
+}
+
+@media (max-width: 899px) {
+  .assign-remaining-bar {
+    flex-wrap: wrap;
+  }
+
+  .assign-remaining-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .assign-inline-button {
+    flex: 1 1 180px;
   }
 }

@@ -117,60 +117,59 @@ const layoutOptions = [
 
     <div v-if="selectedGroup" class="section-pad assign-layout" style="padding-bottom: 96px;">
       <div class="assign-sidebar">
-        <div class="surface-panel" style="padding: 12px;">
-          <div style="display: flex; gap: 8px; justify-content: space-between;">
-            <div
-              v-for="share in billPreviewShares"
-              :key="share.personId"
-              :style="{
-                flex: 1,
-                background: 'var(--paper)',
-                borderRadius: '16px',
-                padding: '10px 6px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '4px',
-                border: '1px solid rgba(20,18,16,0.1)',
-              }"
-            >
-              <AvatarBadge :name="share.person.name" />
-              <div style="font-size: 11px; font-weight: 600; text-align: center;">
-                {{ share.person.name }}
-              </div>
-              <div class="mono" style="font-size: 12px; font-weight: 700;">
-                {{ formatCents(share.totalAmountCents) }}
+        <div class="assign-summary-stack">
+          <div class="surface-panel" style="padding: 12px;">
+            <div style="display: flex; gap: 8px; justify-content: space-between;">
+              <div
+                v-for="share in billPreviewShares"
+                :key="share.personId"
+                :style="{
+                  flex: 1,
+                  background: 'var(--paper)',
+                  borderRadius: '16px',
+                  padding: '10px 6px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  border: '1px solid rgba(20,18,16,0.1)',
+                }"
+              >
+                <AvatarBadge :name="share.person.name" />
+                <div style="font-size: 11px; font-weight: 600; text-align: center;">
+                  {{ share.person.name }}
+                </div>
+                <div class="mono" style="font-size: 12px; font-weight: 700;">
+                  {{ formatCents(share.totalAmountCents) }}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div style="background: var(--marigold); color: var(--ink); border-radius: 14px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; border: 1.5px solid var(--ink);">
-          <IconGlyph name="sparkle" width="16" height="16" style="flex-shrink: 0; margin-top: 2px;" />
-          <div style="font-size: 12px; line-height: 1.35;">
-            <b>Penny:</b> Item assignments save the raw per-person bill shares first. Group settlement is derived after that, not instead of that.
+          <div style="background: var(--marigold); color: var(--ink); border-radius: 14px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; border: 1.5px solid var(--ink);">
+            <IconGlyph name="sparkle" width="16" height="16" style="flex-shrink: 0; margin-top: 2px;" />
+            <div style="font-size: 12px; line-height: 1.35;">
+              <b>Penny:</b> Item assignments save the raw per-person bill shares first. Group settlement is derived after that, not instead of that.
+            </div>
           </div>
-        </div>
 
-        <div style="background: var(--ink); color: var(--cream); border-radius: 22px; padding: 16px;">
-          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px;">
-            <span style="font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.6;">
-              Remaining
-            </span>
-            <span class="h-display" style="font-size: 34px;">
-              {{ formatCents(billRemainingCents) }}
-            </span>
+          <div class="assign-remaining-bar">
+            <div class="assign-remaining-copy">
+              <span class="assign-remaining-label">Remaining</span>
+              <span class="assign-remaining-amount">{{ formatCents(billRemainingCents) }}</span>
+              <span class="assign-remaining-note">Items + tip must equal the bill total</span>
+            </div>
+
+            <div class="assign-remaining-actions">
+              <button class="btn btn-accent assign-inline-button" :disabled="saving || !canCreateBill" @click="emit('save')">
+                {{ saveLabel }}
+                <IconGlyph name="chevron" width="16" height="16" />
+              </button>
+              <button class="btn btn-ghost assign-inline-button" @click="emit('reset')">
+                Reset form
+              </button>
+            </div>
           </div>
-          <div class="mono" style="font-size: 11px; opacity: 0.5; margin-bottom: 12px;">
-            Items + tip must equal the bill total
-          </div>
-          <button class="btn btn-accent btn-block" :disabled="saving || !canCreateBill" @click="emit('save')">
-            {{ saveLabel }}
-            <IconGlyph name="chevron" width="16" height="16" />
-          </button>
-          <button class="btn btn-ghost btn-block" style="margin-top: 10px;" @click="emit('reset')">
-            Reset form
-          </button>
         </div>
 
         <div v-if="errorMessage" style="padding: 12px 14px; border-radius: 16px; background: #fff0ec; color: #7d2f21; border: 1px solid rgba(255,84,54,0.2); font-size: 13px;">
@@ -292,7 +291,7 @@ const layoutOptions = [
                 </label>
 
                 <label style="display: grid; gap: 6px;">
-                  <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Amount</span>
+                  <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Price</span>
                   <input
                     :value="item.amount"
                     type="text"
@@ -333,7 +332,7 @@ const layoutOptions = [
               <thead>
                 <tr class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
                   <th style="text-align: left; padding: 10px 8px;">Item</th>
-                  <th style="text-align: left; padding: 10px 8px;">Amount</th>
+                  <th style="text-align: left; padding: 10px 8px;">Price</th>
                   <th style="text-align: left; padding: 10px 8px;">Assigned</th>
                   <th style="padding: 10px 8px;" />
                 </tr>

@@ -273,7 +273,7 @@ const layoutOptions = [
                 </label>
 
                 <label style="display: grid; gap: 6px;">
-                  <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Amount</span>
+                  <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Price</span>
                   <input
                     :value="item.amount"
                     type="text"
@@ -332,7 +332,7 @@ const layoutOptions = [
               }"
             >
               <div style="padding-left: 10px;">Item</div>
-              <div style="text-align: center;">Amount</div>
+              <div style="text-align: center;">Price</div>
               <div v-for="membership in selectedGroup.memberships" :key="`head-${membership.personId}`" style="text-align: center;">
                 {{ membership.person.name.charAt(0) }}
               </div>
