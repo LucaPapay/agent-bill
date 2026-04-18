@@ -220,6 +220,27 @@ export function useBillAnalysisStream() {
     })
   }
 
+  function openRevisionStream(message: string, people: string[] = [], options: { pushUserMessage?: boolean, statusMessage?: string } = {}) {
+    stop()
+    assistantText.value = ''
+    error.value = ''
+    status.value = 'starting'
+
+    if (options.pushUserMessage !== false) {
+      pushFeed('user', message)
+    }
+
+    if (options.statusMessage) {
+      pushFeed('log', options.statusMessage)
+    }
+
+    openStream(useOrpc().reviseBillSplitStream({
+      chatId: chatId.value,
+      message,
+      people,
+    }))
+  }
+
   async function revise(message: string, people: string[] = []) {
     const nextMessage = String(message || '').trim()
 
@@ -227,18 +248,26 @@ export function useBillAnalysisStream() {
       return null
     }
 
-    stop()
-    assistantText.value = ''
-    error.value = ''
-    status.value = 'starting'
-    pushFeed('user', nextMessage)
-    pushFeed('log', 'Penny is revising the split...')
+    openRevisionStream(nextMessage, people, {
+      statusMessage: 'Penny is revising the split...',
+    })
 
-    openStream(useOrpc().reviseBillSplitStream({
-      chatId: chatId.value,
-      message: nextMessage,
+    return null
+  }
+
+  async function requestSplitQuestion(people: string[] = []) {
+    if (!chatId.value || !receipt.value) {
+      return null
+    }
+
+    openRevisionStream(
+      'Ask me one short question that will give you enough information to create the split for this receipt. Do not create the split yet.',
       people,
-    }))
+      {
+        pushUserMessage: false,
+        statusMessage: 'Penny is preparing the split question...',
+      },
+    )
 
     return null
   }
@@ -257,6 +286,7 @@ export function useBillAnalysisStream() {
     reset,
     result,
     revise,
+    requestSplitQuestion,
     start,
     startFromFile,
     status,
