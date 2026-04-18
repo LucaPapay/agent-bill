@@ -23,6 +23,7 @@ See [app explanation.md](</Users/lucapapay/dev/agent-bill/app explanation.md>) f
 - Prefer one obvious happy path over framework cleverness.
 - Keep everything local-first for now.
 - Do not add auth yet.
+- Other agents may be working in parallel; ignore unrelated changes you did not make.
 
 ## App Shape
 
