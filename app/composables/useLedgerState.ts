@@ -4,6 +4,7 @@ let loadingPromise: Promise<void> | null = null
 
 export function useLedgerState() {
   const api = useOrpc()
+  const { user } = useUserSession()
 
   const ledger = useState<any>('ledger-state:ledger', () => ({
     groups: [],
@@ -105,13 +106,53 @@ export function useLedgerState() {
     })),
   )
 
-  const totalOpenAmountCents = computed(() =>
-    ledger.value.groups.reduce(
-      (sum: number, group: any) =>
-        sum + (group.simplifiedTransfers || []).reduce((groupSum: number, transfer: any) => groupSum + transfer.amountCents, 0),
-      0,
-    ),
-  )
+  const currentPersonId = computed(() => user.value?.personId || '')
+
+  const homeGroupBalances = computed(() => {
+    const personId = currentPersonId.value
+
+    return ledger.value.groups
+      .map((group: any) => {
+        const outgoingCents = (group.simplifiedTransfers || []).reduce((sum: number, transfer: any) => {
+          if (transfer.fromPersonId !== personId) {
+            return sum
+          }
+
+          return sum + transfer.amountCents
+        }, 0)
+
+        const incomingCents = (group.simplifiedTransfers || []).reduce((sum: number, transfer: any) => {
+          if (transfer.toPersonId !== personId) {
+            return sum
+          }
+
+          return sum + transfer.amountCents
+        }, 0)
+
+        const paymentCount = (group.simplifiedTransfers || []).filter((transfer: any) =>
+          transfer.fromPersonId === personId || transfer.toPersonId === personId,
+        ).length
+        const openCents = outgoingCents + incomingCents
+
+        return {
+          amountCents: outgoingCents || incomingCents,
+          amountLabel: formatCents(outgoingCents || incomingCents),
+          directionLabel: outgoingCents ? 'You owe' : incomingCents ? 'Owed to you' : 'Settled',
+          groupId: group.id,
+          groupName: group.name,
+          helperLabel: paymentCount ? `${paymentCount} open ${paymentCount === 1 ? 'payment' : 'payments'}` : `${group.bills.length} saved ${group.bills.length === 1 ? 'bill' : 'bills'}`,
+          incomingCents,
+          outgoingCents,
+          openCents,
+          tone: outgoingCents ? 'tomato' : incomingCents ? 'mint' : 'muted',
+        }
+      })
+      .sort((left: any, right: any) => right.openCents - left.openCents || left.groupName.localeCompare(right.groupName))
+  })
+
+  const totalYouOweCents = computed(() => homeGroupBalances.value.reduce((sum: number, group: any) => sum + group.outgoingCents, 0))
+  const totalOwedToYouCents = computed(() => homeGroupBalances.value.reduce((sum: number, group: any) => sum + group.incomingCents, 0))
+  const homeNetBalanceCents = computed(() => totalOwedToYouCents.value - totalYouOweCents.value)
 
   const totalBills = computed(() => allBills.value.length)
 
@@ -121,14 +162,21 @@ export function useLedgerState() {
       month: 'short',
       weekday: 'short',
     }).format(new Date()),
+    groupBalances: homeGroupBalances.value,
     groupsCount: ledger.value.groups.length,
-    openAmountLabel: formatCents(totalOpenAmountCents.value),
-    pendingPayments: ledger.value.groups.reduce(
-      (sum: number, group: any) => sum + (group.simplifiedTransfers || []).length,
+    incomingPayments: homeGroupBalances.value.reduce(
+      (sum: number, group: any) => sum + (group.incomingCents ? 1 : 0),
       0,
     ),
+    netBalanceLabel: formatCents(Math.abs(homeNetBalanceCents.value)),
+    netBalanceTitle: homeNetBalanceCents.value > 0 ? 'You are owed' : homeNetBalanceCents.value < 0 ? 'You owe' : 'All settled',
+    netBalanceTone: homeNetBalanceCents.value > 0 ? 'mint' : homeNetBalanceCents.value < 0 ? 'tomato' : 'muted',
+    owedToYouLabel: formatCents(totalOwedToYouCents.value),
     peopleCount: ledger.value.people.length,
     totalBills: totalBills.value,
+    youOweLabel: formatCents(totalYouOweCents.value),
+    yourOpenGroupsCount: homeGroupBalances.value.reduce((sum: number, group: any) => sum + (group.openCents ? 1 : 0), 0),
+    yourOutgoingPayments: homeGroupBalances.value.reduce((sum: number, group: any) => sum + (group.outgoingCents ? 1 : 0), 0),
   }))
 
   const canAddPersonToGroup = computed(() =>

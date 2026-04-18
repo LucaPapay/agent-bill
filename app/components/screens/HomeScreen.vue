@@ -55,24 +55,87 @@ const emit = defineEmits(['nav', 'open-bill'])
 
         <div style="background: var(--ink); color: var(--cream); border-radius: 28px; padding: 24px 22px; position: relative; overflow: visible; min-height: 100%;">
           <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.6;">
-            Open settlement
+            {{ summary.netBalanceTitle }}
           </div>
-          <div class="h-display" style="font-size: clamp(56px, 8vw, 86px); line-height: 1; margin-top: 10px; letter-spacing: -0.03em;">
-            {{ summary.openAmountLabel }}
+
+          <div
+            class="h-display"
+            style="font-size: clamp(56px, 8vw, 86px); line-height: 1; margin-top: 10px; letter-spacing: -0.03em;"
+            :style="{
+              color: summary.netBalanceTone === 'tomato'
+                ? 'var(--tomato)'
+                : summary.netBalanceTone === 'mint'
+                  ? 'var(--cream)'
+                  : 'var(--cream)',
+            }"
+          >
+            {{ summary.netBalanceLabel }}
           </div>
+
           <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;">
-            <button class="chip chip-action" type="button" style="background: var(--tomato);" @click="emit('nav', 'settlements')">
-              {{ summary.pendingPayments }} pending payments
+            <button class="chip chip-action" type="button" style="background: var(--tomato);" @click="emit('nav', 'groups')">
+              You owe {{ summary.youOweLabel }}
             </button>
-            <button class="chip chip-action" type="button" style="background: rgba(255,255,255,0.12);" @click="emit('nav', 'groups')">
-              {{ summary.groupsCount }} groups
+            <button class="chip chip-action" type="button" style="background: rgba(104, 217, 151, 0.2); color: var(--mint);" @click="emit('nav', 'groups')">
+              Owed to you {{ summary.owedToYouLabel }}
             </button>
             <button class="chip chip-action" type="button" style="background: rgba(255,255,255,0.12);" @click="emit('nav', 'bills')">
-              {{ summary.totalBills }} saved bills
+              {{ summary.yourOpenGroupsCount }} active groups
             </button>
           </div>
+
+          <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;">
+              <div class="mono" style="font-size: 11px; color: rgba(255,255,255,0.58); text-transform: uppercase; letter-spacing: 0.1em;">
+                By group
+              </div>
+              <button class="mono" type="button" style="font-size: 11px; color: rgba(255,255,255,0.58);" @click="emit('nav', 'groups')">
+                {{ summary.groupsCount }} groups in ledger
+              </button>
+            </div>
+
+            <div v-if="summary.groupBalances.length" style="display: grid; gap: 8px; margin-top: 12px;">
+              <div
+                v-for="group in summary.groupBalances"
+                :key="group.groupId"
+                style="display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; background: rgba(255,255,255,0.06);"
+              >
+                <div>
+                  <div style="font-weight: 700; font-size: 14px;">
+                    {{ group.groupName }}
+                  </div>
+                  <div class="mono" style="font-size: 11px; color: rgba(255,255,255,0.58); margin-top: 4px;">
+                    {{ group.helperLabel }}
+                  </div>
+                </div>
+
+                <div style="text-align: right;">
+                  <div class="mono" style="font-size: 11px; color: rgba(255,255,255,0.58);">
+                    {{ group.directionLabel }}
+                  </div>
+                  <div
+                    style="font-size: 14px; font-weight: 700; margin-top: 4px;"
+                    :style="{
+                      color: group.tone === 'tomato'
+                        ? 'var(--tomato)'
+                        : group.tone === 'mint'
+                          ? 'var(--mint)'
+                          : 'rgba(255,255,255,0.72)',
+                    }"
+                  >
+                    {{ group.amountLabel }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-else style="margin-top: 12px; padding: 10px 12px; border-radius: 16px; background: rgba(255,255,255,0.06); font-size: 13px;">
+              Start a group to see what you owe and what is coming back to you.
+            </div>
+          </div>
+
           <div style="position: absolute; right: 8px; top: -10px; transform: rotate(6deg); background: var(--marigold); color: var(--ink); padding: 4px 14px; font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; box-shadow: 1px 1px 0 rgba(0,0,0,0.15);">
-            LOCAL · LEDGER
+            YOUR · BALANCE
           </div>
         </div>
       </div>
