@@ -1,6 +1,7 @@
 import { eventIterator } from '@orpc/server'
 import { z } from 'zod'
 import { getBillChat, listBillChats } from '../../lib/db'
+import { transcribeVoiceNote } from '../../lib/openai-transcription'
 import {
   runPennyAnalysis,
   runPennyRevision,
@@ -14,6 +15,8 @@ import {
   analysisInputSchema,
   analysisResultSchema,
   revisionInputSchema,
+  voiceTranscriptionInputSchema,
+  voiceTranscriptionResultSchema,
 } from '../../lib/receipt-contract'
 import { protectedRpc } from '../base'
 
@@ -66,6 +69,13 @@ export const listBillChatsProcedure = protectedRpc
     return await listBillChats(context.personId)
   })
 
+export const transcribeVoiceProcedure = protectedRpc
+  .input(voiceTranscriptionInputSchema)
+  .output(voiceTranscriptionResultSchema)
+  .handler(async ({ input }) => {
+    return await transcribeVoiceNote(input)
+  })
+
 export const analysisRouter = {
   analyzeBill,
   analyzeBillStream,
@@ -74,4 +84,5 @@ export const analysisRouter = {
   listBillChats: listBillChatsProcedure,
   reviseBillSplit,
   reviseBillSplitStream,
+  transcribeVoice: transcribeVoiceProcedure,
 }

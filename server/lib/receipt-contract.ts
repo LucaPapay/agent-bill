@@ -80,6 +80,18 @@ export const revisionInputSchema = z.object({
   userMessage: z.string().trim().optional(),
 })
 
+export const voiceTranscriptionInputSchema = z.object({
+  audioBase64: z.string().min(1),
+  groupName: z.string().trim().optional(),
+  groups: z.array(z.string().trim().min(1)).default([]),
+  mimeType: z.string().trim().min(1),
+  people: z.array(z.string().trim().min(1)).default([]),
+})
+
+export const voiceTranscriptionResultSchema = z.object({
+  text: z.string(),
+})
+
 export const splitEntrySchema = z.object({
   amountCents: z.number().int().nonnegative(),
   note: z.string(),

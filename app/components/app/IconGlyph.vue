@@ -93,6 +93,23 @@ defineProps({
   </svg>
 
   <svg
+    v-else-if="name === 'mic'"
+    :width="width"
+    :height="height"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z" />
+    <path d="M6.5 10.5a5.5 5.5 0 0 0 11 0" />
+    <path d="M12 16v5" />
+    <path d="M8.5 21h7" />
+  </svg>
+
+  <svg
     v-else-if="name === 'sparkle'"
     :width="width"
     :height="height"
