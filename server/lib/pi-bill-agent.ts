@@ -79,6 +79,8 @@ function buildParticipantRules(people: string[]) {
   return [
     '- Do not invent participant names.',
     '- If the participant list is still unclear after reading the receipt and the user instruction, call ask_follow_up_question.',
+    '- Do not call submit_split_plan until you have real participant names.',
+    '- Ask which group this belongs to or who was there.',
     '',
     'Participants: not provided yet.',
   ]
@@ -258,6 +260,10 @@ function getSplitPlanError({
 
   if (!receipt) {
     return 'Split plan rejected. No parsed receipt is available.'
+  }
+
+  if (!people.length) {
+    return 'Split plan rejected. No participant list is available yet. Ask a follow-up question instead of inventing names.'
   }
 
   if (!participantNames.length || participantNames.some((name: string) => !name)) {
