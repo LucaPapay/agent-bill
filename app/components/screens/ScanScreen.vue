@@ -808,12 +808,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <PennyLoadingIndicator
-            v-if="isPennyLoading"
-            :loading-chat="analysis.loadingChat.value"
-            :status="pennyLoadingStatus"
-          />
-
           <div v-if="previewUrl" class="scan-chat-row">
             <div class="scan-avatar">
               <IconGlyph name="sparkle" width="16" height="16" />
@@ -1014,6 +1008,12 @@ onBeforeUnmount(() => {
               {{ entry.text }}
             </div>
           </div>
+
+          <PennyLoadingIndicator
+            v-if="isPennyLoading"
+            :loading-chat="analysis.loadingChat.value"
+            :status="pennyLoadingStatus"
+          />
         </div>
 
         <div class="scan-chat-footer">
