@@ -35,6 +35,44 @@ See [app explanation.md](</Users/lucapapay/dev/agent-bill/app explanation.md>) f
 3. Bill analysis enters through oRPC at `/rpc`.
 4. Every successful analysis run gets stored in Postgres.
 
+## Backend Layout
+
+- `server/orpc/router.ts` is now only the top-level oRPC router assembly.
+- `server/orpc/routes/analysis.ts` owns analysis RPC procedures.
+- `server/orpc/routes/ledger.ts` owns manual-ledger RPC procedures.
+- `server/orpc/routes/health.ts` owns the health/status RPC procedure.
+- `server/lib/ledger/service.ts` is the orchestration layer for manual-ledger actions:
+  - it combines ledger math from `server/lib/group-ledger.ts`
+  - with persistence from the database modules
+- `server/lib/db.ts` is now just a thin export surface for the database layer.
+- `server/lib/db/client.ts` owns the shared Postgres client and one-time schema bootstrap.
+- `server/lib/db/schema.ts` owns the table/index creation SQL.
+- `server/lib/db/bill-runs.ts` stores receipt-analysis runs.
+- `server/lib/db/groups.ts` owns people, groups, and group membership queries/writes.
+- `server/lib/db/bills.ts` owns bill create/update/delete persistence and the settlement lock check used before destructive bill edits.
+- `server/lib/db/settlements.ts` owns settlement payment persistence and open-settlement validation.
+- `server/lib/db/ledger-snapshot.ts` builds the full client-facing ledger snapshot shape from Postgres rows.
+- Receipt-analysis backend flow still lives in:
+  - `server/lib/bill-pipeline.ts` for the end-to-end analysis path
+  - `server/lib/openai-receipt.ts` for OpenAI receipt extraction
+  - `server/lib/pi-bill-agent.ts` for the Pi split agent loop
+  - `server/lib/analysis-jobs.ts` for in-memory streamed analysis jobs and SSE fanout
+
+## Backend Request Flow
+
+1. A frontend action calls an oRPC procedure under `server/orpc/routes/`.
+2. The route handler validates input and hands off to a small backend service or pipeline.
+3. Manual-ledger writes go through `server/lib/ledger/service.ts`, which computes member shares/transfers first, then calls the database modules.
+4. Database modules in `server/lib/db/` own persistence only:
+  - schema/bootstrap
+  - focused writes and reads by domain
+  - rebuilding the full ledger snapshot returned to the UI
+5. Receipt analysis goes through `server/lib/bill-pipeline.ts`:
+  - local fallback when no `OPENAI_API_KEY`
+  - OpenAI receipt extraction when a key exists
+  - Pi agent split planning on top of the normalized receipt
+6. Successful receipt analyses are stored as `bill_runs`.
+
 ## Current Flow
 
 1. User uploads a receipt image or pastes bill text.
