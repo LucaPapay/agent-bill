@@ -14,10 +14,12 @@
   },
   "dependencies": {
     "@mariozechner/pi-ai": "^0.67.68",
+    "@mariozechner/pi-coding-agent": "^0.67.68",
     "@orpc/client": "^1.13.14",
     "@orpc/server": "^1.13.14",
     "@tailwindcss/vite": "^4.2.2",
     "nuxt": "^4.4.2",
+    "openai": "^6.34.0",
     "postgres": "^3.4.9",
     "tailwindcss": "^4.2.2",
     "vue": "^3.5.32",

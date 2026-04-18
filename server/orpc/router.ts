@@ -1,9 +1,8 @@
 import { os } from '@orpc/server'
 import { z } from 'zod'
-import { createLocalAnalysis, normalizePeople, normalizePiAnalysis } from '../lib/bill-analysis'
-import { createBillRecord, createGroup, createPerson, addPersonToGroup, getGroupMemberIds, getLedgerSnapshot, saveBillRun } from '../lib/db'
+import { createBillRecord, createGroup, createPerson, addPersonToGroup, getGroupMemberIds, getLedgerSnapshot } from '../lib/db'
 import { buildBillLedger } from '../lib/group-ledger'
-import { analyzeBillWithPi } from '../lib/pi-analysis'
+import { runBillAnalysisPipeline } from '../lib/bill-pipeline'
 
 const analyzeBill = os
   .input(z.object({
@@ -13,44 +12,7 @@ const analyzeBill = os
     rawText: z.string().trim().optional(),
     title: z.string().trim().min(1).default('Untitled bill'),
   }))
-  .handler(async ({ input }) => {
-    const people = normalizePeople(input.people)
-    const notes: string[] = []
-    const piAnalysis = await analyzeBillWithPi({
-      imageBase64: input.imageBase64,
-      mimeType: input.mimeType,
-      people,
-      rawText: input.rawText,
-    })
-
-    if (!piAnalysis && input.imageBase64 && !process.env.OPENAI_API_KEY) {
-      notes.push('OPENAI_API_KEY is not set, so the app fell back to local parsing.')
-    }
-
-    const analysis = piAnalysis
-      ? normalizePiAnalysis({
-          imageProvided: Boolean(input.imageBase64),
-          notes,
-          people,
-          piAnalysis,
-          title: input.title,
-        })
-      : createLocalAnalysis({
-          imageProvided: Boolean(input.imageBase64),
-          notes,
-          people,
-          rawText: input.rawText,
-          title: input.title,
-        })
-
-    const run = await saveBillRun(analysis)
-
-    return {
-      ...analysis,
-      runId: run.id,
-      savedAt: run.createdAt,
-    }
-  })
+  .handler(async ({ input }) => runBillAnalysisPipeline(input))
 
 const getLedger = os.handler(async () => {
   return await getLedgerSnapshot()
@@ -129,7 +91,9 @@ const createLedgerBill = os
 const health = os.handler(() => ({
   databaseConfigured: Boolean(useRuntimeConfig().databaseUrl),
   name: 'agent-bill',
+  openaiReady: Boolean(process.env.OPENAI_API_KEY),
   piReady: Boolean(process.env.OPENAI_API_KEY),
+  streamTransport: 'sse',
   timestamp: new Date().toISOString(),
 }))
 

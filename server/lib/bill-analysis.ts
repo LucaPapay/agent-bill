@@ -45,6 +45,7 @@ function normalizeItems(items: any[]) {
     .map((item: any, index: number) => ({
       name: String(item?.name || `Item ${index + 1}`).trim() || `Item ${index + 1}`,
       amountCents: toCents(item?.amountCents ?? item?.priceCents ?? item?.amount ?? item?.price),
+      quantity: Math.max(1, Math.round(Number(item?.quantity || 1))),
     }))
     .filter((item: any) => item.amountCents > 0)
 }
@@ -158,9 +159,16 @@ export function createLocalAnalysis({ title, people, rawText, imageProvided, not
   }
 
   return {
+    billDate: '',
+    currency: 'EUR',
     title,
     items: normalizedItems,
+    merchant: title,
     notes,
+    openai: {
+      model: null,
+      used: false,
+    },
     pi: {
       model: null,
       used: false,
@@ -188,9 +196,16 @@ export function normalizePiAnalysis({ title, people, imageProvided, notes = [] a
   const totalCents = toCents(piAnalysis?.totalCents) || computedTotal
 
   return {
+    billDate: '',
+    currency: 'EUR',
     title,
     items,
+    merchant: title,
     notes,
+    openai: {
+      model: process.env.OPENAI_RECEIPT_MODEL || 'gpt-4.1-mini',
+      used: false,
+    },
     pi: {
       model: 'openai:gpt-4o-mini',
       used: true,
@@ -201,5 +216,65 @@ export function normalizePiAnalysis({ title, people, imageProvided, notes = [] a
     taxCents,
     tipCents,
     totalCents,
+  }
+}
+
+export function normalizeExtractedReceipt(receipt: any) {
+  const items = normalizeItems(receipt?.items || [])
+  const subtotalFromItems = items.reduce((sum: number, item: any) => sum + item.amountCents, 0)
+  const subtotalCents = toCents(receipt?.subtotalCents) || subtotalFromItems
+  const taxCents = toCents(receipt?.taxCents)
+  const tipCents = toCents(receipt?.tipCents)
+  const totalCents = toCents(receipt?.totalCents) || subtotalCents + taxCents + tipCents
+
+  return {
+    billDate: String(receipt?.billDate || '').trim(),
+    currency: String(receipt?.currency || 'EUR').trim() || 'EUR',
+    items,
+    merchant: String(receipt?.merchant || '').trim(),
+    notes: Array.isArray(receipt?.notes) ? receipt.notes.map((note: any) => String(note).trim()).filter(Boolean) : [],
+    subtotalCents,
+    taxCents,
+    tipCents,
+    totalCents,
+  }
+}
+
+export function createAgentAnalysis({ title, people, plan, receipt, imageProvided }: {
+  title: string
+  people: string[]
+  plan: any
+  receipt: any
+  imageProvided: boolean
+}) {
+  const notes = [
+    ...(receipt?.notes || []),
+    ...(plan?.notes || []),
+  ]
+    .map((note: any) => String(note || '').trim())
+    .filter(Boolean)
+
+  return {
+    billDate: receipt.billDate,
+    currency: receipt.currency,
+    items: receipt.items,
+    merchant: receipt.merchant || title,
+    notes,
+    openai: {
+      model: process.env.OPENAI_RECEIPT_MODEL || 'gpt-4.1-mini',
+      used: true,
+    },
+    pi: {
+      model: process.env.PI_AGENT_MODEL || 'gpt-5-mini',
+      used: true,
+    },
+    receipt,
+    source: imageProvided ? 'openai-image+pi-agent' : 'openai-text+pi-agent',
+    split: normalizeSplit(plan?.split, people, receipt.totalCents),
+    summary: String(plan?.summary || buildSummary(receipt.items.length, receipt.totalCents, 'agentic')).trim(),
+    taxCents: receipt.taxCents,
+    tipCents: receipt.tipCents,
+    title,
+    totalCents: receipt.totalCents,
   }
 }
