@@ -1,19 +1,35 @@
 import { randomUUID } from 'node:crypto'
 import { db, ensureSchema } from './client'
 
+function parseJsonValue(value: unknown) {
+  if (typeof value !== 'string') {
+    return value
+  }
+
+  try {
+    return JSON.parse(value)
+  } catch {
+    return value
+  }
+}
+
 function normalizePeople(value: unknown) {
-  if (!Array.isArray(value)) {
+  const parsedValue = parseJsonValue(value)
+
+  if (!Array.isArray(parsedValue)) {
     return []
   }
 
-  return value
+  return parsedValue
     .map(entry => String(entry || '').trim())
     .filter(Boolean)
 }
 
 function withRunMetadata(row: any) {
+  const payload = parseJsonValue(row.payload)
+
   return {
-    ...row.payload,
+    ...(payload && typeof payload === 'object' ? payload : {}),
     runId: row.id,
     savedAt: row.created_at,
   }
@@ -30,10 +46,11 @@ export async function createBillChat({
 }) {
   await ensureSchema()
 
+  const sql = db()
   const id = randomUUID()
-  const [insertedRow] = await db()`
+  const [insertedRow] = await sql`
     insert into bill_chats (id, person_id, title, people)
-    values (${id}, ${personId}, ${title}, ${JSON.stringify(people)}::jsonb)
+    values (${id}, ${personId}, ${title}, ${sql.json(people)})
     returning id, created_at, updated_at
   `
 
@@ -62,7 +79,7 @@ export async function saveBillRun({
       update bill_chats
       set
         title = ${payload.title},
-        people = ${JSON.stringify(normalizedPeople)}::jsonb,
+        people = ${sql.json(normalizedPeople)},
         updated_at = now()
       where id = ${chatId}
         and person_id = ${personId}
@@ -75,7 +92,7 @@ export async function saveBillRun({
 
     const insertedRuns = await sql`
       insert into bill_runs (id, chat_id, person_id, title, payload)
-      values (${id}, ${chatId}, ${personId}, ${payload.title}, ${JSON.stringify(payload)}::jsonb)
+      values (${id}, ${chatId}, ${personId}, ${payload.title}, ${sql.json(payload)})
       returning id, created_at
     `
 
@@ -139,7 +156,7 @@ export async function listBillChats(personId: string) {
   `
 
   return rows.map((row: any) => {
-    const payload = row.payload || {}
+    const payload = parseJsonValue(row.payload) || {}
 
     return {
       chatId: row.id,

@@ -38,6 +38,12 @@ export async function createSchema(sql: any) {
   `
 
   await sql`
+    update bill_chats
+    set people = (people #>> '{}')::jsonb
+    where jsonb_typeof(people) = 'string'
+  `
+
+  await sql`
     create table if not exists groups (
       id text primary key,
       name text not null,
@@ -204,6 +210,12 @@ export async function createSchema(sql: any) {
   await sql`
     alter table bill_runs
     add column if not exists chat_id text references bill_chats(id) on delete cascade
+  `
+
+  await sql`
+    update bill_runs
+    set payload = (payload #>> '{}')::jsonb
+    where jsonb_typeof(payload) = 'string'
   `
 
   await sql`

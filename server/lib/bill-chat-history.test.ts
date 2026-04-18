@@ -79,4 +79,16 @@ describe('appendBillChatEvent', () => {
       },
     ])
   })
+
+  it('persists backend errors as log entries', () => {
+    expect(appendBillChatEvent([], {
+      type: 'error',
+      message: 'The Pi agent loop failed before the split finished.',
+    })).toEqual([
+      {
+        text: 'The Pi agent loop failed before the split finished.',
+        who: 'log',
+      },
+    ])
+  })
 })

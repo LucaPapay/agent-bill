@@ -193,39 +193,39 @@ function subscribeToSession({
 }) {
   return session.subscribe((event: any) => {
     if (event.type === 'agent_start') {
-      onEvent({
+      void Promise.resolve(onEvent({
         type: 'status',
         phase: 'agent',
         message: statusMessage,
-      })
+      })).catch(() => {})
       return
     }
 
     if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
       sawActivity.value = true
-      onEvent({
+      void Promise.resolve(onEvent({
         type: 'agent_text_delta',
         delta: event.assistantMessageEvent.delta,
-      })
+      })).catch(() => {})
       return
     }
 
     if (event.type === 'tool_execution_start') {
       sawActivity.value = true
-      onEvent({
+      void Promise.resolve(onEvent({
         type: 'agent_tool_start',
         toolName: event.toolName,
-      })
+      })).catch(() => {})
       return
     }
 
     if (event.type === 'tool_execution_end') {
       sawActivity.value = true
-      onEvent({
+      void Promise.resolve(onEvent({
         type: 'agent_tool_end',
         isError: event.isError,
         toolName: event.toolName,
-      })
+      })).catch(() => {})
     }
   })
 }
@@ -245,21 +245,21 @@ function startHeartbeats({
 }) {
   const firstHeartbeat = setTimeout(() => {
     if (!sawActivity.value && !finalPlan.value) {
-      onEvent({
+      void Promise.resolve(onEvent({
         type: 'agent_progress',
         message: firstMessage,
         stage: 'thinking',
-      })
+      })).catch(() => {})
     }
   }, 5000)
 
   const secondHeartbeat = setTimeout(() => {
     if (!sawActivity.value && !finalPlan.value) {
-      onEvent({
+      void Promise.resolve(onEvent({
         type: 'agent_progress',
         message: secondMessage,
         stage: 'thinking',
-      })
+      })).catch(() => {})
     }
   }, 12000)
 
@@ -301,7 +301,7 @@ export async function runPiBillAgent({
       stage: Type.String({ description: 'Current stage label.' }),
     }),
     execute: async (_toolCallId, params) => {
-      onEvent({
+      await onEvent({
         type: 'agent_progress',
         message: params.message,
         stage: params.stage,
@@ -320,7 +320,7 @@ export async function runPiBillAgent({
     description: 'Parse the uploaded receipt image or OCR text into a structured receipt.',
     parameters: Type.Object({}),
     execute: async () => {
-      onEvent({
+      await onEvent({
         type: 'agent_progress',
         message: 'Penny is reading the receipt.',
         stage: 'extract',
@@ -330,9 +330,9 @@ export async function runPiBillAgent({
         extractedReceipt = normalizeExtractedReceipt(await extractReceiptWithOpenAI({
           imageBase64,
           mimeType,
-          onEvent: (payload) => {
+          onEvent: async (payload) => {
             if (payload.type === 'receipt_extracted') {
-              onEvent(payload)
+              await onEvent(payload)
             }
           },
           people,
@@ -380,7 +380,7 @@ export async function runPiBillAgent({
 
       finalPlan.value = params
 
-      onEvent({
+      await onEvent({
         type: 'agent_plan_submitted',
         plan: params,
       })
@@ -461,7 +461,7 @@ export async function runPiBillRevisionAgent({
       stage: Type.String({ description: 'Current stage label.' }),
     }),
     execute: async (_toolCallId, params) => {
-      onEvent({
+      await onEvent({
         type: 'agent_progress',
         message: params.message,
         stage: params.stage,
@@ -503,7 +503,7 @@ export async function runPiBillRevisionAgent({
 
       finalPlan.value = params
 
-      onEvent({
+      await onEvent({
         type: 'agent_plan_submitted',
         plan: params,
       })

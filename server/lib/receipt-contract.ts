@@ -132,6 +132,10 @@ export const analysisChatSummarySchema = z.object({
 
 export const analysisEventSchema = z.discriminatedUnion('type', [
   z.object({
+    type: z.literal('chat_started'),
+    chatId: z.string(),
+  }),
+  z.object({
     type: z.literal('status'),
     phase: z.enum(['queued', 'extracting', 'agent']),
     message: z.string(),

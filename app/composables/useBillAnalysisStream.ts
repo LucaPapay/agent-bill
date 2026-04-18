@@ -1,6 +1,7 @@
 import { consumeEventIterator } from '@orpc/client'
 
 let currentCancel: null | (() => Promise<void>) = null
+let pollTimer: null | ReturnType<typeof setTimeout> = null
 
 function trimFeed(feed: Array<{ text: string; who: string }>, entry: { text: string; who: string }) {
   return [...feed, entry].slice(-120)
@@ -32,11 +33,20 @@ export function useBillAnalysisStream() {
   const result = useState<any>('bill-analysis:result', () => null)
   const status = useState('bill-analysis:status', () => 'idle')
 
+  function stopPolling() {
+    if (pollTimer) {
+      clearTimeout(pollTimer)
+      pollTimer = null
+    }
+  }
+
   function stop() {
     if (currentCancel) {
       void currentCancel()
       currentCancel = null
     }
+
+    stopPolling()
   }
 
   function clearCurrent() {
@@ -67,7 +77,37 @@ export function useBillAnalysisStream() {
     jobId.value = nextResult?.runId || ''
     receipt.value = nextResult?.receipt || null
     result.value = nextResult
-    status.value = 'complete'
+    status.value = Array.isArray(nextResult?.split) && nextResult.split.length ? 'complete' : 'agent'
+
+    if (status.value === 'complete') {
+      stopPolling()
+    }
+  }
+
+  function schedulePoll(nextChatId: string, delay = 1200) {
+    stopPolling()
+
+    if (!nextChatId) {
+      return
+    }
+
+    pollTimer = setTimeout(() => {
+      void useOrpc().getBillChat({ chatId: nextChatId }).then(
+        (value: any) => {
+          applyResult(value)
+
+          if (!Array.isArray(value?.split) || !value.split.length) {
+            schedulePoll(nextChatId)
+            return
+          }
+
+          void loadChats()
+        },
+        () => {
+          schedulePoll(nextChatId, 2000)
+        },
+      )
+    }, delay)
   }
 
   function openStream(stream: any) {
@@ -83,6 +123,10 @@ export function useBillAnalysisStream() {
         error.value = streamError?.message || 'The live analysis stream disconnected.'
         status.value = 'error'
         pushFeed('log', error.value)
+
+        if (chatId.value) {
+          schedulePoll(chatId.value, 800)
+        }
       },
       onFinish: () => {
         currentCancel = null
@@ -91,6 +135,11 @@ export function useBillAnalysisStream() {
   }
 
   function applyPayload(payload: any) {
+    if (payload.type === 'chat_started') {
+      chatId.value = payload.chatId
+      return
+    }
+
     if (payload.type === 'status') {
       status.value = payload.phase
       pushFeed(payload.phase === 'agent' ? 'penny' : 'log', payload.message)
@@ -133,6 +182,10 @@ export function useBillAnalysisStream() {
       status.value = 'error'
       pushFeed('log', payload.message)
       stop()
+
+      if (chatId.value) {
+        schedulePoll(chatId.value, 800)
+      }
     }
   }
 
@@ -161,6 +214,11 @@ export function useBillAnalysisStream() {
     return await useOrpc().getBillChat({ chatId: normalizedChatId }).then(
       (value: any) => {
         applyResult(value)
+
+        if (!Array.isArray(value?.split) || !value.split.length) {
+          schedulePoll(normalizedChatId)
+        }
+
         return value
       },
       (loadError: any) => {
