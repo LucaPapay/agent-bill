@@ -18,20 +18,12 @@ function pushEntry(history: any[], who: 'log' | 'penny' | 'user', text: unknown)
   ].slice(-120)
 }
 
-export function createBillChatSeed(input: {
+export function createBillChatSeed(_input: {
   imageBase64?: string
   rawText?: string
   title: string
 }) {
-  if (input.imageBase64) {
-    return pushEntry([], 'user', `Uploaded a receipt for ${input.title}.`)
-  }
-
-  if (input.rawText) {
-    return pushEntry([], 'user', `Started a text-based receipt scan for ${input.title}.`)
-  }
-
-  return pushEntry([], 'user', `Started a receipt scan for ${input.title}.`)
+  return []
 }
 
 export function appendBillChatReply(history: any[], message: string) {
