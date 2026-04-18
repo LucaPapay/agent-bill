@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import IconGlyph from '../app/IconGlyph.vue'
+import BillComposer from '../ledger/BillComposer.vue'
 import ReceiptSplitPreview from '../scan/ReceiptSplitPreview.vue'
 import { useBillAnalysisStream } from '../../composables/useBillAnalysisStream'
 import { useLedgerState } from '../../composables/useLedgerState'
@@ -22,13 +23,38 @@ const selectedFile = ref(null)
 const showCameraCapture = ref(false)
 const scrollRef = ref(null)
 const composerText = ref('')
+const composerSeededChatId = ref('')
 const localGroupId = ref('')
 const leadMessages = ref([])
 const tailMessages = ref([])
 const previewOverlayReady = ref(false)
 
 const { ledger: ledgerData } = ledger
-const { stageBillComposerDraft } = ledger
+const {
+  addBillItem,
+  billItems,
+  billPaidByPersonId,
+  billPreviewShares,
+  billRemainingCents,
+  billTip,
+  billTitle,
+  billTotal,
+  canCreateBill,
+  consumeBillComposerDraft,
+  createBill,
+  errorMessage,
+  formatCents,
+  removeBillItem,
+  resultLayout,
+  saving,
+  selectedBill,
+  selectedGroup: ledgerSelectedGroup,
+  setSelectedGroup,
+  stageBillComposerDraft,
+  toggleBillItemAssignment,
+  updateBillItemAmount,
+  updateBillItemName,
+} = ledger
 
 function getPathChatId() {
   if (typeof window === 'undefined') {
@@ -78,6 +104,15 @@ const parsedItemCount = computed(() => parsedItems.value.length)
 const resolvedCurrency = computed(() => parsedReceipt.value?.currency || 'EUR')
 const noteList = computed(() => parsedReceipt.value?.notes || [])
 const splitRows = computed(() => analysis.result.value?.split || [])
+const splitPeople = computed(() => {
+  if (!selectedGroup.value?.memberships?.length) {
+    return []
+  }
+
+  return selectedGroup.value.memberships
+    .map((membership) => String(membership?.person?.name || '').trim())
+    .filter(Boolean)
+})
 const canPickReceipt = computed(() => Boolean(selectedGroup.value && !isRunning.value && !hasSavedChat.value))
 const canReset = computed(() =>
   Boolean(
@@ -244,6 +279,7 @@ function pushLocalMessage(who, text) {
 
 function resetDraftInputs() {
   composerText.value = ''
+  composerSeededChatId.value = ''
   selectedFile.value = null
   leadMessages.value = []
   tailMessages.value = []
@@ -308,6 +344,7 @@ async function startFileAnalysis(file) {
 
   await analysis.startFromFile({
     file,
+    people: splitPeople.value,
     title,
   })
 }
@@ -370,7 +407,7 @@ async function onSend() {
   }
 
   if (parsedReceipt.value) {
-    await analysis.revise(message)
+    await analysis.revise(message, splitPeople.value)
     return
   }
 
@@ -405,8 +442,14 @@ function clearGroup() {
 }
 
 async function continueToSplit() {
-  if (!selectedGroup.value || !parsedReceipt.value) {
-    return
+  if (!selectedGroup.value || !parsedReceipt.value || !splitRows.value.length) {
+    return false
+  }
+
+  const seedChatId = String(analysis.chatId.value || analysis.result.value?.chatId || '').trim()
+
+  if (seedChatId && composerSeededChatId.value === seedChatId) {
+    return true
   }
 
   stageBillComposerDraft({
@@ -414,7 +457,7 @@ async function continueToSplit() {
       ? parsedItems.value.map((item, index) => ({
           amount: formatAmountInput(item.amountCents || 0),
           assignedPersonIds: [],
-          id: `scan-item-${Date.now()}-${index}`,
+          id: `scan-item-${seedChatId || Date.now()}-${index}`,
           name: item.name || `Item ${index + 1}`,
         }))
       : [],
@@ -425,7 +468,23 @@ async function continueToSplit() {
     groupId: selectedGroup.value.id,
   })
 
-  await navigateTo(`/groups/${selectedGroup.value.id}/bills/new`)
+  setSelectedGroup(selectedGroup.value.id)
+  consumeBillComposerDraft(selectedGroup.value.id)
+  composerSeededChatId.value = seedChatId || selectedGroup.value.id
+  return true
+}
+
+function openBillComposerFromScan() {
+  composerSeededChatId.value = ''
+  void continueToSplit()
+}
+
+function saveComposerBill() {
+  createBill().then((value) => {
+    if (value?.billId && selectedGroup.value) {
+      navigateTo(`/groups/${selectedGroup.value.id}/bills/${value.billId}`)
+    }
+  })
 }
 
 function scrollToBottom() {
@@ -452,6 +511,21 @@ watch(
     scrollToBottom()
   },
   { deep: true },
+)
+
+watch(
+  [
+    () => analysis.chatId.value,
+    () => splitRows.value.length,
+    () => localGroupId.value,
+  ],
+  () => {
+    if (!selectedGroup.value || !splitRows.value.length) {
+      return
+    }
+
+    void continueToSplit()
+  },
 )
 
 watch(() => props.chatId, (nextChatId, previousChatId) => {
@@ -703,15 +777,47 @@ onBeforeUnmount(() => {
                 </div>
               </div>
 
-              <div class="scan-receipt-actions">
-                <button
-                  class="scan-split-button"
-                  @click="continueToSplit"
-                >
-                  Continue to split
-                </button>
-              </div>
             </div>
+          </div>
+
+          <div v-if="parsedReceipt && splitRows.length && ledgerSelectedGroup" class="scan-chat-row">
+            <div class="scan-avatar">
+              <IconGlyph name="sparkle" width="16" height="16" />
+            </div>
+            <button type="button" class="btn btn-ghost" @click="openBillComposerFromScan">
+              Open bill composer
+            </button>
+          </div>
+          <div v-if="parsedReceipt && splitRows.length && ledgerSelectedGroup" class="scan-composer-stage">
+            <BillComposer
+              :bill-items="billItems"
+              :bill-paid-by-person-id="billPaidByPersonId"
+              :bill-preview-shares="billPreviewShares"
+              :bill-remaining-cents="billRemainingCents"
+              :bill-tip="billTip"
+              :bill-title="billTitle"
+              :bill-total="billTotal"
+              :can-create-bill="canCreateBill"
+              :error-message="errorMessage"
+              :format-cents="formatCents"
+              :layout="resultLayout"
+              :save-label="'Save bill'"
+              :saving="saving"
+              :selected-bill="selectedBill"
+              :selected-group="ledgerSelectedGroup"
+              @add-item="addBillItem"
+              @remove-item="removeBillItem"
+              @reset="openBillComposerFromScan"
+              @save="saveComposerBill"
+              @toggle-assignment="toggleBillItemAssignment"
+              @update:bill-paid-by-person-id="billPaidByPersonId = $event"
+              @update:bill-tip="billTip = $event"
+              @update:bill-title="billTitle = $event"
+              @update:bill-total="billTotal = $event"
+              @update:item-amount="updateBillItemAmount"
+              @update:item-name="updateBillItemName"
+              @update:layout="resultLayout = $event"
+            />
           </div>
 
           <div
@@ -1001,6 +1107,14 @@ onBeforeUnmount(() => {
   box-shadow: 0 20px 38px rgba(24, 16, 10, 0.12);
 }
 
+.scan-composer-stage {
+  width: min(100%, 1080px);
+  border-radius: 24px;
+  overflow: hidden;
+  background: rgba(251, 247, 238, 0.96);
+  box-shadow: 0 20px 38px rgba(24, 16, 10, 0.12);
+}
+
 .scan-receipt-head {
   display: flex;
   justify-content: space-between;
@@ -1088,23 +1202,6 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 8px;
   margin-top: 16px;
-}
-
-.scan-receipt-actions {
-  margin-top: 16px;
-}
-
-.scan-split-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 180px;
-  padding: 12px 18px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--ink);
-  color: var(--cream);
-  font-weight: 700;
 }
 
 .scan-note-row {

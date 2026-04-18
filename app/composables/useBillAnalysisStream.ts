@@ -206,13 +206,16 @@ export function useBillAnalysisStream() {
   async function startFromFile({
     file,
     title,
+    people = [],
   }: {
     file: File
     title: string
+    people?: string[]
   }) {
     return await start({
       imageBase64: await fileToBase64(file),
       mimeType: file.type || 'image/jpeg',
+      people,
       title,
     })
   }
