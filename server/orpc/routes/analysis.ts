@@ -2,7 +2,7 @@ import { eventIterator } from '@orpc/server'
 import { z } from 'zod'
 import { runBillAnalysisPipeline, runBillRevisionPipeline } from '../../lib/bill-pipeline'
 import { getBillChat, listBillChats } from '../../lib/db'
-import { streamBillAnalysis, streamBillRevision } from '../../lib/bill-analysis-stream'
+import { streamBillAnalysis, streamBillRevision, streamExistingBillChat } from '../../lib/bill-analysis-stream'
 import {
   analysisChatSummarySchema,
   analysisEventSchema,
@@ -36,6 +36,16 @@ export const reviseBillSplitStream = protectedRpc
     yield* streamBillRevision(input, context.personId)
   })
 
+export const attachBillChatStream = protectedRpc
+  .input(z.object({
+    chatId: z.string().trim().min(1),
+  }))
+  .output(eventIterator(analysisEventSchema))
+  .handler(async function* ({ context, input }) {
+    await getBillChat(context.personId, input.chatId)
+    yield* streamExistingBillChat(input.chatId)
+  })
+
 export const getBillChatProcedure = protectedRpc
   .input(z.object({
     chatId: z.string().trim().min(1),
@@ -54,6 +64,7 @@ export const listBillChatsProcedure = protectedRpc
 export const analysisRouter = {
   analyzeBill,
   analyzeBillStream,
+  attachBillChatStream,
   getBillChat: getBillChatProcedure,
   listBillChats: listBillChatsProcedure,
   reviseBillSplit,

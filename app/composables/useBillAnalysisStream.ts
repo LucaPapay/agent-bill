@@ -1,7 +1,6 @@
 import { consumeEventIterator } from '@orpc/client'
 
 let currentCancel: null | (() => Promise<void>) = null
-let pollTimer: null | ReturnType<typeof setTimeout> = null
 
 function isPendingResult(value: any) {
   const source = String(value?.source || '').trim()
@@ -38,20 +37,11 @@ export function useBillAnalysisStream() {
   const result = useState<any>('bill-analysis:result', () => null)
   const status = useState('bill-analysis:status', () => 'idle')
 
-  function stopPolling() {
-    if (pollTimer) {
-      clearTimeout(pollTimer)
-      pollTimer = null
-    }
-  }
-
   function stop() {
     if (currentCancel) {
       void currentCancel()
       currentCancel = null
     }
-
-    stopPolling()
   }
 
   function clearCurrent() {
@@ -83,39 +73,11 @@ export function useBillAnalysisStream() {
     receipt.value = nextResult?.receipt || null
     result.value = nextResult
     status.value = isPendingResult(nextResult) ? 'agent' : 'complete'
-
-    if (status.value === 'complete') {
-      stopPolling()
-    }
-  }
-
-  function schedulePoll(nextChatId: string, delay = 1200) {
-    stopPolling()
-
-    if (!nextChatId) {
-      return
-    }
-
-    pollTimer = setTimeout(() => {
-      void useOrpc().getBillChat({ chatId: nextChatId }).then(
-        (value: any) => {
-          applyResult(value)
-
-          if (isPendingResult(value)) {
-            schedulePoll(nextChatId)
-            return
-          }
-
-          void loadChats()
-        },
-        () => {
-          schedulePoll(nextChatId, 2000)
-        },
-      )
-    }, delay)
   }
 
   function openStream(stream: any) {
+    stop()
+
     currentCancel = consumeEventIterator(stream, {
       onEvent: (event) => {
         applyPayload(event)
@@ -128,10 +90,6 @@ export function useBillAnalysisStream() {
         error.value = streamError?.message || 'The live analysis stream disconnected.'
         status.value = 'error'
         pushFeed('log', error.value)
-
-        if (chatId.value) {
-          schedulePoll(chatId.value, 800)
-        }
       },
       onFinish: () => {
         currentCancel = null
@@ -187,10 +145,6 @@ export function useBillAnalysisStream() {
       status.value = 'error'
       pushFeed('log', payload.message)
       stop()
-
-      if (chatId.value) {
-        schedulePoll(chatId.value, 800)
-      }
     }
   }
 
@@ -221,7 +175,9 @@ export function useBillAnalysisStream() {
         applyResult(value)
 
         if (isPendingResult(value)) {
-          schedulePoll(normalizedChatId)
+          openStream(useOrpc().attachBillChatStream({
+            chatId: normalizedChatId,
+          }))
         }
 
         return value

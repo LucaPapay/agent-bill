@@ -484,12 +484,6 @@ watch(() => analysis.chatId.value, (nextChatId) => {
 onMounted(() => {
   void ledger.ensureLoaded()
 
-  if (getResolvedChatId()) {
-    void hydrateSavedChat(getResolvedChatId())
-  } else {
-    initializeFreshScan()
-  }
-
   showCameraCapture.value =
     window.matchMedia('(pointer: coarse)').matches
     || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
@@ -633,7 +627,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-if="parsedReceipt" class="scan-chat-row">
+          <div v-if="parsedReceipt && splitRows.length" class="scan-chat-row">
             <div class="scan-avatar">
               <IconGlyph name="sparkle" width="16" height="16" />
             </div>
@@ -658,7 +652,7 @@ onBeforeUnmount(() => {
                 {{ analysis.result.value?.summary || `Parsed ${parsedItemCount} bill items.` }}
               </div>
 
-              <div v-if="splitRows.length" class="scan-split-list">
+              <div class="scan-split-list">
                 <div
                   v-for="row in splitRows"
                   :key="row.person"
