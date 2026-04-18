@@ -101,7 +101,7 @@ export function startAnalysisJob(run: (push: (event: any) => void) => Promise<an
   return createSubscription(job, [{
     type: 'status',
     phase: 'queued',
-    message: 'Analysis job queued.',
+    message: 'Penny is warming up her little receipt engine.',
   }])
 }
 

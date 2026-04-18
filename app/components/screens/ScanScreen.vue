@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import IconGlyph from '../app/IconGlyph.vue'
 import BillComposer from '../ledger/BillComposer.vue'
 import ReceiptSplitPreview from '../scan/ReceiptSplitPreview.vue'
+import PennyLoadingIndicator from '../scan/PennyLoadingIndicator.vue'
 import { useBillAnalysisStream } from '../../composables/useBillAnalysisStream'
 import { useLedgerState } from '../../composables/useLedgerState'
 
@@ -23,6 +24,7 @@ const selectedFile = ref(null)
 const showCameraCapture = ref(false)
 const scrollRef = ref(null)
 const composerText = ref('')
+const autoQuestionKey = ref('')
 const composerSeedKey = ref('')
 const composerVisible = ref(false)
 const localGroupId = ref('')
@@ -80,6 +82,8 @@ const selectedGroup = computed(() =>
 )
 const hasSavedChat = computed(() => Boolean(analysis.chatId.value))
 const isRunning = computed(() => ['starting', 'queued', 'extracting', 'agent'].includes(analysis.status.value))
+const isPennyLoading = computed(() => analysis.loadingChat.value || isRunning.value)
+const pennyLoadingStatus = computed(() => (analysis.loadingChat.value ? 'loading-chat' : analysis.status.value))
 const parsedReceipt = computed(() => {
   if (analysis.receipt.value) {
     return analysis.receipt.value
@@ -105,6 +109,19 @@ const parsedItemCount = computed(() => parsedItems.value.length)
 const resolvedCurrency = computed(() => parsedReceipt.value?.currency || 'EUR')
 const noteList = computed(() => parsedReceipt.value?.notes || [])
 const splitRows = computed(() => analysis.result.value?.split || [])
+const analysisSource = computed(() => String(analysis.result.value?.source || '').trim())
+const awaitingSplitAnswer = computed(() => analysisSource.value === 'pi-agent-question' && !splitRows.value.length)
+const shouldAskSplitQuestion = computed(() =>
+  Boolean(
+    analysis.chatId.value
+    && selectedGroup.value
+    && parsedReceipt.value
+    && !splitRows.value.length
+    && !awaitingSplitAnswer.value
+    && !isRunning.value
+    && analysis.result.value?.openai?.used,
+  ),
+)
 const splitPeople = computed(() => {
   if (!selectedGroup.value?.memberships?.length) {
     return []
@@ -167,7 +184,9 @@ const introMessage = computed(() => {
   }
 
   if (parsedReceipt.value) {
-    return splitRows.value.length
+    return awaitingSplitAnswer.value
+      ? `Using ${selectedGroup.value.name}. Answer Penny's question so she can build the split.`
+      : splitRows.value.length
       ? `Using ${selectedGroup.value.name}. Keep chatting to tweak the split or continue into the composer.`
       : `Using ${selectedGroup.value.name}. The bill items are ready. Tell Penny how to split them.`
   }
@@ -192,7 +211,9 @@ const composerPlaceholder = computed(() => {
   }
 
   if (parsedReceipt.value) {
-    return splitRows.value.length
+    return awaitingSplitAnswer.value
+      ? "Answer Penny's split question"
+      : splitRows.value.length
       ? 'Tell Penny what to change about the split'
       : 'Tell Penny how to split this receipt'
   }
@@ -279,6 +300,7 @@ function pushLocalMessage(who, text) {
 }
 
 function resetDraftInputs() {
+  autoQuestionKey.value = ''
   composerText.value = ''
   composerSeedKey.value = ''
   composerVisible.value = false
@@ -571,6 +593,29 @@ watch(
   [
     () => analysis.chatId.value,
     () => analysis.result.value?.runId,
+    () => shouldAskSplitQuestion.value,
+    () => splitPeople.value.join('|'),
+  ],
+  () => {
+    if (!shouldAskSplitQuestion.value) {
+      return
+    }
+
+    const questionKey = `${analysis.chatId.value}:${analysis.result.value?.runId || 'pending'}:${splitPeople.value.join('|')}`
+
+    if (autoQuestionKey.value === questionKey) {
+      return
+    }
+
+    autoQuestionKey.value = questionKey
+    void analysis.requestSplitQuestion(splitPeople.value)
+  },
+)
+
+watch(
+  [
+    () => analysis.chatId.value,
+    () => analysis.result.value?.runId,
     () => parsedReceipt.value,
     () => splitRows.value.length,
     () => localGroupId.value,
@@ -701,6 +746,12 @@ onBeforeUnmount(() => {
               {{ entry.text }}
             </div>
           </div>
+
+          <PennyLoadingIndicator
+            v-if="isPennyLoading"
+            :loading-chat="analysis.loadingChat.value"
+            :status="pennyLoadingStatus"
+          />
 
           <div v-if="previewUrl" class="scan-chat-row">
             <div class="scan-avatar">
