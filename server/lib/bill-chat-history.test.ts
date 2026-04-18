@@ -1,0 +1,82 @@
+import { describe, expect, it } from 'vitest'
+import {
+  appendBillChatEvent,
+  appendBillChatReply,
+  createBillChatSeed,
+} from './bill-chat-history'
+
+describe('createBillChatSeed', () => {
+  it('creates a user seed message for receipt uploads', () => {
+    expect(createBillChatSeed({
+      imageBase64: 'abc',
+      people: ['Jojo', 'Sarah'],
+      title: 'Friday dinner',
+    })).toEqual([
+      {
+        text: 'Uploaded a receipt for Friday dinner with Jojo, Sarah.',
+        who: 'user',
+      },
+    ])
+  })
+})
+
+describe('appendBillChatReply', () => {
+  it('appends the next user follow-up message', () => {
+    expect(appendBillChatReply([], 'Sarah had the dessert')).toEqual([
+      {
+        text: 'Sarah had the dessert',
+        who: 'user',
+      },
+    ])
+  })
+})
+
+describe('appendBillChatEvent', () => {
+  it('turns streamed agent events into persisted history entries', () => {
+    const history = [
+      {
+        text: 'Uploaded a receipt for Friday dinner with Jojo, Sarah.',
+        who: 'user',
+      },
+    ]
+
+    expect(
+      appendBillChatEvent(
+        appendBillChatEvent(
+          appendBillChatEvent(history, {
+            message: 'Analysis job queued.',
+            phase: 'queued',
+            type: 'status',
+          }),
+          {
+            message: 'Penny is reading the receipt.',
+            type: 'agent_progress',
+          },
+        ),
+        {
+          result: {
+            summary: 'Split ready.',
+          },
+          type: 'complete',
+        },
+      ),
+    ).toEqual([
+      {
+        text: 'Uploaded a receipt for Friday dinner with Jojo, Sarah.',
+        who: 'user',
+      },
+      {
+        text: 'Analysis job queued.',
+        who: 'log',
+      },
+      {
+        text: 'Penny is reading the receipt.',
+        who: 'penny',
+      },
+      {
+        text: 'Split ready.',
+        who: 'penny',
+      },
+    ])
+  })
+})
