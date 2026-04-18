@@ -198,6 +198,7 @@ export function createLocalAnalysis({ title, people, rawText, imageProvided, not
       model: null,
       used: false,
     },
+    people,
     pi: {
       model: null,
       used: false,
@@ -235,6 +236,7 @@ export function normalizePiAnalysis({ title, people, imageProvided, notes = [] a
       model: process.env.OPENAI_RECEIPT_MODEL || 'gpt-4.1-mini',
       used: false,
     },
+    people,
     pi: {
       model: 'openai:gpt-4o-mini',
       used: true,
@@ -310,6 +312,7 @@ export function createAgentAnalysis({ title, people, plan, receipt, imageProvide
       model: process.env.OPENAI_RECEIPT_MODEL || 'gpt-4.1-mini',
       used: true,
     },
+    people,
     pi: {
       model: process.env.PI_AGENT_MODEL || 'gpt-4.1-mini',
       used: true,

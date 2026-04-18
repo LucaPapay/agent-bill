@@ -17,7 +17,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['switch-user'])
+const emit = defineEmits(['logout'])
 
 const savedBills = computed(() =>
   props.ledger.groups.reduce((sum, group) => sum + group.bills.length, 0)
@@ -42,21 +42,21 @@ const settings = computed(() => [
 
     <div class="section-pad profile-grid">
       <div class="surface-panel" style="padding: 20px; display: flex; gap: 14px; align-items: center;">
-        <AvatarBadge name="Local" size="lg" />
+        <AvatarBadge :name="currentUser?.name || 'You'" size="lg" />
         <div style="flex: 1;">
           <div style="font-weight: 700; font-size: 18px;">
-            {{ currentUser?.name || 'Local workspace' }}
+            {{ currentUser?.name || 'Signed in' }}
           </div>
           <div style="font-size: 12px; color: var(--muted);">
-            Fake login mode · pick a saved user
+            {{ currentUser?.email || 'Google account' }}
           </div>
           <div style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;">
             <span class="chip chip-muted">Postgres-backed</span>
-            <span class="chip chip-muted">Device-local workflow</span>
+            <span class="chip chip-muted">Google session</span>
           </div>
         </div>
-        <button class="btn btn-ghost" style="padding: 8px 12px;" @click="emit('switch-user')">
-          Switch user
+        <button class="btn btn-ghost" style="padding: 10px 14px; font-size: 12px;" @click="emit('logout')">
+          Log out
         </button>
       </div>
 

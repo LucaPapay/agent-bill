@@ -44,10 +44,12 @@ Separately:
 
 1. The Scan screen now expects a real receipt image.
 2. On mobile it opens the camera, and elsewhere it opens a file picker.
-3. As soon as the user selects an image, the frontend opens a typed `oRPC` analysis stream.
-4. OpenAI extracts a structured receipt, then Penny runs one Pi agent pass and streams progress back over the `oRPC` event iterator transport.
-5. Every successful analysis run is saved as a `bill_runs` record.
-6. The backend still supports raw text input for local fallback work, but that path is no longer exposed in the main scan UI.
+3. As soon as the user selects an image, the frontend opens a typed `oRPC` analysis stream in the same chat surface.
+4. Penny now owns the full first pass: the Pi agent calls a receipt-parsing tool, receives the structured receipt, then submits the split plan in the same run.
+5. After Penny proposes a split, the same chat now accepts follow-up user messages and runs a second typed `oRPC` revision stream against the parsed receipt plus the current split.
+6. The split card can hand the proposed shares into the normal bill composer when the selected group contains matching people.
+7. Every successful analysis run is saved as a `bill_runs` record.
+8. The backend still supports raw text input for local fallback work, but that path is no longer exposed in the main scan UI.
 
 ## Current bill behavior
 
@@ -177,6 +179,7 @@ This is the table the group-level simplification aggregates.
 Saved receipt-analysis runs.
 
 - `id`
+- `person_id`
 - `title`
 - `payload`
 - `created_at`
@@ -193,8 +196,8 @@ The stable routes are:
 - `/groups/:groupId` for one group, its members, settlement, and saved bills
 - `/groups/:groupId/bills/new` for the itemized bill composer
 - `/groups/:groupId/bills/:billId` for one saved bill and its derived transfers
-- `/scan` for the scan demo flow
-- `/chat-split` for the chat demo flow
+- `/scan` for the unified scan and split chat flow
+- `/chat-split` as a compatibility redirect back to `/scan`
 - `/profile` for local app/profile status
 
 The route shell keeps navigation and client-side ledger loading alive even on direct deep links.
@@ -215,9 +218,11 @@ The real manual-ledger functionality is now connected into the route structure l
 
 The scan-first design flow is still only partially connected today:
 
-- `Scan` now runs the real backend receipt pipeline through `oRPC` streaming
-- `Chat Split` is still downstream presentation flow
-- the scan result does not yet create a saved ledger bill automatically
+- `Scan` now runs the real backend receipt pipeline through `oRPC` streaming in a single chat surface
+- receipt parsing happens inside the Pi agent via a tool call instead of a separate pre-pass
+- after the first split, the same chat can send revision messages back to Penny without leaving `/scan`
+- the scan result can prefill the normal bill composer when the selected group has matching members
+- the scan result does not yet save a final ledger bill automatically from the chat surface
 - the durable manual workflow now runs through `/groups` -> `/groups/:groupId` -> `/groups/:groupId/bills/new` -> `/groups/:groupId/bills/:billId`
 
 ## Current frontend structure

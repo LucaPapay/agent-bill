@@ -2,33 +2,6 @@ import { computed } from 'vue'
 
 let loadingPromise: Promise<void> | null = null
 
-const CURRENT_USER_STORAGE_KEY = 'agent-bill:current-user-id'
-const EMPTY_LEDGER = {
-  groups: [],
-  people: [],
-}
-
-function readStoredCurrentUserId() {
-  if (!import.meta.client) {
-    return ''
-  }
-
-  return window.localStorage.getItem(CURRENT_USER_STORAGE_KEY) || ''
-}
-
-function writeStoredCurrentUserId(userId: string) {
-  if (!import.meta.client) {
-    return
-  }
-
-  if (userId) {
-    window.localStorage.setItem(CURRENT_USER_STORAGE_KEY, userId)
-    return
-  }
-
-  window.localStorage.removeItem(CURRENT_USER_STORAGE_KEY)
-}
-
 export function useLedgerState() {
   const api = useOrpc()
 
@@ -41,7 +14,6 @@ export function useLedgerState() {
   const saving = useState('ledger-state:saving', () => false)
   const ledgerLoaded = useState('ledger-state:ledger-loaded', () => false)
   const healthLoaded = useState('ledger-state:health-loaded', () => false)
-  const currentUserId = useState('ledger-state:current-user-id', () => readStoredCurrentUserId())
 
   const selectedGroupId = useState('ledger-state:selected-group-id', () => '')
   const selectedBillId = useState('ledger-state:selected-bill-id', () => '')
@@ -64,10 +36,6 @@ export function useLedgerState() {
   const billItemId = useState('ledger-state:bill-item-id', () => 0)
 
   const accentPalette = ['var(--tomato)', 'var(--marigold)', 'var(--mint)', 'var(--lilac)', 'var(--sky)']
-
-  const currentUser = computed(() =>
-    ledger.value.people.find((person: any) => person.id === currentUserId.value) || null,
-  )
 
   const selectedGroup = computed(() =>
     ledger.value.groups.find((group: any) => group.id === selectedGroupId.value) || null,
@@ -311,21 +279,6 @@ export function useLedgerState() {
     return getGroupById(groupId)?.bills.find((bill: any) => bill.id === billId) || null
   }
 
-  function resetScopedState() {
-    loadingPromise = null
-    ledger.value = EMPTY_LEDGER
-    ledgerLoaded.value = false
-    selectedGroupId.value = ''
-    selectedBillId.value = ''
-    personToAddId.value = ''
-    billTitle.value = 'Friday dinner'
-    billTotal.value = '0'
-    billTip.value = '0'
-    billPaidByPersonId.value = ''
-    billItems.value = []
-    resultLayout.value = 'cards'
-  }
-
   function applyLedger(nextLedger: any) {
     ledger.value = nextLedger
 
@@ -390,17 +343,6 @@ export function useLedgerState() {
     billTip.value = '0'
     billItems.value = []
     syncBillForm(selectedGroup.value)
-  }
-
-  function setCurrentUser(userId: string) {
-    currentUserId.value = userId
-    writeStoredCurrentUserId(userId)
-    errorMessage.value = ''
-    resetScopedState()
-  }
-
-  function clearCurrentUser() {
-    setCurrentUser('')
   }
 
   function loadBillFormFromBill(groupId: string, billId: string, options?: { duplicate?: boolean }) {
@@ -483,36 +425,37 @@ export function useLedgerState() {
   }
 
   function loadLedger() {
-    if (!currentUserId.value) {
-      resetScopedState()
-      return Promise.resolve(false)
-    }
-
-    return api.getLedger({
-      currentUserId: currentUserId.value,
-    }).then(
+    return api.getLedger().then(
       (value: any) => {
         applyLedger(value)
         ledgerLoaded.value = true
-        return true
       },
       (error: any) => {
-        if (String(error?.message || '').includes('Current user not found')) {
-          clearCurrentUser()
-          navigateTo('/login')
-        }
-
         errorMessage.value = error?.message || 'Could not load the local ledger.'
-        return false
       },
     )
   }
 
-  function ensureLoaded() {
-    if (!currentUserId.value) {
-      return loadHealth().then(() => undefined)
+  function resetState() {
+    ledger.value = {
+      groups: [],
+      people: [],
     }
+    health.value = null
+    errorMessage.value = ''
+    saving.value = false
+    ledgerLoaded.value = false
+    healthLoaded.value = false
+    selectedGroupId.value = ''
+    selectedBillId.value = ''
+    personName.value = ''
+    groupName.value = ''
+    personToAddId.value = ''
+    billItemId.value = 0
+    resetBillForm()
+  }
 
+  function ensureLoaded() {
     if (ledgerLoaded.value && healthLoaded.value) {
       return Promise.resolve()
     }
@@ -529,21 +472,11 @@ export function useLedgerState() {
     return loadingPromise
   }
 
-  function loginAsUser(userId: string) {
-    setCurrentUser(userId)
-
-    return Promise.all([
-      loadHealth(),
-      loadLedger(),
-    ]).then(([_, didLoadLedger]) => didLoadLedger)
-  }
-
   function createPerson() {
     errorMessage.value = ''
     saving.value = true
 
     return api.createLedgerPerson({
-      currentUserId: currentUserId.value || undefined,
       name: personName.value,
     }).then(
       (value: any) => {
@@ -561,15 +494,10 @@ export function useLedgerState() {
   }
 
   function createGroup() {
-    if (!currentUserId.value) {
-      return Promise.resolve(null)
-    }
-
     errorMessage.value = ''
     saving.value = true
 
     return api.createLedgerGroup({
-      currentUserId: currentUserId.value,
       name: groupName.value,
     }).then(
       (value: any) => {
@@ -588,7 +516,7 @@ export function useLedgerState() {
   }
 
   function addPersonToGroup() {
-    if (!currentUserId.value || !selectedGroupId.value || !personToAddId.value) {
+    if (!selectedGroupId.value || !personToAddId.value) {
       return Promise.resolve(null)
     }
 
@@ -596,7 +524,6 @@ export function useLedgerState() {
     saving.value = true
 
     return api.addLedgerPersonToGroup({
-      currentUserId: currentUserId.value,
       groupId: selectedGroupId.value,
       personId: personToAddId.value,
     }).then(
@@ -614,7 +541,7 @@ export function useLedgerState() {
   }
 
   function createBill() {
-    if (!currentUserId.value || !selectedGroupId.value) {
+    if (!selectedGroupId.value) {
       return Promise.resolve(null)
     }
 
@@ -631,7 +558,6 @@ export function useLedgerState() {
 
     return api.createLedgerBill({
       billItems: payloadItems,
-      currentUserId: currentUserId.value,
       groupId: selectedGroupId.value,
       paidByPersonId: billPaidByPersonId.value,
       tipAmountCents: billTipCents.value,
@@ -654,7 +580,7 @@ export function useLedgerState() {
   }
 
   function updateBill(billId: string) {
-    if (!currentUserId.value || !selectedGroupId.value) {
+    if (!selectedGroupId.value) {
       return Promise.resolve(null)
     }
 
@@ -672,7 +598,6 @@ export function useLedgerState() {
     return api.updateLedgerBill({
       billId,
       billItems: payloadItems,
-      currentUserId: currentUserId.value,
       groupId: selectedGroupId.value,
       paidByPersonId: billPaidByPersonId.value,
       tipAmountCents: billTipCents.value,
@@ -694,16 +619,11 @@ export function useLedgerState() {
   }
 
   function deleteBill(billId: string) {
-    if (!currentUserId.value) {
-      return Promise.resolve(null)
-    }
-
     errorMessage.value = ''
     saving.value = true
 
     return api.deleteLedgerBill({
       billId,
-      currentUserId: currentUserId.value,
     }).then(
       (value: any) => {
         applyLedger(value.ledger)
@@ -727,7 +647,7 @@ export function useLedgerState() {
     fromPersonId: string
     toPersonId: string
   }) {
-    if (!currentUserId.value || !selectedGroupId.value) {
+    if (!selectedGroupId.value) {
       return Promise.resolve(null)
     }
 
@@ -736,7 +656,6 @@ export function useLedgerState() {
 
     return api.recordSettlementPayment({
       amountCents,
-      currentUserId: currentUserId.value,
       fromPersonId,
       groupId: selectedGroupId.value,
       toPersonId,
@@ -755,15 +674,10 @@ export function useLedgerState() {
   }
 
   function undoSettlementPayment(paymentId: string) {
-    if (!currentUserId.value) {
-      return Promise.resolve(null)
-    }
-
     errorMessage.value = ''
     saving.value = true
 
     return api.undoSettlementPayment({
-      currentUserId: currentUserId.value,
       paymentId,
     }).then(
       (value: any) => {
@@ -794,12 +708,9 @@ export function useLedgerState() {
     billTotalCents,
     canAddPersonToGroup,
     canCreateBill,
-    clearCurrentUser,
     createBill,
     createGroup,
     createPerson,
-    currentUser,
-    currentUserId,
     deleteBill,
     ensureLoaded,
     errorMessage,
@@ -812,13 +723,13 @@ export function useLedgerState() {
     ledger,
     ledgerLoaded,
     loadBillFormFromBill,
-    loginAsUser,
     peopleNotInSelectedGroup,
     personName,
     personToAddId,
     recentBillActivities,
     removeBillItem,
     recordSettlementPayment,
+    resetState,
     resetBillForm,
     resultLayout,
     saving,

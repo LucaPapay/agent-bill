@@ -1,12 +1,22 @@
-export default defineNuxtRouteMiddleware((to) => {
-  const { currentUserId } = useLedgerState()
-  const isLoginRoute = to.path === '/login'
+export default defineNuxtRouteMiddleware(async (to) => {
+  const { fetch, loggedIn, ready } = useUserSession()
 
-  if (!currentUserId.value && !isLoginRoute) {
-    return navigateTo('/login')
+  if (!ready.value) {
+    await fetch()
   }
 
-  if (currentUserId.value && isLoginRoute) {
-    return navigateTo('/')
+  if (to.path === '/login') {
+    if (loggedIn.value) {
+      return navigateTo('/')
+    }
+
+    return
   }
+
+  if (loggedIn.value) {
+    return
+  }
+
+  useLedgerState().resetState()
+  return navigateTo('/login')
 })

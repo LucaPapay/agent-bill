@@ -71,6 +71,11 @@ export const analysisInputSchema = z.object({
   title: z.string().trim().min(1).default('Untitled bill'),
 })
 
+export const revisionInputSchema = z.object({
+  chatId: z.string().trim().min(1),
+  message: z.string().trim().min(1),
+})
+
 export const splitEntrySchema = z.object({
   amountCents: z.number().int().nonnegative(),
   note: z.string(),
@@ -83,6 +88,11 @@ export const splitPlanSchema = z.object({
   summary: z.string(),
 })
 
+export const analysisHistoryEntrySchema = z.object({
+  text: z.string(),
+  who: z.enum(['log', 'penny', 'user']),
+})
+
 const analysisEngineSchema = z.object({
   model: z.string().nullable(),
   used: z.boolean(),
@@ -90,11 +100,14 @@ const analysisEngineSchema = z.object({
 
 export const analysisResultSchema = z.object({
   billDate: z.string(),
+  chatId: z.string(),
   currency: z.string(),
+  history: z.array(analysisHistoryEntrySchema),
   items: extractedReceiptSchema.shape.items,
   merchant: z.string(),
   notes: z.array(z.string()),
   openai: analysisEngineSchema,
+  people: z.array(z.string()),
   pi: analysisEngineSchema,
   receipt: extractedReceiptSchema.optional(),
   runId: z.string(),
@@ -106,6 +119,15 @@ export const analysisResultSchema = z.object({
   tipCents: z.number().int().nonnegative(),
   title: z.string(),
   totalCents: z.number().int().nonnegative(),
+})
+
+export const analysisChatSummarySchema = z.object({
+  chatId: z.string(),
+  people: z.array(z.string()),
+  summary: z.string(),
+  title: z.string(),
+  totalCents: z.number().int().nonnegative(),
+  updatedAt: z.union([z.string(), z.date()]),
 })
 
 export const analysisEventSchema = z.discriminatedUnion('type', [

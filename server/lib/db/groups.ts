@@ -1,52 +1,77 @@
 import { randomUUID } from 'node:crypto'
 import { db, ensureSchema } from './client'
 
-export async function listPeople() {
-  await ensureSchema()
-
-  const rows = await db()`
-    select id, name, created_at
-    from people
-    order by lower(name) asc, created_at asc
-  `
-
-  return rows.map((row: any) => ({
+function mapPerson(row: any) {
+  return {
+    avatarUrl: row.avatar_url || '',
     createdAt: row.created_at,
+    email: row.email || '',
+    googleSub: row.google_sub || '',
     id: row.id,
     name: row.name,
-  }))
-}
-
-export async function assertPersonExists(personId: string) {
-  await ensureSchema()
-
-  const [row] = await db()`
-    select id
-    from people
-    where id = ${personId}
-  `
-
-  if (!row) {
-    throw new Error('Current user not found. Choose a user again.')
   }
 }
 
-export async function createPerson(name: string) {
+export async function createPerson(name: string, createdByPersonId?: null | string) {
   await ensureSchema()
 
   const id = randomUUID()
   const rows = await db()`
-    insert into people (id, name)
-    values (${id}, ${name})
-    returning id, name, created_at
+    insert into people (id, name, created_by_person_id)
+    values (${id}, ${name}, ${createdByPersonId || null})
+    returning id, name, email, google_sub, avatar_url, created_at
   `
-  const row = rows[0]!
+  return mapPerson(rows[0]!)
+}
 
-  return {
-    createdAt: row.created_at,
-    id: row.id,
-    name: row.name,
+export async function findOrCreateGooglePerson({
+  avatarUrl,
+  email,
+  googleSub,
+  name,
+}: {
+  avatarUrl: string
+  email: string
+  googleSub: string
+  name: string
+}) {
+  await ensureSchema()
+
+  if (!googleSub) {
+    throw new Error('Google login did not return a stable account id.')
   }
+
+  const existingRows = await db()`
+    select id, name, email, google_sub, avatar_url, created_at
+    from people
+    where google_sub = ${googleSub}
+    limit 1
+  `
+  const existing = existingRows[0]
+
+  if (existing) {
+    const rows = await db()`
+      update people
+      set
+        name = ${name},
+        email = ${email || null},
+        avatar_url = ${avatarUrl || null},
+        last_login_at = now()
+      where id = ${existing.id}
+      returning id, name, email, google_sub, avatar_url, created_at
+    `
+
+    return mapPerson(rows[0]!)
+  }
+
+  const id = randomUUID()
+  const rows = await db()`
+    insert into people (id, name, email, google_sub, avatar_url, last_login_at)
+    values (${id}, ${name}, ${email || null}, ${googleSub}, ${avatarUrl || null}, now())
+    returning id, name, email, google_sub, avatar_url, created_at
+  `
+
+  return mapPerson(rows[0]!)
 }
 
 export async function createGroup(name: string) {
@@ -78,21 +103,6 @@ export async function addPersonToGroup(groupId: string, personId: string) {
   `
 }
 
-export async function assertGroupMembership(groupId: string, personId: string) {
-  await ensureSchema()
-
-  const [row] = await db()`
-    select id
-    from group_memberships
-    where group_id = ${groupId}
-      and person_id = ${personId}
-  `
-
-  if (!row) {
-    throw new Error('You do not have access to that group.')
-  }
-}
-
 export async function getGroupMemberIds(groupId: string) {
   await ensureSchema()
 
@@ -104,4 +114,55 @@ export async function getGroupMemberIds(groupId: string) {
   `
 
   return rows.map(row => row.person_id as string)
+}
+
+export async function canAccessGroup(personId: string, groupId: string) {
+  await ensureSchema()
+
+  const rows = await db()`
+    select 1
+    from group_memberships
+    where group_id = ${groupId}
+      and person_id = ${personId}
+    limit 1
+  `
+
+  return Boolean(rows[0])
+}
+
+export async function assertPersonCanAccessGroup(personId: string, groupId: string) {
+  if (await canAccessGroup(personId, groupId)) {
+    return
+  }
+
+  throw new Error('You do not have access to that group.')
+}
+
+export async function assertPersonCanAccessVisiblePerson(personId: string, targetPersonId: string) {
+  await ensureSchema()
+
+  const rows = await db()`
+    select 1
+    from people
+    where id = ${targetPersonId}
+      and (
+        id = ${personId}
+        or created_by_person_id = ${personId}
+        or exists (
+          select 1
+          from group_memberships member
+          join group_memberships viewer
+            on viewer.group_id = member.group_id
+          where member.person_id = people.id
+            and viewer.person_id = ${personId}
+        )
+      )
+    limit 1
+  `
+
+  if (rows[0]) {
+    return
+  }
+
+  throw new Error('You do not have access to that person.')
 }

@@ -13,8 +13,11 @@ const handler = new RPCHandler(router, {
 
 export default defineEventHandler(async (event) => {
   const request = toWebRequest(event)
+  const session = await getUserSession(event)
   const { response } = await handler.handle(request, {
-    context: {},
+    context: {
+      personId: session.user?.personId || null,
+    },
     prefix: '/rpc',
   })
 
