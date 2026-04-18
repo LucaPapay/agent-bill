@@ -57,7 +57,7 @@ export async function saveBillRun({
 
   const id = randomUUID()
   const normalizedPeople = normalizePeople(payload?.people)
-  const [insertedRow] = await db().begin(async (sql: any) => {
+  const insertedRow = await db().begin(async (sql: any) => {
     const updatedChats = await sql`
       update bill_chats
       set

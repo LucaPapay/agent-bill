@@ -3,19 +3,22 @@ import { computed } from 'vue'
 import IconGlyph from './IconGlyph.vue'
 
 const route = useRoute()
-const { selectedGroupId } = useLedgerState()
 
 const activeTab = computed(() => {
   if (route.path === '/') {
     return 'home'
   }
 
+  if (route.path === '/chats') {
+    return 'splits'
+  }
+
   if (route.path === '/profile') {
     return 'profile'
   }
 
-  if (route.path === '/scan' || route.path.startsWith('/scan/') || route.path === '/chat-split' || route.path.endsWith('/bills/new')) {
-    return 'assign'
+  if (route.path === '/scan' || route.path.startsWith('/scan/') || route.path === '/chat-split') {
+    return 'scan'
   }
 
   if (route.path.startsWith('/groups')) {
@@ -49,18 +52,12 @@ function goTo(path) {
           <span>Groups</span>
         </button>
 
-        <button class="tab-fab" aria-label="Scan receipt" @click="goTo('/scan')">
+        <button class="tab-fab" :class="{ active: activeTab === 'scan' }" aria-label="Scan receipt" @click="goTo('/scan')">
           <IconGlyph name="scan" />
         </button>
 
-        <button
-          class="tab"
-          :class="{ active: activeTab === 'assign' }"
-          @click="goTo(selectedGroupId ? `/groups/${selectedGroupId}/bills/new` : '/groups')"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
-            <path d="M3 6h18M3 12h18M3 18h12" />
-          </svg>
+        <button class="tab" :class="{ active: activeTab === 'splits' }" @click="goTo('/chats')">
+          <IconGlyph name="chat" />
           <span>Splits</span>
         </button>
 
