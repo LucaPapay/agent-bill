@@ -124,6 +124,20 @@ const visibleAnalysisFeed = computed(() =>
       && !/^Started a receipt scan for .+\.$/.test(text)
   }),
 )
+const pinnedBottomFeedEntry = computed(() => {
+  if (!parsedReceipt.value || isPennyLoading.value || !visibleAnalysisFeed.value.length) {
+    return null
+  }
+
+  return visibleAnalysisFeed.value[visibleAnalysisFeed.value.length - 1]
+})
+const feedAboveReceipt = computed(() => {
+  if (!pinnedBottomFeedEntry.value) {
+    return visibleAnalysisFeed.value
+  }
+
+  return visibleAnalysisFeed.value.slice(0, -1)
+})
 const analysisSource = computed(() => String(analysis.result.value?.source || '').trim())
 const awaitingSplitAnswer = computed(() => analysisSource.value === 'pi-agent-question' && !splitRows.value.length)
 const shouldRequestGroupQuestion = computed(() =>
@@ -831,7 +845,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div
-            v-for="(entry, index) in visibleAnalysisFeed"
+            v-for="(entry, index) in feedAboveReceipt"
             :key="`${entry.text}-${index}`"
             class="scan-chat-row"
             :class="entry.who === 'user' ? 'user' : entry.who === 'penny' ? '' : 'system'"
@@ -844,7 +858,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-if="showGroupPickerPrompt" class="scan-choice-row scan-choice-row-inline">
+          <div v-if="!parsedReceipt && showGroupPickerPrompt" class="scan-choice-row scan-choice-row-inline">
             <button
               v-for="group in availableGroups"
               :key="group.id"
@@ -963,6 +977,17 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
+          <div v-if="pinnedBottomFeedEntry && showGroupPickerPrompt" class="scan-choice-row scan-choice-row-inline">
+            <button
+              v-for="group in availableGroups"
+              :key="group.id"
+              class="scan-choice-button"
+              @click="onPickGroup(group)"
+            >
+              {{ group.name }}
+            </button>
+          </div>
+
           <div v-if="parsedReceipt && splitRows.length && ledgerSelectedGroup" class="scan-chat-row">
             <div class="scan-avatar">
               <IconGlyph name="sparkle" width="16" height="16" />
@@ -970,6 +995,26 @@ onBeforeUnmount(() => {
             <button type="button" class="btn scan-composer-toggle" @click="openBillComposerFromScan">
               Open bill composer
             </button>
+          </div>
+
+          <div
+            v-if="pinnedBottomFeedEntry"
+            class="scan-chat-row"
+            :class="pinnedBottomFeedEntry.who === 'user' ? 'user' : pinnedBottomFeedEntry.who === 'penny' ? '' : 'system'"
+          >
+            <div
+              v-if="pinnedBottomFeedEntry.who !== 'user'"
+              class="scan-avatar"
+              :class="pinnedBottomFeedEntry.who === 'penny' ? '' : 'system'"
+            >
+              <IconGlyph :name="pinnedBottomFeedEntry.who === 'penny' ? 'sparkle' : 'scan'" width="16" height="16" />
+            </div>
+            <div
+              class="scan-bubble"
+              :class="pinnedBottomFeedEntry.who === 'penny' ? 'assistant' : pinnedBottomFeedEntry.who === 'user' ? 'user' : 'system'"
+            >
+              {{ pinnedBottomFeedEntry.text }}
+            </div>
           </div>
 
           <div
