@@ -59,6 +59,7 @@ See [app explanation.md](</Users/lucapapay/dev/agent-bill/app explanation.md>) f
 
 - Run `npm run db:seed-demo` to reset the manual-ledger tables and load 3 groups, 10 people, and 20 demo bills.
 - The seed data is intentionally fun and deterministic so local demos always look the same.
+- Run `npm run demo` to clear all persisted app data, reseed the demo data, and start the app.
 
 ## Next Good Steps
 

@@ -203,6 +203,7 @@ For local demos:
 
 - `npm run db:seed-demo` resets the manual-ledger tables
 - it inserts 3 groups, 10 people, and 20 saved bills with deterministic fun sample data
+- `npm run demo` clears all persisted app data, reseeds the demo set, and starts the dev app
 
 ## Group settlement behavior
 

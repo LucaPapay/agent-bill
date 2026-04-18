@@ -463,6 +463,7 @@ async function seedDemoLedger() {
   const billCount = demoGroups.reduce((sum, group) => sum + group.billSpecs.length, 0)
 
   await sql.begin(async (tx) => {
+    await tx`delete from bill_runs`
     await tx`delete from bill_item_assignments`
     await tx`delete from bill_items`
     await tx`delete from bill_member_shares`
@@ -606,6 +607,7 @@ async function seedDemoLedger() {
   })
 
   console.log('Seeded demo ledger')
+  console.log('- cleared existing app data')
   console.log(`- ${peopleCount} people`)
   console.log(`- ${groupCount} groups`)
   console.log(`- ${billCount} bills`)
