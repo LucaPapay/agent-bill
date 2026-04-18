@@ -10,11 +10,19 @@ const activeTab = computed(() => {
     return 'home'
   }
 
+  if (route.path === '/chats') {
+    return 'chats'
+  }
+
   if (route.path === '/profile') {
     return 'profile'
   }
 
-  if (route.path === '/scan' || route.path.startsWith('/scan/') || route.path === '/chat-split' || route.path.endsWith('/bills/new')) {
+  if (route.path === '/scan' || route.path.startsWith('/scan/') || route.path === '/chat-split') {
+    return 'scan'
+  }
+
+  if (route.path.endsWith('/bills/new')) {
     return 'assign'
   }
 
@@ -49,7 +57,12 @@ function goTo(path) {
           <span>Groups</span>
         </button>
 
-        <button class="tab-fab" aria-label="Scan receipt" @click="goTo('/scan')">
+        <button class="tab" :class="{ active: activeTab === 'chats' }" @click="goTo('/chats')">
+          <IconGlyph name="chat" />
+          <span>Chats</span>
+        </button>
+
+        <button class="tab-fab" :class="{ active: activeTab === 'scan' }" aria-label="Scan receipt" @click="goTo('/scan')">
           <IconGlyph name="scan" />
         </button>
 

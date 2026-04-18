@@ -64,6 +64,20 @@ defineProps({
   </svg>
 
   <svg
+    v-else-if="name === 'chat'"
+    :width="width"
+    :height="height"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H10l-4 4v-4H7.5A2.5 2.5 0 0 1 5 12.5z" />
+  </svg>
+
+  <svg
     v-else-if="name === 'scan'"
     :width="width"
     :height="height"

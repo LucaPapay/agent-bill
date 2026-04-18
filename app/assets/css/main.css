@@ -168,6 +168,11 @@ input::placeholder {
   box-shadow: 0 8px 20px rgba(255, 84, 54, 0.5), inset 0 -3px 0 rgba(0, 0, 0, 0.18);
 }
 
+.tab-fab.active {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
+}
+
 .tab-fab svg {
   width: 28px;
   height: 28px;

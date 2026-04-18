@@ -46,15 +46,13 @@ const parsedPeople = computed(() =>
 )
 
 const safeTitle = computed(() => title.value.trim() || 'Untitled bill')
-const currentChatId = computed(() => analysis.chatId.value || '')
-const hasSavedChat = computed(() => Boolean(currentChatId.value))
+const hasSavedChat = computed(() => Boolean(analysis.chatId.value))
 const isRunning = computed(() => ['starting', 'queued', 'extracting', 'agent'].includes(analysis.status.value))
 const canPickReceipt = computed(() => parsedPeople.value.length > 0 && !isRunning.value && !hasSavedChat.value)
 const extractedReceipt = computed(() => analysis.receipt.value || analysis.result.value?.receipt || null)
 const splitRows = computed(() => analysis.result.value?.split || [])
 const assistantReply = computed(() => analysis.assistantText.value.trim())
 const pickerLabel = computed(() => showCameraCapture.value ? 'Use camera' : 'Upload receipt')
-const recentChats = computed(() => analysis.recentChats.value || [])
 const inputModeLabel = computed(() => {
   if (selectedFile.value) {
     return showCameraCapture.value ? 'camera image' : 'image upload'
@@ -234,10 +232,6 @@ async function submitReply() {
   await analysis.revise(message)
 }
 
-async function openSavedChat(nextChatId) {
-  await navigateTo(`/scan/${nextChatId}`)
-}
-
 async function openComposer() {
   if (!canOpenComposer.value || !selectedGroupId.value) {
     return
@@ -321,8 +315,6 @@ watch(() => analysis.chatId.value, (nextChatId) => {
 })
 
 onMounted(() => {
-  void analysis.loadChats()
-
   showCameraCapture.value =
     window.matchMedia('(pointer: coarse)').matches
     || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
@@ -407,46 +399,6 @@ onBeforeUnmount(() => {
           <div>
             This thread is now persisted. Keep using the reply box to adapt the split, or reset to start a new receipt.
           </div>
-        </div>
-      </div>
-
-      <div v-if="recentChats.length" class="scan-card scan-history-card">
-        <div class="scan-card-head">
-          <div>
-            <div class="scan-note-label">
-              Recent chats
-            </div>
-            <div class="scan-card-title">
-              Resume a saved split
-            </div>
-          </div>
-        </div>
-
-        <div class="scan-history-list">
-          <button
-            v-for="chat in recentChats"
-            :key="chat.chatId"
-            class="scan-history-item"
-            :class="{ active: chat.chatId === currentChatId }"
-            @click="openSavedChat(chat.chatId)"
-          >
-            <div>
-              <div class="scan-history-title">
-                {{ chat.title }}
-              </div>
-              <div class="scan-history-meta">
-                {{ chat.people.join(', ') || 'No people saved' }}
-              </div>
-            </div>
-            <div class="scan-history-side">
-              <div class="scan-history-amount">
-                {{ formatMoney(chat.totalCents || 0) }}
-              </div>
-              <div class="scan-history-summary">
-                {{ chat.summary || 'Open saved split' }}
-              </div>
-            </div>
-          </button>
         </div>
       </div>
 
