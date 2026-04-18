@@ -5,13 +5,13 @@ import type { AppRouter } from '../../server/orpc/router'
 
 let client: RouterClient<AppRouter> | null = null
 
-export function useOrpc() {
+export function useOrpc(): RouterClient<AppRouter> {
   if (!client) {
     client = createORPCClient(
       new RPCLink({
         url: `${window.location.origin}/rpc`
       })
-    )
+    ) as RouterClient<AppRouter>
   }
 
   return client

@@ -4,6 +4,8 @@
 
 `agent-bill` is a local-first hackathon app for scanning bills and splitting them with agents.
 
+See [app explanation.md](</Users/lucapapay/dev/agent-bill/app explanation.md>) for the current product understanding, ledger model, and implementation notes.
+
 ## Current Stack
 
 - Nuxt 4 with `ssr: false`
