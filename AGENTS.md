@@ -51,9 +51,14 @@ See [app explanation.md](</Users/lucapapay/dev/agent-bill/app explanation.md>) f
 
 ## Frontend Shell Status
 
-- The app now uses a multi-screen shell instead of one long ledger page.
-- `Groups`, `Assign`, and `Settled` are the screens currently wired to real ledger data.
-- `Scan` and `Chat Split` currently act as design/demo flow and are not yet connected back into saved itemized bills.
+- The app now uses real Nuxt routes instead of a single screen-switching page.
+- Shared client ledger state lives in a composable so direct route loads still work.
+- The main durable manual-ledger routes are:
+  - `/groups`
+  - `/groups/:groupId`
+  - `/groups/:groupId/bills/new`
+  - `/groups/:groupId/bills/:billId`
+- `Scan` and `Chat Split` still act as design/demo flow and are not yet connected back into saved itemized bills.
 
 ## Demo Seed
 

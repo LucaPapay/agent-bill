@@ -9,7 +9,7 @@ There are two active tracks in the codebase:
 - a receipt-analysis track that can use Pi/OpenAI or a local fallback parser
 - a manual ledger track for groups, members, itemized bills, bill shares, raw transfers, and simplified group settlement
 
-The manual ledger track is still the stable storage base. The newer frontend design now wraps that functionality in a more app-like multi-screen flow.
+The manual ledger track is still the stable storage base. The newer frontend design now wraps that functionality in a more app-like route-based shell.
 
 ## Core product assumptions
 
@@ -177,27 +177,44 @@ Saved receipt-analysis runs.
 
 ## Current frontend behavior
 
-The main page now uses a multi-screen shell:
+The app now uses real Nuxt pages with a shared route shell and shared client ledger state.
 
-- home
-- groups
-- profile
-- scan
-- chat split
-- assign
-- settled
+The stable routes are:
 
-The real manual-ledger functionality is connected into that shell through the Groups, Assign, and Settled screens:
+- `/` for the home view
+- `/groups` for creating people and groups and browsing all groups
+- `/groups/:groupId` for one group, its members, settlement, and saved bills
+- `/groups/:groupId/bills/new` for the itemized bill composer
+- `/groups/:groupId/bills/:billId` for one saved bill and its derived transfers
+- `/scan` for the scan demo flow
+- `/chat-split` for the chat demo flow
+- `/profile` for local app/profile status
 
-- Groups is where the local ledger entities are managed
-- Assign is where itemized bills are created and previewed
-- Settled is where saved bill detail and simplified group settlement are reviewed
+The route shell keeps navigation and client-side ledger loading alive even on direct deep links.
 
-The scan-first design flow is only partially connected today:
+The real manual-ledger functionality is now connected into the route structure like this:
+
+- `Groups` list and creation happen on `/groups`
+- group detail and settlement happen on `/groups/:groupId`
+- bill creation happens on `/groups/:groupId/bills/new`
+- saved bill detail happens on `/groups/:groupId/bills/:billId`
+
+The scan-first design flow is still only partially connected today:
 
 - `Scan` and `Chat Split` are still presentation/demo flow
 - they do not yet create saved ledger bills
-- the durable manual workflow still runs through `Groups` -> `Assign` -> `Settled`
+- the durable manual workflow now runs through `/groups` -> `/groups/:groupId` -> `/groups/:groupId/bills/new` -> `/groups/:groupId/bills/:billId`
+
+## Current frontend structure
+
+The route split also changed how the frontend code is organized:
+
+- `app/pages/` now owns the route-level files
+- `app/components/layout/PageShell.vue` owns the shared app shell
+- `app/composables/useLedgerState.ts` owns shared client ledger state, selection state, and ledger mutations
+- extracted ledger UI lives in `app/components/ledger/`
+
+This keeps route files thin and makes direct routes like a single group or single bill work without rebuilding the old one-page screen machine.
 
 For local demos:
 
