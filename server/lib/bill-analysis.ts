@@ -372,41 +372,6 @@ export function createLocalAnalysis({ title, people, rawText, imageProvided, not
   }
 }
 
-export function createReceiptAnalysis({ title, people, rawReceipt, receipt, imageProvided }: {
-  title: string
-  people: string[]
-  rawReceipt?: any
-  receipt: any
-  imageProvided: boolean
-}) {
-  return {
-    billDate: receipt.billDate,
-    billItems: [],
-    currency: receipt.currency,
-    items: receipt.items,
-    merchant: receipt.merchant || title,
-    notes: receipt.notes || [],
-    openai: {
-      model: process.env.OPENAI_RECEIPT_MODEL || 'gpt-4.1-mini',
-      used: true,
-    },
-    people,
-    pi: {
-      model: null,
-      used: false,
-    },
-    rawReceipt: rawReceipt || receipt,
-    receipt,
-    source: imageProvided ? 'openai-image' : 'openai-text',
-    split: [],
-    summary: buildReceiptSummary(receipt.merchant || title, receipt.items.length),
-    taxCents: receipt.taxCents,
-    tipCents: receipt.tipCents,
-    title,
-    totalCents: receipt.totalCents,
-  }
-}
-
 export function normalizePiAnalysis({ title, people, imageProvided, notes = [] as string[], piAnalysis }: {
   title: string
   people: string[]

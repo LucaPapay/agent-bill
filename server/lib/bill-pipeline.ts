@@ -6,9 +6,7 @@ import {
 import {
   createAgentAnalysis,
   createLocalAnalysis,
-  createReceiptAnalysis,
   normalizePeople,
-  normalizeExtractedReceipt,
 } from './bill-analysis'
 import {
   assertPersonCanAccessGroup,
@@ -17,8 +15,7 @@ import {
   getGroupMemberNames,
   saveBillRun,
 } from './db'
-import { extractReceiptWithOpenAI } from './openai-receipt'
-import { runPiBillAgent, runPiBillReceiptSplitAgent, runPiBillRevisionAgent } from './pi-bill-agent'
+import { runPiBillLoop } from './pi-bill-agent'
 
 function createHistoryRecorder(onEvent = (_payload: any) => {}, initialHistory: any[] = []) {
   let history = [...initialHistory]
@@ -171,50 +168,82 @@ export async function runBillAnalysisPipeline(input: any, personId: string, onEv
     chatId: chat.id,
   })
 
-  const analysis = !process.env.OPENAI_API_KEY
-    ? createLocalAnalysis({
-      imageProvided: Boolean(input?.imageBase64),
-      notes: ['OPENAI_API_KEY is missing, so the backend used the local parser.'],
+  let analysis: any = createLocalAnalysis({
+    imageProvided: Boolean(input?.imageBase64),
+    notes: ['OPENAI_API_KEY is missing, so the backend used the local parser.'],
+    people,
+    rawText: input?.rawText,
+    title,
+  })
+
+  if (process.env.OPENAI_API_KEY) {
+    const agentResult = await runPiBillLoop({
+      chatId: chat.id,
+      groupId,
+      imageBase64: input?.imageBase64,
+      mimeType: input?.mimeType,
+      onEvent: (payload: any) => {
+        history.record(payload)
+        onEvent(payload)
+      },
       people,
+      personId,
       rawText: input?.rawText,
       title,
     })
-    : !people.length
-      ? await extractReceiptWithOpenAI({
-        imageBase64: input?.imageBase64,
-        mimeType: input?.mimeType,
-        onEvent: (payload: any) => {
-          history.record(payload)
-          onEvent(payload)
-        },
-        people,
-        rawText: input?.rawText,
-        title,
-      }).then((rawReceipt: any) => createReceiptAnalysis({
-        imageProvided: Boolean(input?.imageBase64),
-        people,
-        rawReceipt,
-        receipt: normalizeExtractedReceipt(rawReceipt),
-        title,
-      }))
-      : await runPiBillAgent({
-        imageBase64: input?.imageBase64,
-        mimeType: input?.mimeType,
-        onEvent: (payload: any) => {
-          history.record(payload)
-          onEvent(payload)
-        },
-        people,
-        rawText: input?.rawText,
-        title,
-      }).then((agentResult: any) => createAgentAnalysis({
-        imageProvided: Boolean(input?.imageBase64),
-        people,
-        plan: agentResult.plan,
-        rawReceipt: agentResult.rawReceipt,
-        receipt: agentResult.receipt,
-        title,
-      }))
+
+    if (!agentResult?.plan) {
+      const summary = String(agentResult?.question || 'Penny needs one more detail.').trim() || 'Penny needs one more detail.'
+      const payload = {
+        ...buildChatPayload({
+          base: {
+            openai: {
+              model: process.env.OPENAI_RECEIPT_MODEL || 'gpt-4.1-mini',
+              used: Boolean(agentResult?.receipt),
+            },
+            pi: {
+              model: process.env.PI_AGENT_MODEL || 'gpt-4.1-mini',
+              used: true,
+            },
+            source: 'pi-agent-question',
+            summary,
+          },
+          chatId: chat.id,
+          groupId,
+          history: history.finish({ summary }),
+          people,
+          rawReceipt: agentResult?.rawReceipt,
+          receipt: agentResult?.receipt,
+          summary,
+          title,
+        }),
+      }
+      const run = await saveBillRun({
+        chatId: chat.id,
+        payload,
+        personId,
+      })
+
+      return {
+        ...payload,
+        runId: run.id,
+        savedAt: run.createdAt,
+      }
+    }
+
+    analysis = createAgentAnalysis({
+      imageProvided: Boolean(input?.imageBase64),
+      people: normalizePeople(
+        Array.isArray(agentResult?.plan?.split)
+          ? agentResult.plan.split.map((entry: any) => entry.person)
+          : people,
+      ),
+      plan: agentResult.plan,
+      rawReceipt: agentResult.rawReceipt,
+      receipt: agentResult.receipt,
+      title,
+    })
+  }
 
   const payload = {
     ...analysis,
@@ -323,30 +352,18 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
   }
 
   try {
-    const agentResult = split.length
-      ? await runPiBillRevisionAgent({
-        chatId: current.chatId,
-        groupId,
-        message,
-        onEvent: recordAndEmit,
-        people,
-        personId,
-        rawReceipt,
-        receipt,
-        split,
-        title,
-      })
-      : await runPiBillReceiptSplitAgent({
-        chatId: current.chatId,
-        groupId,
-        message,
-        onEvent: recordAndEmit,
-        people: participantHints,
-        personId,
-        rawReceipt,
-        receipt,
-        title,
-      })
+    const agentResult = await runPiBillLoop({
+      chatId: current.chatId,
+      groupId,
+      message,
+      onEvent: recordAndEmit,
+      people: split.length ? people : participantHints,
+      personId,
+      rawReceipt,
+      receipt,
+      split,
+      title,
+    })
     if (!agentResult?.plan) {
       await runSaver.wait()
       const payload = {
@@ -407,8 +424,8 @@ export async function runBillRevisionPipeline(input: any, personId: string, onEv
     const run = await saveBillRun({
       chatId: current.chatId,
       payload,
-        personId,
-      })
+      personId,
+    })
 
     return {
       ...payload,

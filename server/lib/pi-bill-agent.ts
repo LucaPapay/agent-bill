@@ -37,49 +37,6 @@ function getPiModelName() {
   return 'gpt-4.1-mini'
 }
 
-function buildPrompt({ title, people, imageBase64, rawText }: {
-  title: string
-  people: string[]
-  imageBase64?: string
-  rawText?: string
-}) {
-  return [
-    `You are Penny, the bill-splitting agent for "${title}".`,
-    'You must read the receipt, then produce a practical split and keep the workflow fast.',
-    'Follow this exact order:',
-    '1. Immediately call log_progress with stage "start".',
-    '2. Call extract_receipt exactly once.',
-    '3. If the extracted receipt math is inconsistent or needs a safe repair, call reconcile_extracted_receipt before you build billItems.',
-    '4. Only if the user explicitly corrects extracted data, call edit_extracted_receipt.',
-    '5. Turn the parsed receipt into save-ready billItems.',
-    '6. Make sure the billItems sum exactly to the receipt total, including tax, tip, and any rounding.',
-    '7. Derive the participant split from those billItems.',
-    '8. Call submit_split_plan exactly once.',
-    'Rules:',
-    '- Only use the provided participant names.',
-    '- The split must include every participant exactly once.',
-    '- The split amounts must sum exactly to the receipt total.',
-    '- The billItems must sum exactly to the receipt total.',
-    '- Each billItem must have a short name, a positive amount, and one or more assignedPeople.',
-    '- The split must exactly match the totals implied by billItems when each billItem is split evenly across its assignedPeople.',
-    '- Shared food can be split across everyone when ownership is unclear.',
-    '- Single-consumer drinks or desserts should only be assigned when there is a strong clue.',
-    '- Keep original receipt item names when practical, but you may add short adjustment items for shared tax, tip, or rounding.',
-    '- You must call extract_receipt before you decide the split.',
-    '- Use reconcile_extracted_receipt for safe math cleanup such as subtotal, tax, tip, total, money-scale, or rounding issues.',
-    '- Do not call edit_extracted_receipt unless the user explicitly corrects the extracted receipt.',
-    '- Use log_progress for short UI-visible updates as you move through the problem.',
-    '- When you are done, call submit_split_plan exactly once.',
-    '- Do not ask follow-up questions.',
-    '- Be decisive and pragmatic.',
-    '',
-    `Participants: ${people.join(', ')}`,
-    '',
-    imageBase64 ? 'A receipt image is available through the extract_receipt tool.' : '',
-    rawText ? `OCR fallback text:\n${rawText.slice(0, 8000)}` : '',
-  ].join('\n')
-}
-
 function formatMoney(amountCents: number, currency = 'EUR') {
   return `${currency} ${(amountCents / 100).toFixed(2)}`
 }
@@ -120,10 +77,10 @@ function buildParticipantRules(people: string[]) {
   }
 
   return [
-    '- Infer the participant names from the user instruction and the current split.',
-    '- Use short human names exactly once each in the split.',
+    '- Do not invent participant names.',
+    '- If the participant list is still unclear after reading the receipt and the user instruction, call ask_follow_up_question.',
     '',
-    'Participants: infer them from the conversation.',
+    'Participants: not provided yet.',
   ]
 }
 
@@ -131,18 +88,7 @@ function buildClarificationRules() {
   return [
     '- If the user has not given enough information for a reliable split, call ask_follow_up_question instead of submit_split_plan.',
     '- Ask one short concrete question that unblocks the split.',
-  ]
-}
-
-function buildGroupSelectionRules(people: string[]) {
-  if (people.length) {
-    return []
-  }
-
-  return [
-    '- If no participants are available yet, call select_group exactly once before you do any split work.',
-    '- Do not call ask_follow_up_question or submit_split_plan until the group is known.',
-    '- If the user instruction already says which group was selected, do not call select_group again.',
+    '- Do not call ask_follow_up_question until you have a parsed receipt and have considered any available previous split hints.',
   ]
 }
 
@@ -174,105 +120,78 @@ function buildPreviousSplitHintText(matches: any[]) {
     .join('\n\n')
 }
 
-function buildRevisionPrompt({ message, people, previousSplitHints, receipt, split, title }: {
-  message: string
+function buildLoopPrompt({
+  imageBase64,
+  message,
+  people,
+  previousSplitHints,
+  rawText,
+  receipt,
+  split,
+  title,
+}: {
+  imageBase64?: string
+  message?: string
   people: string[]
   previousSplitHints?: string
-  receipt: any
-  split: any[]
+  rawText?: string
+  receipt?: any
+  split?: any[]
   title: string
 }) {
-  return [
-    `You are Penny, the bill-splitting agent for "${title}".`,
-    'The receipt is already parsed. Do not ask for more receipt data and do not call extract_receipt.',
-    'Update the split based on the user follow-up message.',
-    'Follow this exact order:',
-    '1. Immediately call log_progress with stage "revise".',
-    '2. If the receipt math needs a safe repair, call reconcile_extracted_receipt before you touch the split.',
-    '3. Only if the user explicitly corrects extracted receipt data, call edit_extracted_receipt.',
-    '4. Review the previous split hints below when they are present. Only if you still need a narrower lookup, call search_previous_splits once before you assign billItems.',
-    '5. Rework the save-ready billItems using the parsed receipt and the current split.',
-    '6. Recompute the participant split from those billItems.',
-    '7. Either call submit_split_plan exactly once or call ask_follow_up_question exactly once.',
-    'Rules:',
-    '- The split amounts must sum exactly to the receipt total.',
-    '- The billItems must sum exactly to the receipt total.',
-    '- Each billItem must have a short name, a positive amount, and one or more assignedPeople.',
-    '- The split must exactly match the totals implied by billItems when each billItem is split evenly across its assignedPeople.',
-    '- Respect explicit user instructions when they do not break the receipt total.',
-    '- If the user only clarifies ownership, keep the total and rebalance the shares.',
-    '- Keep notes short and concrete.',
-    '- Use reconcile_extracted_receipt for safe math cleanup such as subtotal, tax, tip, total, money-scale, or rounding issues.',
-    '- Do not call edit_extracted_receipt unless the user explicitly corrects the extracted receipt.',
-    '- Use the previous split hints below when the dish ownership is ambiguous, when the group tends to order similar meals, or when the user references a previous split.',
-    '- If the preloaded hints are not enough, call search_previous_splits once with a narrower query before you assign billItems.',
-    '- Treat previous splits as hints, not truth. Prefer same group and same people when you borrow any pattern.',
-    '- Do not use previous split memory until the group is known.',
-    '- Only call ask_follow_up_question after you have considered the previous split hints below.',
-    ...buildClarificationRules(),
-    ...buildParticipantRules(people),
-    '',
-    'User follow-up:',
-    message,
-    '',
-    'Parsed receipt:',
-    buildReceiptSummary(receipt),
-    '',
-    previousSplitHints ? `Previous split hints:\n${previousSplitHints}` : '',
-    previousSplitHints ? '' : '',
-    'Current split:',
-    buildCurrentSplitSummary(split, receipt?.currency || 'EUR'),
-  ].join('\n')
-}
+  const hasReceipt = Boolean(receipt)
+  const hasSplit = Array.isArray(split) && split.length > 0
+  const steps = [
+    'Immediately call log_progress with a short stage update.',
+    ...(!hasReceipt ? ['Call extract_receipt exactly once.'] : []),
+    'If the receipt math is inconsistent or needs safe cleanup, call reconcile_extracted_receipt.',
+    'Only if the user explicitly corrects extracted receipt data, call edit_extracted_receipt.',
+    'Use the previous split hints below when present. If you still need a narrower lookup after the receipt is available, call search_previous_splits once.',
+    `${hasSplit ? 'Rework' : 'Build'} save-ready billItems from the parsed receipt and the user instruction.`,
+    `${hasSplit ? 'Recompute' : 'Compute'} the participant split from those billItems.`,
+    'Either call submit_split_plan exactly once or call ask_follow_up_question exactly once.',
+  ]
+  const instruction = String(message || '').trim()
+    || 'Read the uploaded receipt and produce the first practical split.'
 
-function buildReceiptSplitPrompt({ message, people, previousSplitHints, receipt, title }: {
-  message: string
-  people: string[]
-  previousSplitHints?: string
-  receipt: any
-  title: string
-}) {
   return [
     `You are Penny, the bill-splitting agent for "${title}".`,
-    'The receipt is already parsed. Do not ask for more data and do not call extract_receipt.',
-    'Create the first split from the parsed receipt and the user instruction.',
-    'Follow this exact order:',
-    '1. Immediately call log_progress with stage "split".',
-    '2. If the receipt math needs a safe repair, call reconcile_extracted_receipt before you build billItems.',
-    '3. Only if the user explicitly corrects extracted receipt data, call edit_extracted_receipt.',
-    '4. Review the previous split hints below when they are present. Only if you still need a narrower lookup, call search_previous_splits once before you assign billItems.',
-    '5. Build save-ready billItems using the parsed receipt and the user instruction.',
-    '6. Compute the participant split from those billItems.',
-    '7. Either call submit_split_plan exactly once or call ask_follow_up_question exactly once.',
+    hasSplit
+      ? 'Revise the current split based on the latest user instruction.'
+      : 'Produce the first practical split and keep the workflow fast.',
+    hasReceipt
+      ? 'The receipt is already parsed. Do not call extract_receipt again.'
+      : 'You must parse the receipt before you decide the split.',
+    'Workflow:',
+    ...steps.map((step, index) => `${index + 1}. ${step}`),
     'Rules:',
     '- The split amounts must sum exactly to the receipt total.',
     '- The billItems must sum exactly to the receipt total.',
     '- Each billItem must have a short name, a positive amount, and one or more assignedPeople.',
     '- The split must exactly match the totals implied by billItems when each billItem is split evenly across its assignedPeople.',
     '- Shared food can be split across everyone when ownership is unclear.',
+    '- Single-consumer drinks or desserts should only be assigned when there is a strong clue.',
     '- Keep original receipt item names when practical, but you may add short adjustment items for shared tax, tip, or rounding.',
     '- Respect explicit user instructions when they do not break the receipt total.',
-    '- Keep notes short and concrete.',
+    '- If the user only clarifies ownership, keep the total and rebalance the shares.',
     '- Use reconcile_extracted_receipt for safe math cleanup such as subtotal, tax, tip, total, money-scale, or rounding issues.',
     '- Do not call edit_extracted_receipt unless the user explicitly corrects the extracted receipt.',
-    '- Use the previous split hints below when the dish ownership is ambiguous, when the group tends to order similar meals, or when the user references a previous split.',
-    '- If the preloaded hints are not enough, call search_previous_splits once with a narrower query before you assign billItems.',
     '- Treat previous splits as hints, not truth. Prefer same group and same people when you borrow any pattern.',
-    '- Do not use previous split memory until the group is known.',
-    '- Only call ask_follow_up_question after you have considered the previous split hints below. If those hints support a practical first split, make it instead of asking who had what.',
-    '- If the user only gave you the group or participant list, use the previous split hints first. Only call ask_follow_up_question if those hints still do not give you a practical first split.',
+    '- Keep notes short and concrete.',
+    '- Use log_progress for short UI-visible updates.',
+    '- Be decisive and pragmatic.',
     ...buildClarificationRules(),
-    ...buildGroupSelectionRules(people),
     ...buildParticipantRules(people),
     '',
     'User instruction:',
-    message,
+    instruction,
     '',
-    'Parsed receipt:',
-    buildReceiptSummary(receipt),
-    '',
+    hasReceipt ? `Parsed receipt:\n${buildReceiptSummary(receipt)}` : '',
+    hasSplit ? `Current split:\n${buildCurrentSplitSummary(split || [], receipt?.currency || 'EUR')}` : '',
     previousSplitHints ? `Previous split hints:\n${previousSplitHints}` : '',
-  ].join('\n')
+    imageBase64 && !hasReceipt ? 'A receipt image is available through the extract_receipt tool.' : '',
+    rawText && !hasReceipt ? `OCR fallback text:\n${rawText.slice(0, 8000)}` : '',
+  ].filter(Boolean).join('\n')
 }
 
 async function loadPreviousSplitHints({
@@ -633,38 +552,6 @@ function defineFollowUpQuestionTool({
   })
 }
 
-function defineSelectGroupTool({
-  followUpQuestion,
-}: {
-  followUpQuestion: { value: string }
-}) {
-  return defineTool({
-    name: 'select_group',
-    label: 'Select Group',
-    description: 'Ask the user which group this receipt belongs to before you create the first split.',
-    parameters: Type.Object({
-      question: Type.String({ description: 'A single short question asking for the group.' }),
-    }),
-    execute: async (_toolCallId, params) => {
-      const question = String(params.question || '').trim()
-
-      if (!question) {
-        return {
-          content: [{ type: 'text', text: 'Provide a non-empty question.' }],
-          details: {},
-        }
-      }
-
-      followUpQuestion.value = question
-
-      return {
-        content: [{ type: 'text', text: 'Group question recorded.' }],
-        details: {},
-      }
-    },
-  })
-}
-
 function subscribeToSession({
   onEvent,
   sawActivity,
@@ -754,29 +641,45 @@ function startHeartbeats({
   }
 }
 
-export async function runPiBillAgent({
-  title,
-  people,
+export async function runPiBillLoop({
+  chatId,
+  groupId,
   imageBase64,
+  message,
   mimeType,
-  rawText,
   onEvent = () => {},
+  people,
+  personId,
+  rawReceipt,
+  rawText,
+  receipt,
+  split = [],
+  title,
 }: {
-  title: string
-  people: string[]
+  chatId?: string
+  groupId?: string
   imageBase64?: string
+  message?: string
   mimeType?: string
-  rawText?: string
   onEvent?: (payload: any) => void
+  people: string[]
+  personId?: string
+  rawReceipt?: any
+  rawText?: string
+  receipt?: any
+  split?: any[]
+  title: string
 }) {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error('OPENAI_API_KEY is required for the Pi agent loop.')
   }
 
-  const currentRawReceipt = { value: null as any }
-  const currentReceipt = { value: null as any }
+  const currentRawReceipt = { value: (rawReceipt || receipt || null) as any }
+  const currentReceipt = { value: (receipt ? normalizeExtractedReceipt(receipt) : null) as any }
   const finalPlan = { value: null as any }
+  const followUpQuestion = { value: '' }
   const sawActivity = { value: false }
+  const currentSplit = Array.isArray(split) ? split : []
 
   const logProgress = defineTool({
     name: 'log_progress',
@@ -806,35 +709,38 @@ export async function runPiBillAgent({
     description: 'Parse the uploaded receipt image or OCR text into a structured receipt.',
     parameters: Type.Object({}),
     execute: async () => {
+      if (currentReceipt.value) {
+        return toolResponse(currentReceipt.value)
+      }
+
+      if (!imageBase64 && !rawText) {
+        return toolResponse({
+          receipt: null,
+          summary: 'No receipt input is available to parse.',
+        })
+      }
+
       await onEvent({
         type: 'agent_progress',
         message: 'Penny is reading the receipt.',
         stage: 'extract',
       })
 
-      if (!currentReceipt.value) {
-        currentRawReceipt.value = await extractReceiptWithOpenAI({
-          imageBase64,
-          mimeType,
-          onEvent: async (payload) => {
-            if (payload.type === 'receipt_extracted') {
-              await onEvent(payload)
-            }
-          },
-          people,
-          rawText,
-          title,
-        })
-        currentReceipt.value = normalizeExtractedReceipt(currentRawReceipt.value)
-      }
+      currentRawReceipt.value = await extractReceiptWithOpenAI({
+        imageBase64,
+        mimeType,
+        onEvent: async (payload) => {
+          if (payload.type === 'receipt_extracted') {
+            await onEvent(payload)
+          }
+        },
+        people,
+        rawText,
+        title,
+      })
+      currentReceipt.value = normalizeExtractedReceipt(currentRawReceipt.value)
 
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify(currentReceipt.value),
-        }],
-        details: {},
-      }
+      return toolResponse(currentReceipt.value)
     },
   })
 
@@ -846,6 +752,19 @@ export async function runPiBillAgent({
   const editReceipt = defineReceiptEditTool({
     currentReceipt,
     onEvent,
+  })
+
+  const searchPreviousSplitsTool = definePreviousSplitsTool({
+    chatId,
+    currentReceipt,
+    groupId,
+    onEvent,
+    people,
+    personId,
+  })
+
+  const askFollowUpQuestion = defineFollowUpQuestionTool({
+    followUpQuestion,
   })
 
   const submitSplitPlan = defineTool({
@@ -895,214 +814,64 @@ export async function runPiBillAgent({
     },
   })
 
-  const session = await createPiSession([extractReceipt, logProgress, reconcileReceipt, editReceipt, submitSplitPlan])
+  const session = await createPiSession([
+    logProgress,
+    extractReceipt,
+    reconcileReceipt,
+    editReceipt,
+    searchPreviousSplitsTool,
+    askFollowUpQuestion,
+    submitSplitPlan,
+  ])
   const stopHeartbeats = startHeartbeats({
     finalPlan,
-    firstMessage: 'Penny is classifying shared versus individual items.',
+    firstMessage: currentSplit.length
+      ? 'Penny is rebalancing the split.'
+      : currentReceipt.value
+        ? 'Penny is turning the parsed receipt into a split.'
+        : 'Penny is reading the receipt and building the split.',
     onEvent,
     sawActivity,
-    secondMessage: 'Penny is still working through the split. This agent step can take a moment.',
+    secondMessage: 'Penny is still working through the split.',
   })
   const unsubscribe = subscribeToSession({
     onEvent,
     sawActivity,
     session,
-    statusMessage: 'Starting the Pi agent loop.',
+    statusMessage: currentSplit.length ? 'Penny is revising the split.' : 'Penny is building the split.',
   })
+  const previousSplitHints = currentReceipt.value
+    ? await loadPreviousSplitHints({
+      chatId,
+      groupId,
+      onEvent,
+      people,
+      personId,
+      receipt: currentReceipt.value,
+    })
+    : ''
 
   try {
-    await session.prompt(buildPrompt({ imageBase64, people, rawText, title }))
+    await session.prompt(buildLoopPrompt({
+      imageBase64,
+      message,
+      people,
+      previousSplitHints,
+      rawText,
+      receipt: currentReceipt.value,
+      split: currentSplit,
+      title,
+    }))
   } finally {
     stopHeartbeats()
     unsubscribe()
     session.dispose()
-  }
-
-  if (!finalPlan.value) {
-    throw new Error('The Pi agent finished without submitting a split plan.')
   }
 
   if (!currentReceipt.value) {
     throw new Error('The Pi agent finished without extracting a receipt.')
   }
 
-  return {
-    plan: splitPlanSchema.parse(finalPlan.value),
-    rawReceipt: currentRawReceipt.value || currentReceipt.value,
-    receipt: currentReceipt.value,
-  }
-}
-
-export async function runPiBillRevisionAgent({
-  chatId,
-  groupId,
-  message,
-  onEvent = () => {},
-  people,
-  personId,
-  rawReceipt,
-  receipt,
-  split,
-  title,
-}: {
-  chatId?: string
-  groupId?: string
-  message: string
-  onEvent?: (payload: any) => void
-  people: string[]
-  personId?: string
-  rawReceipt?: any
-  receipt: any
-  split: any[]
-  title: string
-}) {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is required for the Pi agent loop.')
-  }
-
-  const currentRawReceipt = { value: rawReceipt || receipt }
-  const currentReceipt = { value: normalizeExtractedReceipt(receipt) }
-  const finalPlan = { value: null as any }
-  const followUpQuestion = { value: '' }
-  const sawActivity = { value: false }
-
-  const logProgress = defineTool({
-    name: 'log_progress',
-    label: 'Log Progress',
-    description: 'Send a short progress update to the frontend UI.',
-    parameters: Type.Object({
-      message: Type.String({ description: 'A short UI-safe progress message.' }),
-      stage: Type.String({ description: 'Current stage label.' }),
-    }),
-    execute: async (_toolCallId, params) => {
-      await onEvent({
-        type: 'agent_progress',
-        message: params.message,
-        stage: params.stage,
-      })
-
-      return {
-        content: [{ type: 'text', text: 'Progress logged.' }],
-        details: {},
-      }
-    },
-  })
-
-  const reconcileReceipt = defineReceiptReconcileTool({
-    currentReceipt,
-    onEvent,
-  })
-
-  const editReceipt = defineReceiptEditTool({
-    currentReceipt,
-    onEvent,
-  })
-
-  const searchPreviousSplitsTool = definePreviousSplitsTool({
-    chatId,
-    currentReceipt,
-    groupId,
-    onEvent,
-    people,
-    personId,
-  })
-
-  const submitSplitPlan = defineTool({
-    name: 'submit_split_plan',
-    label: 'Submit Split Plan',
-    description: 'Submit the final split plan once the reasoning is done.',
-    parameters: Type.Object({
-      billItems: Type.Array(Type.Object({
-        amountCents: Type.Integer({ minimum: 0 }),
-        assignedPeople: Type.Array(Type.String()),
-        name: Type.String(),
-      })),
-      notes: Type.Array(Type.String()),
-      split: Type.Array(Type.Object({
-        amountCents: Type.Integer({ minimum: 0 }),
-        note: Type.String(),
-        person: Type.String(),
-      })),
-      summary: Type.String(),
-    }),
-    execute: async (_toolCallId, params) => {
-      const error = getSplitPlanError({
-        billItems: params.billItems,
-        people,
-        receipt: currentReceipt.value,
-        split: params.split,
-      })
-
-      if (error) {
-        return {
-          content: [{ type: 'text', text: error }],
-          details: {},
-        }
-      }
-
-      finalPlan.value = params
-
-      await onEvent({
-        type: 'agent_plan_submitted',
-        plan: params,
-      })
-
-      return {
-        content: [{ type: 'text', text: 'Split plan recorded.' }],
-        details: {},
-      }
-    },
-  })
-
-  const askFollowUpQuestion = defineFollowUpQuestionTool({
-    followUpQuestion,
-  })
-
-  const session = await createPiSession([
-    logProgress,
-    reconcileReceipt,
-    editReceipt,
-    searchPreviousSplitsTool,
-    askFollowUpQuestion,
-    submitSplitPlan,
-  ])
-  const stopHeartbeats = startHeartbeats({
-    finalPlan,
-    firstMessage: 'Penny is adjusting the split based on your note.',
-    onEvent,
-    sawActivity,
-    secondMessage: 'Penny is still rebalancing the split.',
-  })
-  const unsubscribe = subscribeToSession({
-    onEvent,
-    sawActivity,
-    session,
-    statusMessage: 'Penny is revising the split.',
-  })
-  const previousSplitHints = await loadPreviousSplitHints({
-    chatId,
-    groupId,
-    onEvent,
-    people,
-    personId,
-    receipt: currentReceipt.value,
-  })
-
-  try {
-    await session.prompt(buildRevisionPrompt({
-      message,
-      people,
-      previousSplitHints,
-      receipt: currentReceipt.value,
-      split,
-      title,
-    }))
-  } finally {
-    stopHeartbeats()
-    unsubscribe()
-    session.dispose()
-  }
-
   if (followUpQuestion.value) {
     return {
       question: followUpQuestion.value,
@@ -1112,197 +881,7 @@ export async function runPiBillRevisionAgent({
   }
 
   if (!finalPlan.value) {
-    throw new Error('The Pi agent finished without submitting a revised split plan.')
-  }
-
-  return {
-    plan: splitPlanSchema.parse(finalPlan.value),
-    rawReceipt: currentRawReceipt.value || currentReceipt.value,
-    receipt: currentReceipt.value,
-  }
-}
-
-export async function runPiBillReceiptSplitAgent({
-  chatId,
-  groupId,
-  message,
-  onEvent = () => {},
-  people,
-  personId,
-  rawReceipt,
-  receipt,
-  title,
-}: {
-  chatId?: string
-  groupId?: string
-  message: string
-  onEvent?: (payload: any) => void
-  people: string[]
-  personId?: string
-  rawReceipt?: any
-  receipt: any
-  title: string
-}) {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is required for the Pi agent loop.')
-  }
-
-  const currentRawReceipt = { value: rawReceipt || receipt }
-  const currentReceipt = { value: normalizeExtractedReceipt(receipt) }
-  const finalPlan = { value: null as any }
-  const followUpQuestion = { value: '' }
-  const sawActivity = { value: false }
-
-  const logProgress = defineTool({
-    name: 'log_progress',
-    label: 'Log Progress',
-    description: 'Send a short progress update to the frontend UI.',
-    parameters: Type.Object({
-      message: Type.String({ description: 'A short UI-safe progress message.' }),
-      stage: Type.String({ description: 'Current stage label.' }),
-    }),
-    execute: async (_toolCallId, params) => {
-      await onEvent({
-        type: 'agent_progress',
-        message: params.message,
-        stage: params.stage,
-      })
-
-      return {
-        content: [{ type: 'text', text: 'Progress logged.' }],
-        details: {},
-      }
-    },
-  })
-
-  const reconcileReceipt = defineReceiptReconcileTool({
-    currentReceipt,
-    onEvent,
-  })
-
-  const editReceipt = defineReceiptEditTool({
-    currentReceipt,
-    onEvent,
-  })
-
-  const searchPreviousSplitsTool = definePreviousSplitsTool({
-    chatId,
-    currentReceipt,
-    groupId,
-    onEvent,
-    people,
-    personId,
-  })
-
-  const submitSplitPlan = defineTool({
-    name: 'submit_split_plan',
-    label: 'Submit Split Plan',
-    description: 'Submit the final split plan once the reasoning is done.',
-    parameters: Type.Object({
-      billItems: Type.Array(Type.Object({
-        amountCents: Type.Integer({ minimum: 0 }),
-        assignedPeople: Type.Array(Type.String()),
-        name: Type.String(),
-      })),
-      notes: Type.Array(Type.String()),
-      split: Type.Array(Type.Object({
-        amountCents: Type.Integer({ minimum: 0 }),
-        note: Type.String(),
-        person: Type.String(),
-      })),
-      summary: Type.String(),
-    }),
-    execute: async (_toolCallId, params) => {
-      const error = getSplitPlanError({
-        billItems: params.billItems,
-        people,
-        receipt: currentReceipt.value,
-        split: params.split,
-      })
-
-      if (error) {
-        return {
-          content: [{ type: 'text', text: error }],
-          details: {},
-        }
-      }
-
-      finalPlan.value = params
-
-      await onEvent({
-        type: 'agent_plan_submitted',
-        plan: params,
-      })
-
-      return {
-        content: [{ type: 'text', text: 'Split plan recorded.' }],
-        details: {},
-      }
-    },
-  })
-
-  const askFollowUpQuestion = defineFollowUpQuestionTool({
-    followUpQuestion,
-  })
-  const selectGroup = defineSelectGroupTool({
-    followUpQuestion,
-  })
-
-  const session = await createPiSession([
-    logProgress,
-    reconcileReceipt,
-    editReceipt,
-    searchPreviousSplitsTool,
-    selectGroup,
-    askFollowUpQuestion,
-    submitSplitPlan,
-  ])
-  const stopHeartbeats = startHeartbeats({
-    finalPlan,
-    firstMessage: 'Penny is turning the parsed receipt into a first split.',
-    onEvent,
-    sawActivity,
-    secondMessage: 'Penny is still balancing the split.',
-  })
-  const unsubscribe = subscribeToSession({
-    onEvent,
-    sawActivity,
-    session,
-    statusMessage: 'Penny is building the first split.',
-  })
-  const previousSplitHints = await loadPreviousSplitHints({
-    chatId,
-    groupId,
-    onEvent,
-    people,
-    personId,
-    receipt: currentReceipt.value,
-  })
-
-  try {
-    await session.prompt(buildReceiptSplitPrompt({
-      message,
-      people,
-      previousSplitHints,
-      receipt: currentReceipt.value,
-      title,
-    }))
-  } finally {
-    stopHeartbeats()
-    unsubscribe()
-    session.dispose()
-  }
-
-  if (followUpQuestion.value) {
-    return {
-      question: followUpQuestion.value,
-      rawReceipt: currentRawReceipt.value || currentReceipt.value,
-      receipt: currentReceipt.value,
-    }
-  }
-
-  if (!finalPlan.value) {
-    throw new Error('The Pi agent finished without submitting a split plan.')
+    throw new Error('The Pi agent finished without submitting a split plan or follow-up question.')
   }
 
   return {
