@@ -24,6 +24,7 @@ const showCameraCapture = ref(false)
 const scrollRef = ref(null)
 const composerText = ref('')
 const composerSeedKey = ref('')
+const composerVisible = ref(false)
 const localGroupId = ref('')
 const leadMessages = ref([])
 const tailMessages = ref([])
@@ -280,6 +281,7 @@ function pushLocalMessage(who, text) {
 function resetDraftInputs() {
   composerText.value = ''
   composerSeedKey.value = ''
+  composerVisible.value = false
   selectedFile.value = null
   leadMessages.value = []
   tailMessages.value = []
@@ -438,6 +440,7 @@ async function resetScan() {
 
 function clearGroup() {
   localGroupId.value = ''
+  composerVisible.value = false
   pushLocalMessage('assistant', 'Pick the group for this receipt.')
 }
 
@@ -498,6 +501,7 @@ async function continueToSplit() {
 }
 
 function openBillComposerFromScan() {
+  composerVisible.value = true
   composerSeedKey.value = ''
   void continueToSplit()
 }
@@ -540,10 +544,12 @@ watch(
   [
     () => analysis.chatId.value,
     () => parsedReceipt.value,
+    () => splitRows.value.length,
     () => localGroupId.value,
+    () => composerVisible.value,
   ],
   () => {
-    if (!selectedGroup.value || !parsedReceipt.value) {
+    if (!composerVisible.value || !selectedGroup.value || !parsedReceipt.value) {
       return
     }
 
@@ -808,10 +814,10 @@ onBeforeUnmount(() => {
               <IconGlyph name="sparkle" width="16" height="16" />
             </div>
             <button type="button" class="btn btn-ghost" @click="openBillComposerFromScan">
-              Open bill composer
+              {{ composerVisible ? 'Refresh bill composer' : 'Open bill composer' }}
             </button>
           </div>
-          <div v-if="parsedReceipt && splitRows.length && ledgerSelectedGroup" class="scan-composer-stage">
+          <div v-if="composerVisible && parsedReceipt && splitRows.length && ledgerSelectedGroup" class="scan-composer-stage">
             <BillComposer
               :bill-items="billItems"
               :bill-paid-by-person-id="billPaidByPersonId"
