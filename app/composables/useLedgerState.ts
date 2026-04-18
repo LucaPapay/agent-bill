@@ -1,19 +1,15 @@
 import { computed } from 'vue'
+import {
+  buildPreviewShares,
+  centsToMoneyInput,
+  createEmptyBillItem,
+  normalizeAssignedPersonIds,
+  prepareBillItems,
+  toCents,
+  todayBillDate,
+} from '../lib/ledger-bill-form'
 
 let loadingPromise: Promise<void> | null = null
-
-function todayBillDate() {
-  const value = new Date()
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-
-  return `${year}-${month}-${day}`
-}
-
-function centsToMoneyInput(cents: number) {
-  return ((cents || 0) / 100).toFixed(2).replace('.', ',')
-}
 
 export function useLedgerState() {
   const api = useOrpc()
@@ -93,9 +89,17 @@ export function useLedgerState() {
   const billTipCents = computed(() => toCents(billTip.value))
   const billTotalCents = computed(() => toCents(billTotal.value))
   const billRemainingCents = computed(() => billTotalCents.value - billTipCents.value - billItemsSubtotalCents.value)
+  const preparedBillItems = computed(() =>
+    prepareBillItems(selectedGroup.value, billItems.value),
+  )
 
   const billPreviewShares = computed(() =>
-    buildPreviewShares(selectedGroup.value, billItems.value, billTipCents.value, billTotalCents.value),
+    buildPreviewShares(
+      selectedGroup.value,
+      preparedBillItems.value.payloadItems,
+      billTipCents.value,
+      billTotalCents.value,
+    ),
   )
 
   const allBills = computed(() =>
@@ -229,6 +233,8 @@ export function useLedgerState() {
       && selectedGroup.value.memberships.length
       && billTitle.value.trim()
       && billPaidByPersonId.value
+      && !preparedBillItems.value.hasIncompleteItems
+      && billRemainingCents.value === 0
       && billTotalCents.value > 0,
     ),
   )
@@ -238,126 +244,11 @@ export function useLedgerState() {
     return `bill-item-${billItemId.value}`
   }
 
-  function toCents(value: string | number | undefined | null) {
-    const normalized = String(value || '')
-      .trim()
-      .replace(/[^0-9,.-]/g, '')
-      .replace(',', '.')
-    const amount = Number.parseFloat(normalized)
-
-    if (!Number.isFinite(amount)) {
-      return 0
-    }
-
-    return Math.max(0, Math.round(amount * 100))
-  }
-
   function formatCents(cents: number) {
     return new Intl.NumberFormat('en-US', {
       currency: 'EUR',
       style: 'currency',
     }).format((cents || 0) / 100)
-  }
-
-  function splitEvenly(amountCents: number, personIds: string[]) {
-    if (!personIds.length || amountCents <= 0) {
-      return new Map<string, number>()
-    }
-
-    const base = Math.floor(amountCents / personIds.length)
-    const remainder = amountCents % personIds.length
-    const result = new Map<string, number>()
-
-    for (const [index, personId] of personIds.entries()) {
-      result.set(personId, base + (index < remainder ? 1 : 0))
-    }
-
-    return result
-  }
-
-  function normalizeAssignedPersonIds(group: any, personIds: string[]) {
-    const allowedIds = new Set((group?.memberships || []).map((membership: any) => membership.personId))
-    const normalized: string[] = []
-
-    for (const personId of personIds) {
-      if (!allowedIds.has(personId) || normalized.includes(personId)) {
-        continue
-      }
-
-      normalized.push(personId)
-    }
-
-    return normalized
-  }
-
-  function createEmptyBillItem(group: any) {
-    const firstPersonId = group?.memberships?.[0]?.personId
-
-    return {
-      amount: '',
-      assignedPersonIds: firstPersonId ? [firstPersonId] : [],
-      id: nextBillItemId(),
-      name: '',
-    }
-  }
-
-  function buildPreviewShares(group: any, items: any[], tipAmountCents: number, totalAmountCents: number) {
-    const memberships = group?.memberships || []
-    const itemAmountsByPersonId = new Map<string, number>(
-      memberships.map((membership: any) => [membership.personId, 0]),
-    )
-    let hasAssignedItems = false
-
-    for (const item of items) {
-      const amountCents = toCents(item.amount)
-      const assignedPersonIds = normalizeAssignedPersonIds(group, item.assignedPersonIds || [])
-
-      if (amountCents <= 0 || !assignedPersonIds.length) {
-        continue
-      }
-
-      const splitAmounts = splitEvenly(amountCents, assignedPersonIds)
-      hasAssignedItems = true
-
-      for (const personId of assignedPersonIds) {
-        itemAmountsByPersonId.set(
-          personId,
-          (itemAmountsByPersonId.get(personId) || 0) + (splitAmounts.get(personId) || 0),
-        )
-      }
-    }
-
-    if (!hasAssignedItems && memberships.length) {
-      const evenItemAmounts = splitEvenly(
-        Math.max(0, totalAmountCents - tipAmountCents),
-        memberships.map((membership: any) => membership.personId),
-      )
-
-      for (const membership of memberships) {
-        itemAmountsByPersonId.set(membership.personId, evenItemAmounts.get(membership.personId) || 0)
-      }
-    }
-
-    const tipParticipants = memberships
-      .map((membership: any) => membership.personId)
-      .filter((personId: string) => (itemAmountsByPersonId.get(personId) || 0) > 0)
-    const sharedTip = splitEvenly(
-      tipAmountCents,
-      tipParticipants.length ? tipParticipants : memberships.map((membership: any) => membership.personId),
-    )
-
-    return memberships.map((membership: any) => {
-      const itemAmountCents = itemAmountsByPersonId.get(membership.personId) ?? 0
-      const sharedTipCents = sharedTip.get(membership.personId) ?? 0
-
-      return {
-        itemAmountCents,
-        person: membership.person,
-        personId: membership.personId,
-        tipAmountCents: sharedTipCents,
-        totalAmountCents: itemAmountCents + sharedTipCents,
-      }
-    })
   }
 
   function getGroupById(groupId: string) {
@@ -386,7 +277,7 @@ export function useLedgerState() {
     const members = group?.memberships || []
 
     if (!billItems.value.length) {
-      billItems.value = [createEmptyBillItem(group)]
+      billItems.value = [createEmptyBillItem(group, nextBillItemId)]
     }
     else {
       billItems.value = billItems.value.map(item => {
@@ -456,7 +347,7 @@ export function useLedgerState() {
           id: nextBillItemId(),
           name: item.name,
         }))
-      : [createEmptyBillItem(selectedGroup.value)]
+      : [createEmptyBillItem(selectedGroup.value, nextBillItemId)]
 
     return true
   }
@@ -485,21 +376,21 @@ export function useLedgerState() {
           id: item.id || nextBillItemId(),
           name: item.name || '',
         }))
-      : [createEmptyBillItem(selectedGroup.value)]
+      : [createEmptyBillItem(selectedGroup.value, nextBillItemId)]
     billPaidByPersonId.value = draft.billPaidByPersonId || selectedGroup.value?.memberships?.[0]?.personId || ''
     syncBillForm(selectedGroup.value)
     return true
   }
 
   function addBillItem() {
-    billItems.value.push(createEmptyBillItem(selectedGroup.value))
+    billItems.value.push(createEmptyBillItem(selectedGroup.value, nextBillItemId))
   }
 
   function removeBillItem(itemId: string) {
     billItems.value = billItems.value.filter(item => item.id !== itemId)
 
     if (!billItems.value.length) {
-      billItems.value = [createEmptyBillItem(selectedGroup.value)]
+      billItems.value = [createEmptyBillItem(selectedGroup.value, nextBillItemId)]
     }
   }
 
@@ -697,17 +588,9 @@ export function useLedgerState() {
     errorMessage.value = ''
     saving.value = true
 
-    const payloadItems = billItems.value
-      .map(item => ({
-        amountCents: toCents(item.amount),
-        assignedPersonIds: normalizeAssignedPersonIds(selectedGroup.value, item.assignedPersonIds || []),
-        name: item.name.trim(),
-      }))
-      .filter(item => item.name || item.amountCents > 0)
-
     return api.createLedgerBill({
       billDate: billDate.value,
-      billItems: payloadItems,
+      billItems: preparedBillItems.value.payloadItems,
       groupId: selectedGroupId.value,
       paidByPersonId: billPaidByPersonId.value,
       tipAmountCents: billTipCents.value,
@@ -737,18 +620,10 @@ export function useLedgerState() {
     errorMessage.value = ''
     saving.value = true
 
-    const payloadItems = billItems.value
-      .map(item => ({
-        amountCents: toCents(item.amount),
-        assignedPersonIds: normalizeAssignedPersonIds(selectedGroup.value, item.assignedPersonIds || []),
-        name: item.name.trim(),
-      }))
-      .filter(item => item.name || item.amountCents > 0)
-
     return api.updateLedgerBill({
       billId,
       billDate: billDate.value,
-      billItems: payloadItems,
+      billItems: preparedBillItems.value.payloadItems,
       groupId: selectedGroupId.value,
       paidByPersonId: billPaidByPersonId.value,
       tipAmountCents: billTipCents.value,

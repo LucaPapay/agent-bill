@@ -130,6 +130,7 @@ function buildGroupSelectionRules(people: string[]) {
   return [
     '- If no participants are available yet, call select_group exactly once before you do any split work.',
     '- Do not call ask_follow_up_question or submit_split_plan until the group is known.',
+    '- If the user instruction already says which group was selected, do not call select_group again.',
   ]
 }
 
@@ -142,7 +143,7 @@ function buildRevisionPrompt({ message, people, receipt, split, title }: {
 }) {
   return [
     `You are Penny, the bill-splitting agent for "${title}".`,
-    'The receipt is already parsed. Do not ask for more data and do not call extract_receipt.',
+    'The receipt is already parsed. Do not ask for more receipt data and do not call extract_receipt.',
     'Update the split based on the user follow-up message.',
     'Follow this exact order:',
     '1. Immediately call log_progress with stage "revise".',
@@ -195,7 +196,7 @@ function buildReceiptSplitPrompt({ message, people, receipt, title }: {
     '- Keep original receipt item names when practical, but you may add short adjustment items for shared tax, tip, or rounding.',
     '- Respect explicit user instructions when they do not break the receipt total.',
     '- Keep notes short and concrete.',
-    '- If the user only gave you the group or participant list, ask one short question about how the receipt should be split before you create the first split.',
+    '- If the user only gave you the group or participant list, call ask_follow_up_question with one short question about how the receipt should be split before you create the first split.',
     ...buildClarificationRules(),
     ...buildGroupSelectionRules(people),
     ...buildParticipantRules(people),

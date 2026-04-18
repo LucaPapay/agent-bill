@@ -64,6 +64,7 @@ export const extractedReceiptSchema = z.object({
 })
 
 export const analysisInputSchema = z.object({
+  groupId: z.string().trim().optional(),
   imageBase64: z.string().optional(),
   mimeType: z.string().optional(),
   people: z.array(z.string().trim().min(1)).default([]),
@@ -73,8 +74,11 @@ export const analysisInputSchema = z.object({
 
 export const revisionInputSchema = z.object({
   chatId: z.string().trim().min(1),
+  groupId: z.string().trim().optional(),
   message: z.string().trim().min(1),
   people: z.array(z.string().trim().min(1)).default([]),
+  systemMessage: z.string().trim().optional(),
+  userMessage: z.string().trim().optional(),
 })
 
 export const splitEntrySchema = z.object({
@@ -111,6 +115,7 @@ export const analysisResultSchema = z.object({
   billItems: z.array(agentBillItemSchema),
   chatId: z.string(),
   currency: z.string(),
+  groupId: z.string().optional(),
   history: z.array(analysisHistoryEntrySchema),
   items: extractedReceiptSchema.shape.items,
   merchant: z.string(),

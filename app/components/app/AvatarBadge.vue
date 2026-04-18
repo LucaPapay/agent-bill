@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
-import { avatarColors } from './mockData'
+
+const fallbackPalette = ['#F6B533', '#FF5436', '#8FC56A', '#B9A6E8', '#7FB8D9', '#E89E6C', '#D9B38F']
 
 const props = defineProps({
   name: {
@@ -12,8 +13,6 @@ const props = defineProps({
     default: 'md',
   },
 })
-
-const fallbackPalette = ['#F6B533', '#FF5436', '#8FC56A', '#B9A6E8', '#7FB8D9', '#E89E6C', '#D9B38F']
 
 function colorFromName(name) {
   let hash = 0
@@ -27,7 +26,7 @@ function colorFromName(name) {
 }
 
 const avatarStyle = computed(() => ({
-  background: avatarColors[props.name] || colorFromName(props.name),
+  background: colorFromName(props.name),
 }))
 
 const initial = computed(() => props.name.charAt(0).toUpperCase())

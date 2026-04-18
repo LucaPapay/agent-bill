@@ -151,6 +151,23 @@ export async function getGroupMemberIds(groupId: string) {
   return rows.map(row => row.person_id as string)
 }
 
+export async function getGroupMemberNames(groupId: string) {
+  await ensureSchema()
+
+  const rows = await db()`
+    select people.name
+    from group_memberships
+    join people
+      on people.id = group_memberships.person_id
+    where group_memberships.group_id = ${groupId}
+    order by group_memberships.created_at asc
+  `
+
+  return rows
+    .map(row => String(row.name || '').trim())
+    .filter(Boolean)
+}
+
 export async function canAccessGroup(personId: string, groupId: string) {
   await ensureSchema()
 
