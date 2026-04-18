@@ -92,6 +92,31 @@ function buildCurrentSplitSummary(split: any[], currency = 'EUR') {
     .join('\n')
 }
 
+function buildParticipantRules(people: string[]) {
+  if (people.length) {
+    return [
+      '- Only use the provided participant names.',
+      '- The split must include every participant exactly once.',
+      '',
+      `Participants: ${people.join(', ')}`,
+    ]
+  }
+
+  return [
+    '- Infer the participant names from the user instruction and the current split.',
+    '- Use short human names exactly once each in the split.',
+    '',
+    'Participants: infer them from the conversation.',
+  ]
+}
+
+function buildClarificationRules() {
+  return [
+    '- If the user has not given enough information for a reliable split, call ask_follow_up_question instead of submit_split_plan.',
+    '- Ask one short concrete question that unblocks the split.',
+  ]
+}
+
 function buildRevisionPrompt({ message, people, receipt, split, title }: {
   message: string
   people: string[]
@@ -108,15 +133,12 @@ function buildRevisionPrompt({ message, people, receipt, split, title }: {
     '2. Rework the split using the parsed receipt and the current split.',
     '3. Call submit_split_plan exactly once.',
     'Rules:',
-    '- Only use the provided participant names.',
-    '- The split must include every participant exactly once.',
     '- The split amounts must sum exactly to the receipt total.',
     '- Respect explicit user instructions when they do not break the receipt total.',
     '- If the user only clarifies ownership, keep the total and rebalance the shares.',
     '- Keep notes short and concrete.',
-    '- Do not ask follow-up questions.',
-    '',
-    `Participants: ${people.join(', ')}`,
+    ...buildClarificationRules(),
+    ...buildParticipantRules(people),
     '',
     'User follow-up:',
     message,
@@ -126,6 +148,36 @@ function buildRevisionPrompt({ message, people, receipt, split, title }: {
     '',
     'Current split:',
     buildCurrentSplitSummary(split, receipt?.currency || 'EUR'),
+  ].join('\n')
+}
+
+function buildReceiptSplitPrompt({ message, people, receipt, title }: {
+  message: string
+  people: string[]
+  receipt: any
+  title: string
+}) {
+  return [
+    `You are Penny, the bill-splitting agent for "${title}".`,
+    'The receipt is already parsed. Do not ask for more data and do not call extract_receipt.',
+    'Create the first split from the parsed receipt and the user instruction.',
+    'Follow this exact order:',
+    '1. Immediately call log_progress with stage "split".',
+    '2. Build a practical split using the parsed receipt and the user instruction.',
+    '3. Call submit_split_plan exactly once.',
+    'Rules:',
+    '- The split amounts must sum exactly to the receipt total.',
+    '- Shared food can be split across everyone when ownership is unclear.',
+    '- Respect explicit user instructions when they do not break the receipt total.',
+    '- Keep notes short and concrete.',
+    ...buildClarificationRules(),
+    ...buildParticipantRules(people),
+    '',
+    'User instruction:',
+    message,
+    '',
+    'Parsed receipt:',
+    buildReceiptSummary(receipt),
   ].join('\n')
 }
 
@@ -145,12 +197,19 @@ function getSplitPlanError({
     return 'Split plan rejected. No parsed receipt is available.'
   }
 
-  if (participantNames.length !== people.length || participantNames.some((name: string) => !people.includes(name))) {
-    return `Split plan rejected. Use each participant exactly once: ${people.join(', ')}.`
+  if (!participantNames.length || participantNames.some((name: string) => !name)) {
+    return 'Split plan rejected. Each split row needs a participant name.'
   }
 
-  if (new Set(participantNames).size !== people.length) {
+  if (new Set(participantNames).size !== participantNames.length) {
     return 'Split plan rejected. A participant appears more than once.'
+  }
+
+  if (people.length && (
+    participantNames.length !== people.length
+    || participantNames.some((name: string) => !people.includes(name))
+  )) {
+    return `Split plan rejected. Use each participant exactly once: ${people.join(', ')}.`
   }
 
   if (totalCents !== receipt.totalCents) {
@@ -178,6 +237,38 @@ async function createPiSession(customTools: any[]) {
   })
 
   return session
+}
+
+function defineFollowUpQuestionTool({
+  followUpQuestion,
+}: {
+  followUpQuestion: { value: string }
+}) {
+  return defineTool({
+    name: 'ask_follow_up_question',
+    label: 'Ask Follow-up Question',
+    description: 'Ask one short question when the user has not given enough information for a reliable split.',
+    parameters: Type.Object({
+      question: Type.String({ description: 'A single short clarifying question for the user.' }),
+    }),
+    execute: async (_toolCallId, params) => {
+      const question = String(params.question || '').trim()
+
+      if (!question) {
+        return {
+          content: [{ type: 'text', text: 'Provide a non-empty question.' }],
+          details: {},
+        }
+      }
+
+      followUpQuestion.value = question
+
+      return {
+        content: [{ type: 'text', text: 'Question recorded.' }],
+        details: {},
+      }
+    },
+  })
 }
 
 function subscribeToSession({
@@ -449,6 +540,7 @@ export async function runPiBillRevisionAgent({
   }
 
   const finalPlan = { value: null as any }
+  const followUpQuestion = { value: '' }
   const normalizedReceipt = normalizeExtractedReceipt(receipt)
   const sawActivity = { value: false }
 
@@ -515,7 +607,11 @@ export async function runPiBillRevisionAgent({
     },
   })
 
-  const session = await createPiSession([logProgress, submitSplitPlan])
+  const askFollowUpQuestion = defineFollowUpQuestionTool({
+    followUpQuestion,
+  })
+
+  const session = await createPiSession([logProgress, askFollowUpQuestion, submitSplitPlan])
   const stopHeartbeats = startHeartbeats({
     finalPlan,
     firstMessage: 'Penny is adjusting the split based on your note.',
@@ -544,8 +640,149 @@ export async function runPiBillRevisionAgent({
     session.dispose()
   }
 
+  if (followUpQuestion.value) {
+    return {
+      question: followUpQuestion.value,
+      receipt: normalizedReceipt,
+    }
+  }
+
   if (!finalPlan.value) {
     throw new Error('The Pi agent finished without submitting a revised split plan.')
+  }
+
+  return {
+    plan: splitPlanSchema.parse(finalPlan.value),
+    receipt: normalizedReceipt,
+  }
+}
+
+export async function runPiBillReceiptSplitAgent({
+  message,
+  onEvent = () => {},
+  people,
+  receipt,
+  title,
+}: {
+  message: string
+  onEvent?: (payload: any) => void
+  people: string[]
+  receipt: any
+  title: string
+}) {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is required for the Pi agent loop.')
+  }
+
+  const finalPlan = { value: null as any }
+  const followUpQuestion = { value: '' }
+  const normalizedReceipt = normalizeExtractedReceipt(receipt)
+  const sawActivity = { value: false }
+
+  const logProgress = defineTool({
+    name: 'log_progress',
+    label: 'Log Progress',
+    description: 'Send a short progress update to the frontend UI.',
+    parameters: Type.Object({
+      message: Type.String({ description: 'A short UI-safe progress message.' }),
+      stage: Type.String({ description: 'Current stage label.' }),
+    }),
+    execute: async (_toolCallId, params) => {
+      await onEvent({
+        type: 'agent_progress',
+        message: params.message,
+        stage: params.stage,
+      })
+
+      return {
+        content: [{ type: 'text', text: 'Progress logged.' }],
+        details: {},
+      }
+    },
+  })
+
+  const submitSplitPlan = defineTool({
+    name: 'submit_split_plan',
+    label: 'Submit Split Plan',
+    description: 'Submit the final split plan once the reasoning is done.',
+    parameters: Type.Object({
+      notes: Type.Array(Type.String()),
+      split: Type.Array(Type.Object({
+        amountCents: Type.Integer({ minimum: 0 }),
+        note: Type.String(),
+        person: Type.String(),
+      })),
+      summary: Type.String(),
+    }),
+    execute: async (_toolCallId, params) => {
+      const error = getSplitPlanError({
+        people,
+        receipt: normalizedReceipt,
+        split: params.split,
+      })
+
+      if (error) {
+        return {
+          content: [{ type: 'text', text: error }],
+          details: {},
+        }
+      }
+
+      finalPlan.value = params
+
+      await onEvent({
+        type: 'agent_plan_submitted',
+        plan: params,
+      })
+
+      return {
+        content: [{ type: 'text', text: 'Split plan recorded.' }],
+        details: {},
+      }
+    },
+  })
+
+  const askFollowUpQuestion = defineFollowUpQuestionTool({
+    followUpQuestion,
+  })
+
+  const session = await createPiSession([logProgress, askFollowUpQuestion, submitSplitPlan])
+  const stopHeartbeats = startHeartbeats({
+    finalPlan,
+    firstMessage: 'Penny is turning the parsed receipt into a first split.',
+    onEvent,
+    sawActivity,
+    secondMessage: 'Penny is still balancing the split.',
+  })
+  const unsubscribe = subscribeToSession({
+    onEvent,
+    sawActivity,
+    session,
+    statusMessage: 'Penny is building the first split.',
+  })
+
+  try {
+    await session.prompt(buildReceiptSplitPrompt({
+      message,
+      people,
+      receipt: normalizedReceipt,
+      title,
+    }))
+  } finally {
+    stopHeartbeats()
+    unsubscribe()
+    session.dispose()
+  }
+
+  if (followUpQuestion.value) {
+    return {
+      question: followUpQuestion.value,
+      receipt: normalizedReceipt,
+    }
+  }
+
+  if (!finalPlan.value) {
+    throw new Error('The Pi agent finished without submitting a split plan.')
   }
 
   return {

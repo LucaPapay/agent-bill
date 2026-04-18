@@ -20,21 +20,18 @@ function pushEntry(history: any[], who: 'log' | 'penny' | 'user', text: unknown)
 
 export function createBillChatSeed(input: {
   imageBase64?: string
-  people: string[]
   rawText?: string
   title: string
 }) {
-  const peopleLabel = input.people.join(', ')
-
   if (input.imageBase64) {
-    return pushEntry([], 'user', `Uploaded a receipt for ${input.title} with ${peopleLabel}.`)
+    return pushEntry([], 'user', `Uploaded a receipt for ${input.title}.`)
   }
 
   if (input.rawText) {
-    return pushEntry([], 'user', `Started a text-based receipt split for ${input.title} with ${peopleLabel}.`)
+    return pushEntry([], 'user', `Started a text-based receipt scan for ${input.title}.`)
   }
 
-  return pushEntry([], 'user', `Started a split for ${input.title} with ${peopleLabel}.`)
+  return pushEntry([], 'user', `Started a receipt scan for ${input.title}.`)
 }
 
 export function appendBillChatReply(history: any[], message: string) {

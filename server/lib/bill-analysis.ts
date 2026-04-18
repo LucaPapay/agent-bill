@@ -124,6 +124,14 @@ function buildSummary(itemCount: number, totalCents: number, mode: string) {
   return `Parsed ${itemCount} bill line item${itemCount === 1 ? '' : 's'} and produced a ${mode} split.`
 }
 
+function buildReceiptSummary(merchant: string, itemCount: number) {
+  if (!itemCount) {
+    return 'No structured bill items were found yet.'
+  }
+
+  return `Parsed ${itemCount} bill item${itemCount === 1 ? '' : 's'} from ${merchant || 'the receipt'}.`
+}
+
 export function createLocalAnalysis({ title, people, rawText, imageProvided, notes = [] as string[] }: {
   title: string
   people: string[]
@@ -204,11 +212,43 @@ export function createLocalAnalysis({ title, people, rawText, imageProvided, not
       used: false,
     },
     source: rawText ? 'local-text' : 'local-empty',
-    split: splitEvenly(resolvedTotalCents, people),
-    summary: buildSummary(normalizedItems.length, resolvedTotalCents, 'local fallback'),
+    split: [],
+    summary: buildReceiptSummary(title, normalizedItems.length),
     taxCents,
     tipCents,
     totalCents: resolvedTotalCents,
+  }
+}
+
+export function createReceiptAnalysis({ title, people, receipt, imageProvided }: {
+  title: string
+  people: string[]
+  receipt: any
+  imageProvided: boolean
+}) {
+  return {
+    billDate: receipt.billDate,
+    currency: receipt.currency,
+    items: receipt.items,
+    merchant: receipt.merchant || title,
+    notes: receipt.notes || [],
+    openai: {
+      model: process.env.OPENAI_RECEIPT_MODEL || 'gpt-4.1-mini',
+      used: true,
+    },
+    people,
+    pi: {
+      model: null,
+      used: false,
+    },
+    receipt,
+    source: imageProvided ? 'openai-image' : 'openai-text',
+    split: [],
+    summary: buildReceiptSummary(receipt.merchant || title, receipt.items.length),
+    taxCents: receipt.taxCents,
+    tipCents: receipt.tipCents,
+    title,
+    totalCents: receipt.totalCents,
   }
 }
 

@@ -16,7 +16,7 @@ describe('normalizePeople', () => {
 })
 
 describe('createLocalAnalysis', () => {
-  it('parses receipt-like text and falls back to an even split', () => {
+  it('parses receipt-like text and returns the extracted bill items', () => {
     expect(createLocalAnalysis({
       imageProvided: false,
       people: ['Alice', 'Bob'],
@@ -35,16 +35,7 @@ describe('createLocalAnalysis', () => {
       taxCents: 120,
       tipCents: 280,
       totalCents: 2200,
-      split: [
-        {
-          amountCents: 1100,
-          person: 'Alice',
-        },
-        {
-          amountCents: 1100,
-          person: 'Bob',
-        },
-      ],
+      split: [],
     })
   })
 

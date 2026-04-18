@@ -3,6 +3,11 @@ import { consumeEventIterator } from '@orpc/client'
 let currentCancel: null | (() => Promise<void>) = null
 let pollTimer: null | ReturnType<typeof setTimeout> = null
 
+function isPendingResult(value: any) {
+  const source = String(value?.source || '').trim()
+  return source === 'pi-agent-pending' || source === 'receipt-pending'
+}
+
 function trimFeed(feed: Array<{ text: string; who: string }>, entry: { text: string; who: string }) {
   return [...feed, entry].slice(-120)
 }
@@ -77,7 +82,7 @@ export function useBillAnalysisStream() {
     jobId.value = nextResult?.runId || ''
     receipt.value = nextResult?.receipt || null
     result.value = nextResult
-    status.value = Array.isArray(nextResult?.split) && nextResult.split.length ? 'complete' : 'agent'
+    status.value = isPendingResult(nextResult) ? 'agent' : 'complete'
 
     if (status.value === 'complete') {
       stopPolling()
@@ -96,7 +101,7 @@ export function useBillAnalysisStream() {
         (value: any) => {
           applyResult(value)
 
-          if (!Array.isArray(value?.split) || !value.split.length) {
+          if (isPendingResult(value)) {
             schedulePoll(nextChatId)
             return
           }
@@ -215,7 +220,7 @@ export function useBillAnalysisStream() {
       (value: any) => {
         applyResult(value)
 
-        if (!Array.isArray(value?.split) || !value.split.length) {
+        if (isPendingResult(value)) {
           schedulePoll(normalizedChatId)
         }
 
@@ -244,25 +249,22 @@ export function useBillAnalysisStream() {
 
   async function startFromFile({
     file,
-    people,
     title,
   }: {
     file: File
-    people: string[]
     title: string
   }) {
     return await start({
       imageBase64: await fileToBase64(file),
       mimeType: file.type || 'image/jpeg',
-      people,
       title,
     })
   }
 
-  async function revise(message: string) {
+  async function revise(message: string, people: string[] = []) {
     const nextMessage = String(message || '').trim()
 
-    if (!nextMessage || !chatId.value || !result.value?.split?.length) {
+    if (!nextMessage || !chatId.value || !receipt.value) {
       return null
     }
 
@@ -276,6 +278,7 @@ export function useBillAnalysisStream() {
     openStream(useOrpc().reviseBillSplitStream({
       chatId: chatId.value,
       message: nextMessage,
+      people,
     }))
 
     return null

@@ -18,10 +18,6 @@ function buildPrompt({ title, people, rawText }: {
   people: string[]
   rawText?: string
 }) {
-  const participantText = people.length
-    ? `Participants:\n${people.map(person => `- ${person}`).join('\n')}`
-    : ''
-
   const rawTextBlock = rawText
     ? `OCR fallback text:\n${rawText.slice(0, 8000)}`
     : ''
@@ -38,7 +34,6 @@ function buildPrompt({ title, people, rawText }: {
     '- If a field is missing, use an empty string or 0 instead of inventing a value.',
     '- subtotalCents + taxCents + tipCents should match totalCents when the receipt shows those values.',
     '- Keep notes short and concrete.',
-    participantText,
     rawTextBlock,
   ]
     .filter(Boolean)

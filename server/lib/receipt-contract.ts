@@ -66,7 +66,7 @@ export const extractedReceiptSchema = z.object({
 export const analysisInputSchema = z.object({
   imageBase64: z.string().optional(),
   mimeType: z.string().optional(),
-  people: z.array(z.string().trim().min(1)).min(1),
+  people: z.array(z.string().trim().min(1)).default([]),
   rawText: z.string().trim().optional(),
   title: z.string().trim().min(1).default('Untitled bill'),
 })
@@ -74,6 +74,7 @@ export const analysisInputSchema = z.object({
 export const revisionInputSchema = z.object({
   chatId: z.string().trim().min(1),
   message: z.string().trim().min(1),
+  people: z.array(z.string().trim().min(1)).default([]),
 })
 
 export const splitEntrySchema = z.object({
