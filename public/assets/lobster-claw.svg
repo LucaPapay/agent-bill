@@ -1,0 +1,70 @@
+<svg width="320" height="320" viewBox="0 0 320 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g filter="url(#shadow)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M74 152C74 122 82 91 97 63" stroke="#111111" stroke-width="7"/>
+    <path d="M90 158C95 125 107 92 126 66" stroke="#111111" stroke-width="5"/>
+
+    <path
+      d="M126 270C117 254 111 240 110 223C109 203 116 186 129 173C139 163 153 157 167 157C183 157 196 165 205 181C212 193 216 208 219 224C221 242 219 259 214 278C204 273 194 270 181 270C164 268 146 268 126 270Z"
+      fill="#F2291C"
+      stroke="#111111"
+      stroke-width="8"
+    />
+
+    <path
+      d="M127 181C116 168 107 154 99 137C91 117 87 98 89 79C92 54 106 33 131 22C160 9 193 9 220 20C233 25 243 32 248 42C251 48 250 54 245 59C241 65 234 68 226 71C236 74 243 80 245 88C248 97 244 106 236 112C231 117 224 121 217 123C225 126 231 131 234 138C239 148 235 159 225 166C213 175 196 180 177 181"
+      fill="#F2291C"
+      stroke="#111111"
+      stroke-width="8"
+    />
+
+    <path
+      d="M190 184C204 177 216 169 227 159C240 147 249 133 255 118C262 99 262 79 253 62C248 53 240 46 230 42"
+      fill="#F2291C"
+      stroke="#111111"
+      stroke-width="8"
+    />
+
+    <path
+      d="M178 44C173 49 168 54 164 59C169 63 173 67 177 72C171 77 166 82 161 87C167 92 171 97 176 102C170 108 165 113 160 119C166 124 170 129 175 134C169 140 164 145 159 151C165 156 170 161 175 166"
+      fill="#111111"
+      stroke="#111111"
+      stroke-width="7"
+    />
+
+    <path
+      d="M212 73C206 78 201 83 196 88C202 93 206 98 211 103C205 108 200 113 195 118C200 123 205 128 209 133C204 138 199 143 194 148C199 153 203 158 208 163"
+      fill="#111111"
+      stroke="#111111"
+      stroke-width="7"
+    />
+
+    <path
+      d="M133 188L129 211L141 202L140 228L153 217L152 244L166 231L166 258L178 247"
+      fill="#F2291C"
+      stroke="#111111"
+      stroke-width="8"
+    />
+
+    <path
+      d="M138 191L136 206L145 199L144 220L154 211L154 233L165 223L165 241"
+      stroke="#FFF8F1"
+      stroke-width="5"
+    />
+
+    <path d="M119 102C134 73 157 48 190 31" stroke="#FFF8F1" stroke-width="10"/>
+    <path d="M207 136C221 112 232 91 241 73" stroke="#FFF8F1" stroke-width="9"/>
+    <circle cx="130" cy="128" r="7" fill="#FFF8F1"/>
+  </g>
+  <defs>
+    <filter id="shadow" x="56" y="12" width="216" height="278" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="10"/>
+      <feGaussianBlur stdDeviation="10"/>
+      <feComposite in2="hardAlpha" operator="out"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.05 0 0 0 0 0.03 0 0 0 0 0.02 0 0 0 0.28 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
+    </filter>
+  </defs>
+</svg>
