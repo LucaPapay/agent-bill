@@ -1,5 +1,18 @@
 <script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+import BottomTabBar from '../components/app/BottomTabBar.vue'
+import AssignScreen from '../components/screens/AssignScreen.vue'
+import ChatSplitScreen from '../components/screens/ChatSplitScreen.vue'
+import GroupsScreen from '../components/screens/GroupsScreen.vue'
+import HomeScreen from '../components/screens/HomeScreen.vue'
+import ProfileScreen from '../components/screens/ProfileScreen.vue'
+import ScanScreen from '../components/screens/ScanScreen.vue'
+import SettledScreen from '../components/screens/SettledScreen.vue'
+
 const api = useOrpc()
+
+const screen = ref('home')
+const resultLayout = ref('cards')
 
 const ledger = ref<any>({
   groups: [],
@@ -27,6 +40,20 @@ const billItems = ref<Array<{
 }>>([])
 
 let billItemId = 0
+
+const accentPalette = ['var(--tomato)', 'var(--marigold)', 'var(--mint)', 'var(--lilac)', 'var(--sky)']
+
+const activeTab = computed(() => {
+  if (['scan', 'chat', 'assign', 'settled'].includes(screen.value)) {
+    return 'assign'
+  }
+
+  if (['home', 'groups', 'profile'].includes(screen.value)) {
+    return screen.value
+  }
+
+  return ''
+})
 
 const selectedGroup = computed(() =>
   ledger.value.groups.find((group: any) => group.id === selectedGroupId.value) || null
@@ -67,6 +94,68 @@ const billRemainingCents = computed(() => billTotalCents.value - billTipCents.va
 
 const billPreviewShares = computed(() =>
   buildPreviewShares(selectedGroup.value, billItems.value, billTipCents.value, billTotalCents.value)
+)
+
+const allBills = computed(() =>
+  ledger.value.groups.flatMap((group: any) =>
+    group.bills.map((bill: any) => ({
+      ...bill,
+      groupId: group.id,
+      groupName: group.name,
+    })),
+  )
+)
+
+const recentBillActivities = computed(() =>
+  allBills.value.slice(0, 4).map((bill: any, index: number) => ({
+    accent: accentPalette[index % accentPalette.length],
+    amount: formatCents(bill.totalAmountCents),
+    billId: bill.id,
+    emoji: ['🧾', '🍽️', '🏠', '💸'][index % 4],
+    groupId: bill.groupId,
+    sub: `${bill.groupName} · paid by ${bill.paidByPerson?.name || 'Unknown'}`,
+    title: bill.title,
+  })),
+)
+
+const totalOpenAmountCents = computed(() =>
+  ledger.value.groups.reduce(
+    (sum: number, group: any) =>
+      sum + (group.simplifiedTransfers || []).reduce((groupSum: number, transfer: any) => groupSum + transfer.amountCents, 0),
+    0,
+  )
+)
+
+const totalBills = computed(() => allBills.value.length)
+
+const homeSummary = computed(() => ({
+  dateLabel: new Intl.DateTimeFormat('en-US', {
+    day: 'numeric',
+    month: 'short',
+    weekday: 'short',
+  }).format(new Date()),
+  groupsCount: ledger.value.groups.length,
+  openAmountLabel: formatCents(totalOpenAmountCents.value),
+  pendingPayments: ledger.value.groups.reduce(
+    (sum: number, group: any) => sum + (group.simplifiedTransfers || []).length,
+    0,
+  ),
+  peopleCount: ledger.value.people.length,
+  totalBills: totalBills.value,
+}))
+
+const canAddPersonToGroup = computed(() =>
+  Boolean(selectedGroupId.value && personToAddId.value)
+)
+
+const canCreateBill = computed(() =>
+  Boolean(
+    selectedGroup.value
+    && selectedGroup.value.memberships.length
+    && billTitle.value.trim()
+    && billPaidByPersonId.value
+    && billTotalCents.value > 0,
+  )
 )
 
 watch(selectedGroup, (group) => {
@@ -176,7 +265,10 @@ function buildPreviewShares(group: any, items: any[], tipAmountCents: number, to
   }
 
   if (!hasAssignedItems && memberships.length) {
-    const evenItemAmounts = splitEvenly(Math.max(0, totalAmountCents - tipAmountCents), memberships.map((membership: any) => membership.personId))
+    const evenItemAmounts = splitEvenly(
+      Math.max(0, totalAmountCents - tipAmountCents),
+      memberships.map((membership: any) => membership.personId),
+    )
 
     for (const membership of memberships) {
       itemAmountsByPersonId.set(membership.personId, evenItemAmounts.get(membership.personId) || 0)
@@ -205,24 +297,18 @@ function buildPreviewShares(group: any, items: any[], tipAmountCents: number, to
   })
 }
 
-function formatAssignedPeople(item: any) {
-  const names = (item.assignedPeople || []).map((person: any) => person.name)
+function applyLedger(nextLedger: any) {
+  ledger.value = nextLedger
 
-  if (!names.length) {
-    return 'Unassigned'
+  if (!selectedGroupId.value && nextLedger.groups.length) {
+    selectedGroupId.value = nextLedger.groups[0].id
   }
 
-  return names.join(', ')
-}
-
-function formatItemSplit(item: any) {
-  const assignedPeople = item.assignedPeople || []
-
-  if (assignedPeople.length <= 1) {
-    return 'Single owner'
+  if (!nextLedger.groups.find((group: any) => group.id === selectedGroupId.value)) {
+    selectedGroupId.value = nextLedger.groups[0]?.id || ''
   }
 
-  return `Split across ${assignedPeople.length} people`
+  syncBillForm(nextLedger.groups.find((group: any) => group.id === selectedGroupId.value) || null)
 }
 
 function syncBillForm(group: any) {
@@ -259,20 +345,6 @@ function syncBillForm(group: any) {
   }
 }
 
-function applyLedger(nextLedger: any) {
-  ledger.value = nextLedger
-
-  if (!selectedGroupId.value && nextLedger.groups.length) {
-    selectedGroupId.value = nextLedger.groups[0].id
-  }
-
-  if (!nextLedger.groups.find((group: any) => group.id === selectedGroupId.value)) {
-    selectedGroupId.value = nextLedger.groups[0]?.id || ''
-  }
-
-  syncBillForm(nextLedger.groups.find((group: any) => group.id === selectedGroupId.value) || null)
-}
-
 function resetBillForm() {
   billTitle.value = 'Friday dinner'
   billTotal.value = '0'
@@ -293,7 +365,29 @@ function removeBillItem(itemId: string) {
   }
 }
 
-function toggleBillItemAssignment(item: any, personId: string) {
+function updateBillItemName(itemId: string, value: string) {
+  const item = billItems.value.find(entry => entry.id === itemId)
+
+  if (item) {
+    item.name = value
+  }
+}
+
+function updateBillItemAmount(itemId: string, value: string) {
+  const item = billItems.value.find(entry => entry.id === itemId)
+
+  if (item) {
+    item.amount = value
+  }
+}
+
+function toggleBillItemAssignment(itemId: string, personId: string) {
+  const item = billItems.value.find(entry => entry.id === itemId)
+
+  if (!item) {
+    return
+  }
+
   if (item.assignedPersonIds.includes(personId)) {
     item.assignedPersonIds = item.assignedPersonIds.filter((value: string) => value !== personId)
     return
@@ -343,6 +437,7 @@ function createGroup() {
       groupName.value = ''
       selectedGroupId.value = value.groupId
       applyLedger(value.ledger)
+      screen.value = 'groups'
     },
     (error: any) => {
       errorMessage.value = error?.message || 'Could not create the group.'
@@ -403,6 +498,7 @@ function createBill() {
       selectedBillId.value = value.billId
       applyLedger(value.ledger)
       resetBillForm()
+      screen.value = 'settled'
     },
     (error: any) => {
       errorMessage.value = error?.message || 'Could not save the bill.'
@@ -411,575 +507,124 @@ function createBill() {
     saving.value = false
   })
 }
+
+function handleTabNav(nextScreen: string) {
+  if (nextScreen === 'assign' && !selectedGroup.value) {
+    screen.value = 'groups'
+    return
+  }
+
+  screen.value = nextScreen
+}
+
+function openBill(groupId: string, billId: string) {
+  selectedGroupId.value = groupId
+  selectedBillId.value = billId
+  screen.value = 'settled'
+}
 </script>
 
 <template>
-  <main class="min-h-screen px-5 py-8 text-ink sm:px-8 lg:px-10">
-    <div class="mx-auto grid max-w-7xl gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-      <section class="grid gap-6">
-        <div class="rounded-[2rem] border border-white/60 bg-paper/85 p-6 card-shadow backdrop-blur sm:p-8">
-          <div class="flex flex-wrap items-start justify-between gap-4">
-            <div class="max-w-2xl">
-              <p class="mb-3 inline-flex rounded-full border border-accent/25 bg-white/70 px-3 py-1 text-xs font-medium tracking-[0.22em] text-accent-deep uppercase">
-                Manual split ledger
-              </p>
-              <h1 class="max-w-xl font-serif text-4xl leading-tight sm:text-5xl">
-                Build groups, enter receipt items, and keep the owed amounts transparent.
-              </h1>
-              <p class="mt-4 max-w-2xl text-sm leading-6 text-muted sm:text-base">
-                This flow stores local groups, bill items, item assignees, per-person shares, and the
-                derived who-owes-whom transfers that later simplification can work from.
-              </p>
-            </div>
+  <main class="app-root">
+    <div class="app-view">
+      <BottomTabBar :active-tab="activeTab" @nav="handleTabNav" />
 
-            <div class="receipt-grid rounded-[1.75rem] border border-accent/15 bg-paper-strong/80 p-4 text-sm card-shadow">
-              <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Status</p>
-              <div class="mt-3 grid gap-2 text-sm">
-                <div class="flex items-center justify-between gap-6">
-                  <span>Groups</span>
-                  <span class="rounded-full bg-white px-2 py-1 text-xs">{{ ledger.groups.length }}</span>
-                </div>
-                <div class="flex items-center justify-between gap-6">
-                  <span>People</span>
-                  <span class="rounded-full bg-white px-2 py-1 text-xs">{{ ledger.people.length }}</span>
-                </div>
-                <div class="flex items-center justify-between gap-6">
-                  <span>Database</span>
-                  <span class="rounded-full bg-white px-2 py-1 text-xs">
-                    {{ health?.databaseConfigured ? 'ready' : 'missing url' }}
-                  </span>
-                </div>
-                <div class="flex items-center justify-between gap-6">
-                  <span>Pi</span>
-                  <span class="rounded-full bg-white px-2 py-1 text-xs">
-                    {{ health?.piReady ? 'optional' : 'off' }}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+      <HomeScreen
+        v-if="screen === 'home'"
+        :health="health"
+        :recent-bills="recentBillActivities"
+        :summary="homeSummary"
+        @nav="handleTabNav"
+        @open-bill="openBill($event.groupId, $event.billId)"
+      />
 
-          <div class="mt-8 grid gap-4 lg:grid-cols-2">
-            <form class="grid gap-3 rounded-[1.75rem] border border-white/60 bg-white/80 p-5 card-shadow" @submit.prevent="createPerson">
-              <div>
-                <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Create person</p>
-                <p class="mt-2 text-sm text-muted">
-                  People are global so the same person can be added to multiple groups.
-                </p>
-              </div>
+      <GroupsScreen
+        v-else-if="screen === 'groups'"
+        :can-add-person-to-group="canAddPersonToGroup"
+        :error-message="errorMessage"
+        :format-cents="formatCents"
+        :group-name="groupName"
+        :groups="ledger.groups"
+        :people-not-in-selected-group="peopleNotInSelectedGroup"
+        :person-name="personName"
+        :person-to-add-id="personToAddId"
+        :saving="saving"
+        :selected-group="selectedGroup"
+        @add-person="addPersonToGroup"
+        @open-assign="screen = 'assign'"
+        @select-group="selectedGroupId = $event"
+        @submit-group="createGroup"
+        @submit-person="createPerson"
+        @update:group-name="groupName = $event"
+        @update:person-name="personName = $event"
+        @update:person-to-add-id="personToAddId = $event"
+      />
 
-              <label class="grid gap-2 text-sm">
-                <span>Name</span>
-                <input
-                  v-model="personName"
-                  class="rounded-2xl border border-stone-200 bg-paper px-4 py-3 outline-none focus:border-accent"
-                  placeholder="Jojo"
-                >
-              </label>
+      <ProfileScreen
+        v-else-if="screen === 'profile'"
+        :health="health"
+        :ledger="ledger"
+      />
 
-              <button
-                class="rounded-full bg-accent px-4 py-3 text-sm font-medium text-white transition hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-60"
-                :disabled="saving || !personName.trim()"
-              >
-                Create person
-              </button>
-            </form>
+      <ScanScreen v-else-if="screen === 'scan'" @done="screen = 'chat'" />
 
-            <form class="grid gap-3 rounded-[1.75rem] border border-white/60 bg-white/80 p-5 card-shadow" @submit.prevent="createGroup">
-              <div>
-                <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Create group</p>
-                <p class="mt-2 text-sm text-muted">
-                  Groups own the bills. Members can belong to as many groups as you want.
-                </p>
-              </div>
+      <ChatSplitScreen
+        v-else-if="screen === 'chat'"
+        @done="screen = selectedGroup ? 'assign' : 'groups'"
+        @jump-to-items="screen = selectedGroup ? 'assign' : 'groups'"
+      />
 
-              <label class="grid gap-2 text-sm">
-                <span>Group name</span>
-                <input
-                  v-model="groupName"
-                  class="rounded-2xl border border-stone-200 bg-paper px-4 py-3 outline-none focus:border-accent"
-                  placeholder="Flat dinner club"
-                >
-              </label>
+      <AssignScreen
+        v-else-if="screen === 'assign'"
+        :bill-items="billItems"
+        :bill-paid-by-person-id="billPaidByPersonId"
+        :bill-preview-shares="billPreviewShares"
+        :bill-remaining-cents="billRemainingCents"
+        :bill-tip="billTip"
+        :bill-title="billTitle"
+        :bill-total="billTotal"
+        :can-create-bill="canCreateBill"
+        :error-message="errorMessage"
+        :format-cents="formatCents"
+        :layout="resultLayout"
+        :saving="saving"
+        :selected-bill="selectedBill"
+        :selected-group="selectedGroup"
+        @add-item="addBillItem"
+        @remove-item="removeBillItem"
+        @reset="resetBillForm"
+        @save="createBill"
+        @toggle-assignment="toggleBillItemAssignment"
+        @update:bill-paid-by-person-id="billPaidByPersonId = $event"
+        @update:bill-tip="billTip = $event"
+        @update:bill-title="billTitle = $event"
+        @update:bill-total="billTotal = $event"
+        @update:item-amount="updateBillItemAmount"
+        @update:item-name="updateBillItemName"
+        @update:layout="resultLayout = $event"
+      />
 
-              <button
-                class="rounded-full bg-accent px-4 py-3 text-sm font-medium text-white transition hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-60"
-                :disabled="saving || !groupName.trim()"
-              >
-                Create group
-              </button>
-            </form>
-          </div>
+      <SettledScreen
+        v-else-if="screen === 'settled'"
+        :format-cents="formatCents"
+        :selected-bill="selectedBill"
+        :selected-bill-id="selectedBillId"
+        :selected-group="selectedGroup"
+        :selected-group-bill-transfers="selectedGroupBillTransfers"
+        :selected-group-simplified-total-cents="selectedGroupSimplifiedTotalCents"
+        :selected-group-simplified-transfers="selectedGroupSimplifiedTransfers"
+        @nav="handleTabNav"
+        @select-bill="selectedBillId = $event"
+      />
 
-          <p v-if="errorMessage" class="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {{ errorMessage }}
-          </p>
-        </div>
-
-        <div class="rounded-[2rem] border border-white/60 bg-white/85 p-6 card-shadow">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Groups</p>
-              <h2 class="mt-2 font-serif text-3xl">Pick a working group</h2>
-            </div>
-          </div>
-
-          <div v-if="ledger.groups.length" class="mt-5 grid gap-3">
-            <button
-              v-for="group in ledger.groups"
-              :key="group.id"
-              class="rounded-[1.5rem] border px-4 py-4 text-left transition"
-              :class="group.id === selectedGroupId ? 'border-accent bg-paper' : 'border-stone-200 bg-white hover:border-accent/50'"
-              @click="selectedGroupId = group.id"
-            >
-              <div class="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p class="text-lg font-semibold">{{ group.name }}</p>
-                  <p class="text-sm text-muted">
-                    {{ group.memberships.length }} member{{ group.memberships.length === 1 ? '' : 's' }}
-                    ·
-                    {{ group.bills.length }} bill{{ group.bills.length === 1 ? '' : 's' }}
-                  </p>
-                </div>
-                <span class="rounded-full bg-white px-3 py-1 text-xs text-muted">
-                  {{ group.bills[0]?.title || 'No bills yet' }}
-                </span>
-              </div>
-            </button>
-          </div>
-
-          <div
-            v-else
-            class="mt-5 rounded-[1.75rem] border border-dashed border-stone-300 bg-paper/70 px-5 py-8 text-sm leading-6 text-muted"
-          >
-            Start by creating a person and a group. Then add people into that group before entering bills.
-          </div>
-        </div>
-      </section>
-
-      <section class="grid gap-6">
-        <div class="rounded-[2rem] border border-white/60 bg-white/85 p-6 card-shadow">
-          <div v-if="selectedGroup" class="grid gap-6">
-            <div class="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Selected group</p>
-                <h2 class="mt-2 font-serif text-3xl">{{ selectedGroup.name }}</h2>
-              </div>
-
-              <form class="flex flex-wrap items-end gap-3" @submit.prevent="addPersonToGroup">
-                <label class="grid gap-2 text-sm">
-                  <span>Add existing person</span>
-                  <select
-                    v-model="personToAddId"
-                    class="rounded-2xl border border-stone-200 bg-paper px-4 py-3 outline-none focus:border-accent"
-                  >
-                    <option value="">Select person</option>
-                    <option v-for="person in peopleNotInSelectedGroup" :key="person.id" :value="person.id">
-                      {{ person.name }}
-                    </option>
-                  </select>
-                </label>
-
-                <button
-                  class="rounded-full bg-accent px-4 py-3 text-sm font-medium text-white transition hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-60"
-                  :disabled="saving || !personToAddId"
-                >
-                  Add to group
-                </button>
-              </form>
-            </div>
-
-            <div class="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-              <div class="rounded-[1.75rem] border border-stone-200 bg-paper/80 p-5">
-                <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Members</p>
-                <div class="mt-4 grid gap-3">
-                  <div
-                    v-for="membership in selectedGroup.memberships"
-                    :key="membership.id"
-                    class="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-sm"
-                  >
-                    <span>{{ membership.person.name }}</span>
-                    <span class="text-muted">ready for items</span>
-                  </div>
-                </div>
-              </div>
-
-              <form class="grid gap-4 rounded-[1.75rem] border border-stone-200 bg-white p-5" @submit.prevent="createBill">
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Create bill</p>
-                    <p class="mt-2 text-sm text-muted">
-                      Add each receipt item, assign it to one or more people, and the app will derive per-person shares and transfers.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    class="rounded-full border border-stone-200 px-4 py-2 text-sm text-muted transition hover:border-accent/40 hover:text-ink"
-                    @click="resetBillForm"
-                  >
-                    Reset
-                  </button>
-                </div>
-
-                <div class="grid gap-4 md:grid-cols-2">
-                  <label class="grid gap-2 text-sm">
-                    <span>Bill title</span>
-                    <input
-                      v-model="billTitle"
-                      class="rounded-2xl border border-stone-200 bg-paper px-4 py-3 outline-none focus:border-accent"
-                      placeholder="Pizza night"
-                    >
-                  </label>
-
-                  <label class="grid gap-2 text-sm">
-                    <span>Paid by</span>
-                    <select
-                      v-model="billPaidByPersonId"
-                      class="rounded-2xl border border-stone-200 bg-paper px-4 py-3 outline-none focus:border-accent"
-                    >
-                      <option value="">Select payer</option>
-                      <option v-for="membership in selectedGroup.memberships" :key="membership.personId" :value="membership.personId">
-                        {{ membership.person.name }}
-                      </option>
-                    </select>
-                  </label>
-
-                  <label class="grid gap-2 text-sm">
-                    <span>Total amount</span>
-                    <input
-                      v-model="billTotal"
-                      class="rounded-2xl border border-stone-200 bg-paper px-4 py-3 outline-none focus:border-accent"
-                      placeholder="43.00"
-                    >
-                  </label>
-
-                  <label class="grid gap-2 text-sm">
-                    <span>Tip amount</span>
-                    <input
-                      v-model="billTip"
-                      class="rounded-2xl border border-stone-200 bg-paper px-4 py-3 outline-none focus:border-accent"
-                      placeholder="4.00"
-                    >
-                  </label>
-                </div>
-
-                <div class="rounded-[1.5rem] bg-paper p-4">
-                  <div class="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                    <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Receipt items</p>
-                      <p class="mt-1 text-sm text-muted">Assign each item to one or more people. Shared items are split evenly. Leave everything blank to split the bill evenly.</p>
-                    </div>
-                    <div class="flex items-center gap-3">
-                      <p class="text-sm text-muted">Remaining: {{ formatCents(billRemainingCents) }}</p>
-                      <button
-                        type="button"
-                        class="rounded-full bg-white px-4 py-2 text-sm font-medium text-ink transition hover:bg-accent hover:text-white"
-                        @click="addBillItem"
-                      >
-                        Add item
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="mt-4 grid gap-3">
-                    <div
-                      v-for="item in billItems"
-                      :key="item.id"
-                      class="rounded-[1.5rem] border border-stone-200 bg-white p-4"
-                    >
-                      <div class="grid gap-3 md:grid-cols-[1fr_140px_auto] md:items-end">
-                        <label class="grid gap-2 text-sm">
-                          <span>Item name</span>
-                          <input
-                            v-model="item.name"
-                            class="rounded-2xl border border-stone-200 bg-paper px-4 py-3 outline-none focus:border-accent"
-                            placeholder="Margherita pizza"
-                          >
-                        </label>
-
-                        <label class="grid gap-2 text-sm">
-                          <span>Amount</span>
-                          <input
-                            v-model="item.amount"
-                            class="rounded-2xl border border-stone-200 bg-paper px-4 py-3 outline-none focus:border-accent"
-                            placeholder="12.50"
-                          >
-                        </label>
-
-                        <button
-                          type="button"
-                          class="rounded-full border border-stone-200 px-4 py-3 text-sm text-muted transition hover:border-red-300 hover:text-red-700"
-                          @click="removeBillItem(item.id)"
-                        >
-                          Remove
-                        </button>
-                      </div>
-
-                      <div class="mt-4 grid gap-2">
-                        <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Assign to</p>
-                        <div class="flex flex-wrap gap-2">
-                          <button
-                            v-for="membership in selectedGroup.memberships"
-                            :key="`${item.id}-${membership.personId}`"
-                            type="button"
-                            class="rounded-full border px-3 py-2 text-sm transition"
-                            :class="item.assignedPersonIds.includes(membership.personId)
-                              ? 'border-accent bg-accent text-white'
-                              : 'border-stone-200 bg-paper text-muted hover:border-accent/40 hover:text-ink'"
-                            @click="toggleBillItemAssignment(item, membership.personId)"
-                          >
-                            {{ membership.person.name }}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="rounded-[1.5rem] border border-stone-200 bg-paper/60 p-4">
-                  <div class="flex flex-wrap items-center justify-between gap-3">
-                    <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Derived per-person preview</p>
-                    <p class="text-sm text-muted">Based on the item assignments above, or an even split when no items are filled in</p>
-                  </div>
-
-                  <div class="mt-4 grid gap-3">
-                    <div
-                      v-for="share in billPreviewShares"
-                      :key="share.personId"
-                      class="rounded-2xl bg-white px-4 py-4"
-                    >
-                      <div class="flex items-center justify-between gap-4">
-                        <span class="font-medium">{{ share.person.name }}</span>
-                        <span class="text-lg font-semibold">{{ formatCents(share.totalAmountCents) }}</span>
-                      </div>
-                      <div class="mt-3 grid gap-2 text-sm text-muted">
-                        <div class="flex items-center justify-between gap-4">
-                          <span>Items</span>
-                          <span>{{ formatCents(share.itemAmountCents) }}</span>
-                        </div>
-                        <div class="flex items-center justify-between gap-4">
-                          <span>Shared tip</span>
-                          <span>{{ formatCents(share.tipAmountCents) }}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  class="rounded-full bg-accent px-4 py-3 text-sm font-medium text-white transition hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-60"
-                  :disabled="saving || !billTitle.trim() || !billPaidByPersonId || !selectedGroup.memberships.length"
-                >
-                  Save bill
-                </button>
-              </form>
-            </div>
-
-            <div class="rounded-[1.75rem] border border-stone-200 bg-white p-5">
-              <div class="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                  <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Group settlement</p>
-                  <p class="mt-2 text-sm text-muted">
-                    This is the simplified who-owes-who view across every bill in this group.
-                  </p>
-                </div>
-
-                <div class="grid min-w-[220px] gap-3 sm:grid-cols-2">
-                  <div class="rounded-2xl bg-paper px-4 py-4">
-                    <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Payments left</p>
-                    <p class="mt-2 text-2xl font-semibold">{{ selectedGroupSimplifiedTransfers.length }}</p>
-                  </div>
-                  <div class="rounded-2xl bg-paper px-4 py-4">
-                    <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Open amount</p>
-                    <p class="mt-2 text-2xl font-semibold">{{ formatCents(selectedGroupSimplifiedTotalCents) }}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div v-if="selectedGroupSimplifiedTransfers.length" class="mt-5 grid gap-3">
-                <div
-                  v-for="transfer in selectedGroupSimplifiedTransfers"
-                  :key="transfer.id"
-                  class="flex flex-wrap items-center justify-between gap-4 rounded-[1.5rem] bg-paper px-4 py-4"
-                >
-                  <div>
-                    <p class="font-medium">{{ transfer.fromPerson.name }} owes {{ transfer.toPerson.name }}</p>
-                    <p class="mt-1 text-sm text-muted">
-                      Simplified from {{ selectedGroupBillTransfers.length }} raw transfer{{ selectedGroupBillTransfers.length === 1 ? '' : 's' }} in this group.
-                    </p>
-                  </div>
-                  <span class="text-lg font-semibold">{{ formatCents(transfer.amountCents) }}</span>
-                </div>
-              </div>
-
-              <div
-                v-else
-                class="mt-5 rounded-[1.5rem] bg-paper px-4 py-4 text-sm text-muted"
-              >
-                Nobody owes anyone anything in this group right now.
-              </div>
-            </div>
-          </div>
-
-          <div
-            v-else
-            class="rounded-[1.75rem] border border-dashed border-stone-300 bg-paper/70 px-5 py-8 text-sm leading-6 text-muted"
-          >
-            Pick a group to add members and create bills.
-          </div>
-        </div>
-
-        <div v-if="selectedGroup" class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <div class="rounded-[2rem] border border-white/60 bg-white/85 p-6 card-shadow">
-            <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Bills</p>
-            <div v-if="selectedGroup.bills.length" class="mt-4 grid gap-3">
-              <button
-                v-for="bill in selectedGroup.bills"
-                :key="bill.id"
-                class="rounded-[1.5rem] border px-4 py-4 text-left transition"
-                :class="bill.id === selectedBillId ? 'border-accent bg-paper' : 'border-stone-200 bg-white hover:border-accent/50'"
-                @click="selectedBillId = bill.id"
-              >
-                <div class="flex items-center justify-between gap-4">
-                  <div>
-                    <p class="font-semibold">{{ bill.title }}</p>
-                    <p class="text-sm text-muted">
-                      Paid by {{ bill.paidByPerson?.name || 'Unknown' }}
-                    </p>
-                  </div>
-                  <span class="text-sm font-semibold">{{ formatCents(bill.totalAmountCents) }}</span>
-                </div>
-              </button>
-            </div>
-
-            <div
-              v-else
-              class="mt-4 rounded-[1.75rem] border border-dashed border-stone-300 bg-paper/70 px-5 py-8 text-sm leading-6 text-muted"
-            >
-              No bills have been saved for this group yet.
-            </div>
-          </div>
-
-          <div class="rounded-[2rem] border border-white/60 bg-white/85 p-6 card-shadow">
-            <div v-if="selectedBill" class="grid gap-5">
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Bill detail</p>
-                  <h3 class="mt-2 font-serif text-3xl">{{ selectedBill.title }}</h3>
-                  <p class="mt-2 text-sm text-muted">
-                    Paid by {{ selectedBill.paidByPerson?.name || 'Unknown' }}
-                  </p>
-                </div>
-
-                <div class="text-right">
-                  <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Total</p>
-                  <p class="mt-2 text-2xl font-semibold">{{ formatCents(selectedBill.totalAmountCents) }}</p>
-                </div>
-              </div>
-
-              <div class="grid gap-4 sm:grid-cols-3">
-                <div class="rounded-[1.5rem] bg-paper px-4 py-4">
-                  <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Tip</p>
-                  <p class="mt-2 text-2xl font-semibold">{{ formatCents(selectedBill.tipAmountCents) }}</p>
-                </div>
-                <div class="rounded-[1.5rem] bg-paper px-4 py-4">
-                  <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Items</p>
-                  <p class="mt-2 text-2xl font-semibold">{{ selectedBill.items.length }}</p>
-                </div>
-                <div class="rounded-[1.5rem] bg-paper px-4 py-4">
-                  <p class="text-xs font-medium tracking-[0.18em] text-muted uppercase">Transfers</p>
-                  <p class="mt-2 text-2xl font-semibold">{{ selectedBill.transfers.length }}</p>
-                </div>
-              </div>
-
-              <div class="rounded-[1.75rem] border border-stone-200 bg-white p-5">
-                <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Receipt items</p>
-                <div v-if="selectedBill.items.length" class="mt-4 grid gap-3">
-                  <div
-                    v-for="item in selectedBill.items"
-                    :key="item.id"
-                    class="rounded-2xl bg-paper px-4 py-4"
-                  >
-                    <div class="flex items-center justify-between gap-4">
-                      <span class="font-medium">{{ item.name }}</span>
-                      <span class="text-lg font-semibold">{{ formatCents(item.amountCents) }}</span>
-                    </div>
-                    <div class="mt-3 grid gap-2 text-sm text-muted">
-                      <div class="flex items-center justify-between gap-4">
-                        <span>Assigned to</span>
-                        <span>{{ formatAssignedPeople(item) }}</span>
-                      </div>
-                      <div class="flex items-center justify-between gap-4">
-                        <span>Split</span>
-                        <span>{{ formatItemSplit(item) }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div
-                  v-else
-                  class="mt-4 rounded-2xl bg-paper px-4 py-4 text-sm text-muted"
-                >
-                  This older bill does not have saved item rows yet.
-                </div>
-              </div>
-
-              <div class="rounded-[1.75rem] border border-stone-200 bg-white p-5">
-                <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Per-person shares</p>
-                <div class="mt-4 grid gap-3">
-                  <div
-                    v-for="share in selectedBill.shares"
-                    :key="share.id"
-                    class="rounded-2xl bg-paper px-4 py-4"
-                  >
-                    <div class="flex items-center justify-between gap-4">
-                      <span class="font-medium">{{ share.person.name }}</span>
-                      <span class="text-lg font-semibold">{{ formatCents(share.totalAmountCents) }}</span>
-                    </div>
-                    <div class="mt-3 grid gap-2 text-sm text-muted">
-                      <div class="flex items-center justify-between gap-4">
-                        <span>Items</span>
-                        <span>{{ formatCents(share.itemAmountCents) }}</span>
-                      </div>
-                      <div class="flex items-center justify-between gap-4">
-                        <span>Shared tip</span>
-                        <span>{{ formatCents(share.tipAmountCents) }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="rounded-[1.75rem] border border-stone-200 bg-white p-5">
-                <p class="text-xs font-medium tracking-[0.24em] text-muted uppercase">Derived transfers</p>
-                <div v-if="selectedBill.transfers.length" class="mt-4 grid gap-3">
-                  <div
-                    v-for="transfer in selectedBill.transfers"
-                    :key="transfer.id"
-                    class="flex items-center justify-between gap-4 rounded-2xl bg-paper px-4 py-3 text-sm"
-                  >
-                    <span>{{ transfer.fromPerson.name }} owes {{ transfer.toPerson.name }}</span>
-                    <span class="font-semibold">{{ formatCents(transfer.amountCents) }}</span>
-                  </div>
-                </div>
-                <div
-                  v-else
-                  class="mt-4 rounded-2xl bg-paper px-4 py-4 text-sm text-muted"
-                >
-                  Nobody else owes money on this bill because the payer covered only their own share.
-                </div>
-              </div>
-            </div>
-
-            <div
-              v-else
-              class="rounded-[1.75rem] border border-dashed border-stone-300 bg-paper/70 px-5 py-8 text-sm leading-6 text-muted"
-            >
-              Pick a saved bill to inspect its items, per-person shares, and stored transfers.
-            </div>
-          </div>
-        </div>
-      </section>
+      <HomeScreen
+        v-else
+        :health="health"
+        :recent-bills="recentBillActivities"
+        :summary="homeSummary"
+        @nav="handleTabNav"
+        @open-bill="openBill($event.groupId, $event.billId)"
+      />
     </div>
   </main>
 </template>

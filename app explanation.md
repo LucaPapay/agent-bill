@@ -2,14 +2,14 @@
 
 ## What the app is
 
-`agent-bill` is a local-first hackathon app for bills, shared costs, and later debt simplification inside a group.
+`agent-bill` is a local-first hackathon app for scanning bills, saving shared costs, and simplifying who owes whom inside a group.
 
-The app now has two tracks:
+There are two active tracks in the codebase:
 
-- an existing receipt-analysis track that can use Pi/OpenAI or a local fallback parser
+- a receipt-analysis track that can use Pi/OpenAI or a local fallback parser
 - a manual ledger track for groups, members, itemized bills, bill shares, raw transfers, and simplified group settlement
 
-The manual ledger track is the important base for the next step, because simplification only makes sense once the app stores explicit who-owes-whom data.
+The manual ledger track is still the stable storage base. The newer frontend design now wraps that functionality in a more app-like multi-screen flow.
 
 ## Core product assumptions
 
@@ -22,17 +22,32 @@ The manual ledger track is the important base for the next step, because simplif
 - A bill can store explicit receipt items, but items are optional.
 - Each bill item can be assigned to one or more group members.
 - Tip is entered once per bill, then split automatically across bill participants.
-- We still want bill detail to show the raw breakdown per person:
+- Bill detail should preserve the raw breakdown per person:
   - item amount
   - shared tip amount
   - total amount for that bill
 - We persist both raw bill transfers and simplified group-level transfers derived from them.
 
+## Current flow
+
+1. The user creates people and groups locally.
+2. The user adds existing people into a selected group.
+3. The user creates a bill for that group, either itemized or as an even split fallback.
+4. The app stores saved bill items, bill member shares, and bill transfers in Postgres.
+5. The selected group also exposes a simplified settlement view derived from all transfers in that group.
+
+Separately:
+
+1. The user can upload a receipt image or paste bill text.
+2. If `OPENAI_API_KEY` exists, Pi analyzes the bill and proposes a split.
+3. If not, the app falls back to a local text parser and even split.
+4. Every successful analysis run is saved as a `bill_runs` record.
+
 ## Current bill behavior
 
 When creating a bill:
 
-- the UI renders one editable receipt item row at a time
+- the UI renders editable receipt items
 - each item can be assigned to one or more people in the selected group
 - the user can also leave the item list blank and fall back to an even split
 - the UI renders one bill-level tip amount
@@ -64,13 +79,13 @@ Then the bill shares preserve the raw breakdown per person, and the derived tran
 
 Without a payer, the app can show shares but it cannot create actual obligations.
 
-The later simplification step needs obligations, not just bill percentages. So every bill needs a `paid_by_person_id`.
+The later simplification step needs obligations, not just percentages. So every bill needs a `paid_by_person_id`.
 
 ## Current data model
 
 ### `people`
 
-Global people records. These are reused across groups.
+Global people records reused across groups.
 
 - `id`
 - `name`
@@ -151,21 +166,36 @@ The derived obligations created from one bill.
 
 This is the table the group-level simplification aggregates.
 
+### `bill_runs`
+
+Saved receipt-analysis runs.
+
+- `id`
+- `title`
+- `payload`
+- `created_at`
+
 ## Current frontend behavior
 
-The main page now acts as a simple manual ledger:
+The main page now uses a multi-screen shell:
 
-- create a person
-- create a group
-- add existing people into the selected group
-- create an itemized bill for that group
-- inspect the simplified settlement for the selected group
-- inspect saved bills
-- inspect receipt items, raw bill shares, and derived transfers
+- home
+- groups
+- profile
+- scan
+- chat split
+- assign
+- settled
+
+The real manual-ledger functionality is connected into that shell through the Groups, Assign, and Settled screens:
+
+- Groups is where the local ledger entities are managed
+- Assign is where itemized bills are created and previewed
+- Settled is where saved bill detail and simplified group settlement are reviewed
 
 ## Group settlement behavior
 
-The selected group now exposes a simplified settlement view:
+The selected group exposes a simplified settlement view:
 
 - collect all `bill_transfers` inside a group
 - convert them into one net balance per person
@@ -179,7 +209,7 @@ Target example:
 - and B owes C
 - then the app should prefer reducing that into A owing C when the net amounts allow it
 
-That simplification now exists in the backend and is rendered in the group detail view.
+That simplification exists in the backend and is rendered in the group detail and settled views.
 
 ## Next intended step
 
@@ -187,4 +217,5 @@ Useful next work after this:
 
 - connect receipt-analysis output into saved itemized bills
 - add OCR fallback for image-only mode without Pi
+- add household/session concepts before auth
 - add payment settlement state once simplified group obligations are visible
