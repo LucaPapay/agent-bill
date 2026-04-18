@@ -1,5 +1,5 @@
 import { createError, createEventStream, getRouterParam } from 'h3'
-import { getAnalysisJob, subscribeToAnalysisJob } from '../../../../lib/analysis-jobs'
+import { getAnalysisJob, subscribeToAnalysisJob } from '../../../../../lib/analysis-jobs'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')

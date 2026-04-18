@@ -9,6 +9,10 @@ import {
 import { splitPlanSchema } from './receipt-contract'
 
 function getPiModelName() {
+  if (process.env.PI_AGENT_MODEL === 'gpt-4.1-mini') {
+    return 'gpt-4.1-mini'
+  }
+
   if (process.env.PI_AGENT_MODEL === 'gpt-5.4') {
     return 'gpt-5.4'
   }
@@ -17,7 +21,31 @@ function getPiModelName() {
     return 'gpt-5.4-mini'
   }
 
-  return 'gpt-5-mini'
+  if (process.env.PI_AGENT_MODEL === 'gpt-5-mini') {
+    return 'gpt-5-mini'
+  }
+
+  return 'gpt-4.1-mini'
+}
+
+function buildReceiptSummary(receipt: any) {
+  const itemLines = (receipt?.items || [])
+    .slice(0, 20)
+    .map((item: any, index: number) => {
+      return `${index + 1}. ${item.name} | qty ${item.quantity} | line total ${item.amountCents} cents`
+    })
+
+  return [
+    `Merchant: ${receipt?.merchant || 'Unknown'}`,
+    `Date: ${receipt?.billDate || 'Unknown'}`,
+    `Currency: ${receipt?.currency || 'EUR'}`,
+    `Subtotal cents: ${receipt?.subtotalCents || 0}`,
+    `Tax cents: ${receipt?.taxCents || 0}`,
+    `Tip cents: ${receipt?.tipCents || 0}`,
+    `Total cents: ${receipt?.totalCents || 0}`,
+    'Items:',
+    ...itemLines,
+  ].join('\n')
 }
 
 function buildPrompt({ title, people, receipt }: {
@@ -27,7 +55,12 @@ function buildPrompt({ title, people, receipt }: {
 }) {
   return [
     `You are Penny, the bill-splitting agent for "${title}".`,
-    'You already have a structured receipt. Decide on a practical split.',
+    'You already have a structured receipt. Decide on a practical split and keep the workflow fast.',
+    'Follow this exact order:',
+    '1. Immediately call log_progress with stage "start".',
+    '2. Decide which items are shared and which likely belong to one person.',
+    '3. Distribute tax and tip proportionally.',
+    '4. Call submit_split_plan exactly once.',
     'Rules:',
     '- Only use the provided participant names.',
     '- Shared food can be split across everyone when ownership is unclear.',
@@ -35,10 +68,12 @@ function buildPrompt({ title, people, receipt }: {
     '- Tax and tip should be distributed proportionally across the split.',
     '- Use log_progress for short UI-visible updates as you move through the problem.',
     '- When you are done, call submit_split_plan exactly once.',
+    '- Do not ask follow-up questions.',
+    '- Be decisive and pragmatic.',
     '',
     `Participants: ${people.join(', ')}`,
     '',
-    `Structured receipt JSON:\n${JSON.stringify(receipt, null, 2)}`,
+    `Structured receipt:\n${buildReceiptSummary(receipt)}`,
   ].join('\n')
 }
 
@@ -58,6 +93,7 @@ export async function runPiBillAgent({
   }
 
   let finalPlan: any = null
+  let sawActivity = false
 
   const logProgress = defineTool({
     name: 'log_progress',
@@ -125,6 +161,26 @@ export async function runPiBillAgent({
     tools: [],
   })
 
+  const firstHeartbeat = setTimeout(() => {
+    if (!sawActivity && !finalPlan) {
+      onEvent({
+        type: 'agent_progress',
+        message: 'Penny is classifying shared versus individual items.',
+        stage: 'thinking',
+      })
+    }
+  }, 5000)
+
+  const secondHeartbeat = setTimeout(() => {
+    if (!sawActivity && !finalPlan) {
+      onEvent({
+        type: 'agent_progress',
+        message: 'Penny is still working through the split. This agent step can take a moment.',
+        stage: 'thinking',
+      })
+    }
+  }, 12000)
+
   const unsubscribe = session.subscribe((event) => {
     if (event.type === 'agent_start') {
       onEvent({
@@ -136,6 +192,7 @@ export async function runPiBillAgent({
     }
 
     if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
+      sawActivity = true
       onEvent({
         type: 'agent_text_delta',
         delta: event.assistantMessageEvent.delta,
@@ -144,6 +201,7 @@ export async function runPiBillAgent({
     }
 
     if (event.type === 'tool_execution_start') {
+      sawActivity = true
       onEvent({
         type: 'agent_tool_start',
         toolName: event.toolName,
@@ -152,6 +210,7 @@ export async function runPiBillAgent({
     }
 
     if (event.type === 'tool_execution_end') {
+      sawActivity = true
       onEvent({
         type: 'agent_tool_end',
         isError: event.isError,
@@ -163,6 +222,8 @@ export async function runPiBillAgent({
   try {
     await session.prompt(buildPrompt({ title, people, receipt }))
   } finally {
+    clearTimeout(firstHeartbeat)
+    clearTimeout(secondHeartbeat)
     unsubscribe()
     session.dispose()
   }

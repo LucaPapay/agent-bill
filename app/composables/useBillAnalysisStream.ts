@@ -4,6 +4,10 @@ function trimFeed(feed: Array<{ text: string; who: string }>, entry: { text: str
   return [...feed, entry].slice(-10)
 }
 
+function isAnalysisJob(value: any) {
+  return typeof value?.id === 'string' && typeof value?.streamUrl === 'string'
+}
+
 function fileToBase64(file: File) {
   return new Promise<string>((resolve) => {
     const reader = new FileReader()
@@ -102,11 +106,31 @@ export function useBillAnalysisStream() {
     status.value = 'starting'
     pushFeed('log', 'Opening analysis stream...')
 
-    const job = await $fetch<{ id: string; streamUrl: string }>('/api/analysis/jobs', {
+    const response = await $fetch.raw('/api/analysis/jobs', {
       method: 'POST',
       body: input,
+    }).catch((fetchError: any) => {
+      error.value = fetchError?.data?.statusMessage || fetchError?.message || 'Could not start the analysis job.'
+      status.value = 'error'
+      pushFeed('log', error.value)
+      return null
     })
 
+    if (!response) {
+      return null
+    }
+
+    const contentType = String(response.headers.get('content-type') || '')
+    const payload = response._data
+
+    if (!contentType.includes('application/json') || !isAnalysisJob(payload)) {
+      error.value = 'The analysis endpoint did not return a job payload. Restart Nuxt so the API routes reload.'
+      status.value = 'error'
+      pushFeed('log', error.value)
+      return null
+    }
+
+    const job = payload as { id: string; streamUrl: string }
     jobId.value = job.id
     currentSource = new EventSource(job.streamUrl)
 
