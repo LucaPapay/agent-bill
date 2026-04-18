@@ -37,6 +37,7 @@ defineProps({
     default: '',
   },
   canCreateBill: Boolean,
+  embedded: Boolean,
   errorMessage: {
     type: String,
     default: '',
@@ -88,7 +89,7 @@ const layoutOptions = [
 </script>
 
 <template>
-  <div class="screen">
+  <div :class="embedded ? 'bill-composer' : 'screen bill-composer'">
     <div v-if="selectedGroup" class="section-pad" style="padding-top: 24px; padding-bottom: 18px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
       <div>
         <span class="tape">Manual ledger</span>

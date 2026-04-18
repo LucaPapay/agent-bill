@@ -1,7 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import IconGlyph from '../app/IconGlyph.vue'
-import BillComposer from '../ledger/BillComposer.vue'
 import ReceiptSplitPreview from '../scan/ReceiptSplitPreview.vue'
 import PennyLoadingIndicator from '../scan/PennyLoadingIndicator.vue'
 import { useBillAnalysisStream } from '../../composables/useBillAnalysisStream'
@@ -26,36 +25,15 @@ const scrollRef = ref(null)
 const composerText = ref('')
 const autoQuestionKey = ref('')
 const composerSeedKey = ref('')
-const composerVisible = ref(false)
 const localGroupId = ref('')
 const leadMessages = ref([])
 const tailMessages = ref([])
 
 const { ledger: ledgerData } = ledger
 const {
-  addBillItem,
-  billItems,
-  billPaidByPersonId,
-  billPreviewShares,
-  billRemainingCents,
-  billTip,
-  billTitle,
-  billTotal,
-  canCreateBill,
-  consumeBillComposerDraft,
-  createBill,
-  errorMessage,
-  formatCents,
-  removeBillItem,
-  resultLayout,
-  saving,
-  selectedBill,
   selectedGroup: ledgerSelectedGroup,
   setSelectedGroup,
   stageBillComposerDraft,
-  toggleBillItemAssignment,
-  updateBillItemAmount,
-  updateBillItemName,
 } = ledger
 
 function getPathChatId() {
@@ -341,7 +319,6 @@ function resetDraftInputs() {
   autoQuestionKey.value = ''
   composerText.value = ''
   composerSeedKey.value = ''
-  composerVisible.value = false
   selectedFile.value = null
   leadMessages.value = []
   tailMessages.value = []
@@ -396,7 +373,6 @@ function getGroupPeople(group) {
 
 function confirmGroup(group, userText) {
   localGroupId.value = group.id
-  composerVisible.value = false
 
   if (parsedReceipt.value) {
     return
@@ -514,7 +490,6 @@ async function hydrateSavedChat(nextChatId) {
   }
 
   composerText.value = ''
-  composerVisible.value = false
   clearInputs()
   return await analysis.loadChat(normalizedChatId)
 }
@@ -616,24 +591,30 @@ async function continueToSplit() {
     groupId: selectedGroup.value.id,
   })
 
-  setSelectedGroup(selectedGroup.value.id)
-  consumeBillComposerDraft(selectedGroup.value.id)
   composerSeedKey.value = seedKey
   return true
 }
 
-function openBillComposerFromScan() {
-  composerVisible.value = true
-  composerSeedKey.value = ''
-  void continueToSplit()
-}
+async function openBillComposerFromScan() {
+  const group = selectedGroup.value || ledgerSelectedGroup.value
 
-function saveComposerBill() {
-  createBill().then((value) => {
-    if (value?.billId && selectedGroup.value) {
-      navigateTo(`/groups/${selectedGroup.value.id}/bills/${value.billId}`)
-    }
-  })
+  if (!group) {
+    return
+  }
+
+  if (!selectedGroup.value) {
+    localGroupId.value = group.id
+  }
+
+  setSelectedGroup(group.id)
+  composerSeedKey.value = ''
+  const hasDraft = await continueToSplit()
+
+  if (!hasDraft) {
+    return
+  }
+
+  await navigateTo(`/groups/${group.id}/bills/new`)
 }
 
 function scrollToBottom() {
@@ -681,24 +662,6 @@ watch(
 
     autoQuestionKey.value = questionKey
     void analysis.requestGroupQuestion()
-  },
-)
-
-watch(
-  [
-    () => analysis.chatId.value,
-    () => analysis.result.value?.runId,
-    () => parsedReceipt.value,
-    () => splitRows.value.length,
-    () => localGroupId.value,
-    () => composerVisible.value,
-  ],
-  () => {
-    if (!composerVisible.value || !selectedGroup.value || !parsedReceipt.value) {
-      return
-    }
-
-    void continueToSplit()
   },
 )
 
@@ -960,39 +923,8 @@ onBeforeUnmount(() => {
               <IconGlyph name="sparkle" width="16" height="16" />
             </div>
             <button type="button" class="btn scan-composer-toggle" @click="openBillComposerFromScan">
-              {{ composerVisible ? 'Refresh bill composer' : 'Open bill composer' }}
+              Open bill composer
             </button>
-          </div>
-          <div v-if="composerVisible && parsedReceipt && splitRows.length && ledgerSelectedGroup" class="scan-composer-stage">
-            <BillComposer
-              :bill-items="billItems"
-              :bill-paid-by-person-id="billPaidByPersonId"
-              :bill-preview-shares="billPreviewShares"
-              :bill-remaining-cents="billRemainingCents"
-              :bill-tip="billTip"
-              :bill-title="billTitle"
-              :bill-total="billTotal"
-              :can-create-bill="canCreateBill"
-              :error-message="errorMessage"
-              :format-cents="formatCents"
-              :layout="resultLayout"
-              :save-label="'Save bill'"
-              :saving="saving"
-              :selected-bill="selectedBill"
-              :selected-group="ledgerSelectedGroup"
-              @add-item="addBillItem"
-              @remove-item="removeBillItem"
-              @reset="openBillComposerFromScan"
-              @save="saveComposerBill"
-              @toggle-assignment="toggleBillItemAssignment"
-              @update:bill-paid-by-person-id="billPaidByPersonId = $event"
-              @update:bill-tip="billTip = $event"
-              @update:bill-title="billTitle = $event"
-              @update:bill-total="billTotal = $event"
-              @update:item-amount="updateBillItemAmount"
-              @update:item-name="updateBillItemName"
-              @update:layout="resultLayout = $event"
-            />
           </div>
 
           <div
