@@ -50,6 +50,26 @@ function normalizeItems(items: any[]) {
     .filter((item: any) => item.amountCents > 0)
 }
 
+function normalizePlanBillItems(items: any[], people: string[], totalCents: number) {
+  if (!Array.isArray(items) || !items.length) {
+    return []
+  }
+
+  const normalized = items
+    .map((item: any, index: number) => ({
+      amountCents: toCents(item?.amountCents ?? item?.amount),
+      assignedPeople: normalizePeople(item?.assignedPeople || []).filter((person: string) => people.includes(person)),
+      name: String(item?.name || `Item ${index + 1}`).trim() || `Item ${index + 1}`,
+    }))
+    .filter((item: any) => item.amountCents > 0 && item.assignedPeople.length)
+
+  if (normalized.reduce((sum: number, item: any) => sum + item.amountCents, 0) !== totalCents) {
+    return []
+  }
+
+  return normalized
+}
+
 function scaleMoney(value: number, scale: number) {
   if (!value || scale === 1) {
     return value
@@ -197,6 +217,7 @@ export function createLocalAnalysis({ title, people, rawText, imageProvided, not
 
   return {
     billDate: '',
+    billItems: [],
     currency: 'EUR',
     title,
     items: normalizedItems,
@@ -228,6 +249,7 @@ export function createReceiptAnalysis({ title, people, receipt, imageProvided }:
 }) {
   return {
     billDate: receipt.billDate,
+    billItems: [],
     currency: receipt.currency,
     items: receipt.items,
     merchant: receipt.merchant || title,
@@ -267,6 +289,7 @@ export function normalizePiAnalysis({ title, people, imageProvided, notes = [] a
 
   return {
     billDate: '',
+    billItems: [],
     currency: 'EUR',
     title,
     items,
@@ -344,6 +367,7 @@ export function createAgentAnalysis({ title, people, plan, receipt, imageProvide
 
   return {
     billDate: receipt.billDate,
+    billItems: normalizePlanBillItems(plan?.billItems, people, receipt.totalCents),
     currency: receipt.currency,
     items: receipt.items,
     merchant: receipt.merchant || title,

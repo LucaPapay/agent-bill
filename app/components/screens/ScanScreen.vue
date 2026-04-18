@@ -331,6 +331,7 @@ function resolveGroupFromMessage(message) {
 
 function confirmGroup(group, userText) {
   localGroupId.value = group.id
+  composerVisible.value = false
 
   if (userText) {
     pushLocalMessage('user', userText)
@@ -425,6 +426,7 @@ async function hydrateSavedChat(nextChatId) {
   }
 
   composerText.value = ''
+  composerVisible.value = false
   clearInputs()
   return await analysis.loadChat(normalizedChatId)
 }
@@ -450,14 +452,38 @@ async function continueToSplit() {
   }
 
   const seedChatId = String(analysis.chatId.value || analysis.result.value?.chatId || '').trim()
+  const seedRunId = String(analysis.result.value?.runId || '').trim()
   const hasResolvedSplit = splitRows.value.length > 0
-  const seedKey = `${seedChatId || selectedGroup.value.id}:${hasResolvedSplit ? 'split' : 'parsed'}`
+  const planDraftItems = Array.isArray(analysis.result.value?.billItems)
+    ? analysis.result.value.billItems.map((item, index) => {
+        const assignedPersonIds = (item.assignedPeople || [])
+          .map((personName) => selectedGroup.value?.memberships?.find((entry) =>
+            String(entry?.person?.name || '').trim().toLowerCase() === String(personName || '').trim().toLowerCase(),
+          )?.personId || '')
+          .filter(Boolean)
+
+        if (!assignedPersonIds.length) {
+          return null
+        }
+
+        return {
+          amount: formatAmountInput(item.amountCents || 0),
+          assignedPersonIds,
+          id: `scan-plan-${seedRunId || seedChatId || Date.now()}-${index}`,
+          name: item.name || `Item ${index + 1}`,
+        }
+      }).filter(Boolean)
+    : []
+  const seedMode = planDraftItems.length ? 'plan' : hasResolvedSplit ? 'split' : 'parsed'
+  const seedKey = `${seedChatId || selectedGroup.value.id}:${seedRunId || 'pending'}:${seedMode}`
 
   if (composerSeedKey.value === seedKey) {
     return true
   }
 
-  const splitDraftItems = hasResolvedSplit
+  const splitDraftItems = planDraftItems.length
+    ? planDraftItems
+    : hasResolvedSplit
     ? splitRows.value.map((row, index) => {
         const membership = selectedGroup.value?.memberships?.find((entry) =>
           String(entry?.person?.name || '').trim().toLowerCase() === String(row.person || '').trim().toLowerCase(),
@@ -543,6 +569,7 @@ watch(
 watch(
   [
     () => analysis.chatId.value,
+    () => analysis.result.value?.runId,
     () => parsedReceipt.value,
     () => splitRows.value.length,
     () => localGroupId.value,

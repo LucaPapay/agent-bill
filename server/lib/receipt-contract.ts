@@ -83,7 +83,14 @@ export const splitEntrySchema = z.object({
   person: z.string(),
 })
 
+export const agentBillItemSchema = z.object({
+  amountCents: z.number().int().nonnegative(),
+  assignedPeople: z.array(z.string()),
+  name: z.string(),
+})
+
 export const splitPlanSchema = z.object({
+  billItems: z.array(agentBillItemSchema),
   notes: z.array(z.string()),
   split: z.array(splitEntrySchema),
   summary: z.string(),
@@ -101,6 +108,7 @@ const analysisEngineSchema = z.object({
 
 export const analysisResultSchema = z.object({
   billDate: z.string(),
+  billItems: z.array(agentBillItemSchema),
   chatId: z.string(),
   currency: z.string(),
   history: z.array(analysisHistoryEntrySchema),
