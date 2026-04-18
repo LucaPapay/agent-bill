@@ -134,7 +134,7 @@ const emit = defineEmits(['nav', 'open-bill'])
               No saved bills yet
             </div>
             <div style="margin-top: 8px; font-size: 14px; line-height: 1.5;">
-              Start in Groups to create a ledger group, then add your first bill in the Splits tab.
+              Start in Groups to create a ledger group, then open a split chat from Scan or review saved ones in Splits.
             </div>
           </div>
         </div>

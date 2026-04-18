@@ -48,15 +48,15 @@ onMounted(() => {
       <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
         <div>
           <h1 class="h-display" style="font-size: 42px; line-height: 1; margin: 0;">
-            Old chats
+            Splits
           </h1>
           <div class="mono" style="font-size: 11px; color: var(--muted); margin-top: 6px;">
-            {{ chats.length ? `${chats.length} saved scan threads` : 'No saved scan threads yet' }}
+            {{ chats.length ? `${chats.length} saved split chats` : 'No saved split chats yet' }}
           </div>
         </div>
 
         <button class="btn btn-accent" @click="startNewSplit">
-          New scan
+          New split
         </button>
       </div>
     </div>
@@ -76,7 +76,7 @@ onMounted(() => {
           Empty
         </div>
         <div style="font-size: 15px; line-height: 1.5; margin-top: 8px;">
-          Start a scan in the Scan tab. Once Penny finishes, the chat will be saved here and reopening it will send you back to the scan screen.
+          Start a split from Scan. Once Penny finishes, that split chat will live here and reopening it will send you back to the scan screen.
         </div>
       </div>
 
