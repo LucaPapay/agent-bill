@@ -5,7 +5,6 @@ import BillItemsPanel from '../../../../../components/ledger/BillItemsPanel.vue'
 import BillListPanel from '../../../../../components/ledger/BillListPanel.vue'
 import BillReceiptCard from '../../../../../components/ledger/BillReceiptCard.vue'
 import BillTransfersPanel from '../../../../../components/ledger/BillTransfersPanel.vue'
-import GroupSettlementPanel from '../../../../../components/ledger/GroupSettlementPanel.vue'
 
 const route = useRoute()
 const groupId = computed(() => String(route.params.groupId || ''))
@@ -17,14 +16,8 @@ const {
   getBillById,
   getGroupById,
   ledgerLoaded,
-  recordSettlementPayment,
   saving,
-  selectedGroupBillTransfers,
-  selectedGroupSettlementPayments,
-  selectedGroupSimplifiedTotalCents,
-  selectedGroupSimplifiedTransfers,
   setSelectedBill,
-  undoSettlementPayment,
 } = useLedgerState()
 
 const group = computed(() => getGroupById(groupId.value))
@@ -63,68 +56,45 @@ function removeBill() {
           </span>
         </div>
 
-        <BillReceiptCard :bill="bill" :format-cents="formatCents" :group="group" />
-
-        <div style="display: flex; gap: 10px; margin-top: 24px; flex-wrap: wrap;">
-          <NuxtLink class="btn btn-ghost" style="flex: 1; text-decoration: none;" :to="`/groups/${group.id}`">
-            Back to group
-          </NuxtLink>
-          <NuxtLink class="btn btn-primary" style="flex: 1; text-decoration: none;" :to="`/groups/${group.id}/bills/new`">
-            Create another bill
-          </NuxtLink>
-        </div>
-
-        <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+        <div style="max-width: 960px; width: 100%; margin: 0 auto 12px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
           <NuxtLink
-            class="btn btn-ghost"
-            :style="{ flex: 1, textDecoration: 'none', opacity: canMutateBill ? 1 : 0.55, pointerEvents: canMutateBill ? 'auto' : 'none' }"
+            class="chip chip-muted chip-action"
+            :style="{ textDecoration: 'none', opacity: canMutateBill ? 1 : 0.45, pointerEvents: canMutateBill ? 'auto' : 'none' }"
             :to="`/groups/${group.id}/bills/${bill.id}/edit`"
           >
             Edit bill
           </NuxtLink>
-          <NuxtLink class="btn btn-ghost" style="flex: 1; text-decoration: none;" :to="`/groups/${group.id}/bills/new?duplicate=${bill.id}`">
-            Duplicate
-          </NuxtLink>
           <button
-            class="btn btn-ghost"
+            class="chip chip-action"
             :disabled="saving || !canMutateBill"
-            style="flex: 1;"
+            style="background: rgba(255, 84, 54, 0.14); color: #8f2e1f;"
             @click="removeBill"
           >
-            Delete
+            Delete bill
           </button>
         </div>
 
+        <BillReceiptCard :bill="bill" :format-cents="formatCents" :group="group" />
+
         <div
           v-if="!canMutateBill"
-          style="margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: var(--paper); font-size: 13px; line-height: 1.45;"
+          style="max-width: 960px; margin: 12px auto 0; padding: 12px 14px; border-radius: 16px; background: var(--paper); font-size: 13px; line-height: 1.45;"
         >
-          Active settlement payments exist in this group, so this bill is locked until those payments are undone.
+          Active settlement payments exist in this group, so editing and deleting this bill stay locked until those payments are undone.
         </div>
 
-        <div style="display: grid; gap: 14px; margin-top: 18px;" class="home-main">
-          <GroupSettlementPanel
-            :format-cents="formatCents"
-            :payments="selectedGroupSettlementPayments"
-            :raw-transfer-count="selectedGroupBillTransfers.length"
-            :saving="saving"
-            :total-cents="selectedGroupSimplifiedTotalCents"
-            :transfers="selectedGroupSimplifiedTransfers"
-            @record-payment="recordSettlementPayment"
-            @undo-payment="undoSettlementPayment"
-          />
+        <div style="max-width: 1120px; width: 100%; margin: 18px auto 0; display: grid; gap: 14px;" class="profile-grid">
+          <BillItemsPanel :bill="bill" :format-cents="formatCents" />
+          <BillTransfersPanel :bill="bill" :format-cents="formatCents" />
+        </div>
 
+        <div style="max-width: 960px; width: 100%; margin: 18px auto 0;">
           <BillListPanel
             :bills="group.bills"
             :format-cents="formatCents"
             :group-id="group.id"
             :selected-bill-id="bill.id"
           />
-        </div>
-
-        <div style="display: grid; gap: 14px; margin-top: 18px;" class="profile-grid">
-          <BillItemsPanel :bill="bill" :format-cents="formatCents" />
-          <BillTransfersPanel :bill="bill" :format-cents="formatCents" />
         </div>
       </div>
 

@@ -32,7 +32,11 @@ defineProps({
 </script>
 
 <template>
-  <div v-if="bill && group" class="receipt perforated-top perforated-bottom" style="padding: 28px 22px; margin: 0 6px; font-family: var(--mono);">
+  <div
+    v-if="bill && group"
+    class="receipt perforated-top perforated-bottom"
+    style="width: 100%; max-width: 960px; margin: 0 auto; padding: 28px 22px; font-family: var(--mono);"
+  >
     <div style="text-align: center;">
       <div style="font-size: 10px; letter-spacing: 0.12em; color: var(--muted);">
         AGENT-BILL · {{ group.name.toUpperCase() }}
