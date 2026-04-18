@@ -11,6 +11,10 @@ function todayBillDate() {
   return `${year}-${month}-${day}`
 }
 
+function centsToMoneyInput(cents: number) {
+  return ((cents || 0) / 100).toFixed(2).replace('.', ',')
+}
+
 export function useLedgerState() {
   const api = useOrpc()
   const { clear, user } = useUserSession()
@@ -34,8 +38,8 @@ export function useLedgerState() {
 
   const billTitle = useState('ledger-state:bill-title', () => 'Friday dinner')
   const billDate = useState('ledger-state:bill-date', () => todayBillDate())
-  const billTotal = useState('ledger-state:bill-total', () => '0')
-  const billTip = useState('ledger-state:bill-tip', () => '0')
+  const billTotal = useState('ledger-state:bill-total', () => '0,00')
+  const billTip = useState('ledger-state:bill-tip', () => '0,00')
   const billPaidByPersonId = useState('ledger-state:bill-paid-by-person-id', () => '')
   const billItems = useState<Array<{
     amount: string
@@ -425,8 +429,8 @@ export function useLedgerState() {
   function resetBillForm() {
     billTitle.value = 'Friday dinner'
     billDate.value = todayBillDate()
-    billTotal.value = '0'
-    billTip.value = '0'
+    billTotal.value = '0,00'
+    billTip.value = '0,00'
     billItems.value = []
     syncBillForm(selectedGroup.value)
   }
@@ -442,12 +446,12 @@ export function useLedgerState() {
     selectedBillId.value = bill.id
     billTitle.value = options?.duplicate ? `${bill.title} copy` : bill.title
     billDate.value = bill.billDate || todayBillDate()
-    billTotal.value = String((bill.totalAmountCents || 0) / 100)
-    billTip.value = String((bill.tipAmountCents || 0) / 100)
+    billTotal.value = centsToMoneyInput(bill.totalAmountCents || 0)
+    billTip.value = centsToMoneyInput(bill.tipAmountCents || 0)
     billPaidByPersonId.value = bill.paidByPersonId
     billItems.value = bill.items.length
       ? bill.items.map((item: any) => ({
-          amount: String((item.amountCents || 0) / 100),
+          amount: centsToMoneyInput(item.amountCents || 0),
           assignedPersonIds: [...(item.assignedPersonIds || [])],
           id: nextBillItemId(),
           name: item.name,
@@ -472,8 +476,8 @@ export function useLedgerState() {
     setSelectedGroup(groupId)
     billTitle.value = draft.billTitle || 'Friday dinner'
     billDate.value = draft.billDate || todayBillDate()
-    billTotal.value = draft.billTotal || '0'
-    billTip.value = draft.billTip || '0'
+    billTotal.value = draft.billTotal || '0,00'
+    billTip.value = draft.billTip || '0,00'
     billItems.value = Array.isArray(draft.billItems) && draft.billItems.length
       ? draft.billItems.map((item: any) => ({
           amount: item.amount || '',

@@ -1,6 +1,7 @@
 <script setup>
 import AvatarBadge from '../app/AvatarBadge.vue'
 import IconGlyph from '../app/IconGlyph.vue'
+import MoneyInput from '../app/MoneyInput.vue'
 
 defineProps({
   billItems: {
@@ -235,24 +236,22 @@ const layoutOptions = [
 
             <label style="display: grid; gap: 6px;">
               <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Total</span>
-              <input
-                :value="billTotal"
-                type="text"
-                placeholder="43.00"
-                style="width: 100%; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
-                @input="emit('update:bill-total', $event.target.value)"
-              >
+              <MoneyInput
+                :model-value="billTotal"
+                placeholder="43,00€"
+                :input-style="{ width: '100%', border: '1.5px solid rgba(20,18,16,0.12)', borderRadius: '16px', background: 'var(--paper)', padding: '12px 14px', outline: 'none' }"
+                @update:model-value="emit('update:bill-total', $event)"
+              />
             </label>
 
             <label style="display: grid; gap: 6px;">
               <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Tip</span>
-              <input
-                :value="billTip"
-                type="text"
-                placeholder="4.00"
-                style="width: 100%; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
-                @input="emit('update:bill-tip', $event.target.value)"
-              >
+              <MoneyInput
+                :model-value="billTip"
+                placeholder="4,00€"
+                :input-style="{ width: '100%', border: '1.5px solid rgba(20,18,16,0.12)', borderRadius: '16px', background: 'var(--paper)', padding: '12px 14px', outline: 'none' }"
+                @update:model-value="emit('update:bill-tip', $event)"
+              />
             </label>
           </div>
 
@@ -292,13 +291,13 @@ const layoutOptions = [
 
                 <label style="display: grid; gap: 6px;">
                   <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Price</span>
-                  <input
-                    :value="item.amount"
-                    type="text"
-                    placeholder="12.50"
-                    style="width: 100%; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
-                    @input="emit('update:item-amount', item.id, $event.target.value)"
-                  >
+                  <MoneyInput
+                    :model-value="item.amount"
+                    allow-empty
+                    placeholder="12,50€"
+                    :input-style="{ width: '100%', border: '1.5px solid rgba(20,18,16,0.12)', borderRadius: '16px', background: 'var(--paper)', padding: '12px 14px', outline: 'none' }"
+                    @update:model-value="emit('update:item-amount', item.id, $event)"
+                  />
                 </label>
               </div>
 
@@ -349,13 +348,13 @@ const layoutOptions = [
                     >
                   </td>
                   <td style="padding: 10px 8px; min-width: 120px;">
-                    <input
-                      :value="item.amount"
-                      type="text"
-                      placeholder="12.50"
-                      style="width: 100%; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 14px; background: var(--paper); padding: 10px 12px; outline: none;"
-                      @input="emit('update:item-amount', item.id, $event.target.value)"
-                    >
+                    <MoneyInput
+                      :model-value="item.amount"
+                      allow-empty
+                      placeholder="12,50€"
+                      :input-style="{ width: '100%', border: '1.5px solid rgba(20,18,16,0.12)', borderRadius: '14px', background: 'var(--paper)', padding: '10px 12px', outline: 'none' }"
+                      @update:model-value="emit('update:item-amount', item.id, $event)"
+                    />
                   </td>
                   <td style="padding: 10px 8px; min-width: 220px;">
                     <div style="display: flex; gap: 6px; flex-wrap: wrap;">
