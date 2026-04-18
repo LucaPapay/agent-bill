@@ -207,6 +207,7 @@ function buildRevisionPrompt({ message, people, previousSplitHints, receipt, spl
     '- Use the previous split hints below when the dish ownership is ambiguous, when the group tends to order similar meals, or when the user references a previous split.',
     '- If the preloaded hints are not enough, call search_previous_splits once with a narrower query before you assign billItems.',
     '- Treat previous splits as hints, not truth. Prefer same group and same people when you borrow any pattern.',
+    '- Do not use previous split memory until the group is known.',
     '- Only call ask_follow_up_question after you have considered the previous split hints below.',
     ...buildClarificationRules(),
     ...buildParticipantRules(people),
@@ -257,6 +258,7 @@ function buildReceiptSplitPrompt({ message, people, previousSplitHints, receipt,
     '- Use the previous split hints below when the dish ownership is ambiguous, when the group tends to order similar meals, or when the user references a previous split.',
     '- If the preloaded hints are not enough, call search_previous_splits once with a narrower query before you assign billItems.',
     '- Treat previous splits as hints, not truth. Prefer same group and same people when you borrow any pattern.',
+    '- Do not use previous split memory until the group is known.',
     '- Only call ask_follow_up_question after you have considered the previous split hints below. If those hints support a practical first split, make it instead of asking who had what.',
     '- If the user only gave you the group or participant list, use the previous split hints first. Only call ask_follow_up_question if those hints still do not give you a practical first split.',
     ...buildClarificationRules(),
@@ -288,15 +290,13 @@ async function loadPreviousSplitHints({
   personId?: string
   receipt: any
 }) {
-  if (!personId || !receipt) {
+  if (!personId || !receipt || !String(groupId || '').trim()) {
     return ''
   }
 
   await onEvent({
     type: 'agent_progress',
-    message: groupId
-      ? 'Penny is checking what this group ate before.'
-      : 'Penny is checking similar previous splits.',
+    message: 'Penny is checking what this group ate before.',
     stage: 'memory',
   })
 
@@ -541,10 +541,24 @@ function definePreviousSplitsTool({
       query: Type.Optional(Type.String({ description: 'Short search hint such as "same sushi group".' })),
     }),
     execute: async (_toolCallId, params) => {
-      if (!personId || !currentReceipt.value) {
+      if (!currentReceipt.value) {
+        return toolResponse({
+          matches: [],
+          summary: 'No parsed receipt is available yet.',
+        })
+      }
+
+      if (!personId) {
         return toolResponse({
           matches: [],
           summary: 'No searchable split history is available yet.',
+        })
+      }
+
+      if (!String(groupId || '').trim()) {
+        return toolResponse({
+          matches: [],
+          summary: 'Select the group before searching previous splits.',
         })
       }
 
