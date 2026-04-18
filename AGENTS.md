@@ -73,6 +73,16 @@ See [app explanation.md](</Users/lucapapay/dev/agent-bill/app explanation.md>) f
   - Pi agent split planning on top of the normalized receipt
 6. Successful receipt analyses are stored as `bill_runs`.
 
+## Backend Tests
+
+- Run `npm test` for the current backend/unit test suite.
+- The test suite is intentionally focused on pure logic modules that are easy to break and cheap to verify.
+- Current coverage includes:
+  - `server/lib/group-simplification.ts` for transfer netting and open-settlement calculation
+  - `server/lib/group-ledger.ts` for bill share construction, tip distribution, and transfer generation
+  - `server/lib/bill-analysis.ts` for people normalization, local fallback parsing, and receipt money normalization
+- The DB modules are still exercised manually through the app flows rather than through a heavier integration harness.
+
 ## Current Flow
 
 1. User uploads a receipt image or pastes bill text.
