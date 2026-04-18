@@ -46,15 +46,26 @@ function buildParticipantRules(people: string[]) {
   ]
 }
 
-function buildClarificationRules() {
+function buildClarificationRules(allowPlainReply: boolean) {
+  if (allowPlainReply) {
+    return [
+      '- If the user asks a simple question about the receipt or current split, answer it directly in plain text.',
+      '- If the user wants the split changed and you have enough information, submit the split instead of replying with commentary.',
+      '- If the user has not given enough information for a reliable split, ask one short concrete question in plain text instead of submitting a split.',
+      '- Do not ask for clarification until you have a parsed receipt and have considered any available previous split hints.',
+    ]
+  }
+
   return [
-    '- If the user asks a simple question about the receipt or current split, answer it directly in plain text.',
-    '- If the user has not given enough information for a reliable split, ask one short concrete question in plain text instead of submitting a split.',
+    '- Your default job is to build or revise the split, not to explain it.',
+    '- Reply in plain text only when one missing detail blocks the split and you need that detail from the user.',
+    '- Do not end with commentary when you already have enough information to submit the split.',
     '- Do not ask for clarification until you have a parsed receipt and have considered any available previous split hints.',
   ]
 }
 
 export function buildPennyPrompt({
+  allowPlainReply,
   imageBase64,
   message,
   people,
@@ -64,6 +75,7 @@ export function buildPennyPrompt({
   split,
   title,
 }: {
+  allowPlainReply?: boolean
   imageBase64?: string
   message?: string
   people: string[]
@@ -83,8 +95,12 @@ export function buildPennyPrompt({
     'Use the previous split hints below when present. If you still need a narrower lookup after the receipt is available, call search_previous_splits once.',
     `${hasSplit ? 'Rework' : 'Build'} save-ready billItems from the parsed receipt and the user instruction.`,
     `${hasSplit ? 'Recompute' : 'Compute'} the participant split from those billItems.`,
-    'If you have enough information, call submit_split_plan exactly once.',
-    'If you do not have enough information or the user only wants an explanation, reply directly in plain text and do not submit a split yet.',
+    allowPlainReply
+      ? 'If you have enough information and the user wants split changes, call submit_split_plan exactly once. Reply in plain text only when the user is asking for explanation and no split change is needed.'
+      : 'If you have enough information, call submit_split_plan exactly once.',
+    allowPlainReply
+      ? 'If you do not have enough information, ask one short question in plain text and do not submit a split yet.'
+      : 'If one missing detail blocks the split, ask one short question in plain text. Otherwise submit the split.',
   ]
   const instruction = String(message || '').trim()
     || 'Read the uploaded receipt and produce the first practical split.'
@@ -109,14 +125,14 @@ export function buildPennyPrompt({
     '- Keep original receipt item names when practical, but you may add short adjustment items for shared tax, tip, or rounding.',
     '- Respect explicit user instructions when they do not break the receipt total.',
     '- If the user only clarifies ownership, keep the total and rebalance the shares.',
-    '- Do not force a new split when a plain answer is enough.',
+    ...(allowPlainReply ? ['- Do not force a new split when a plain answer is enough.'] : []),
     '- Use reconcile_extracted_receipt for safe math cleanup such as subtotal, tax, tip, total, money-scale, or rounding issues.',
     '- Do not call edit_extracted_receipt unless the user explicitly corrects the extracted receipt.',
     '- Treat previous splits as hints, not truth. Prefer same group and same people when you borrow any pattern.',
     '- Keep notes short and concrete.',
     '- Use log_progress for short UI-visible updates.',
     '- Be decisive and pragmatic.',
-    ...buildClarificationRules(),
+    ...buildClarificationRules(Boolean(allowPlainReply)),
     ...buildParticipantRules(people),
     '',
     'User instruction:',

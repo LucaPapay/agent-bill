@@ -408,6 +408,23 @@ function startHeartbeats({
   }
 }
 
+function isInformationalMessage(message?: string) {
+  const normalizedMessage = String(message || '').trim().toLowerCase()
+
+  if (!normalizedMessage) {
+    return false
+  }
+
+  if (
+    /^\s*(why|how|what|who|which|when|where|is|are|was|were|can|could|would|did|does|explain|tell me|show me|summarize|list)\b/.test(normalizedMessage)
+    || normalizedMessage.includes('?')
+  ) {
+    return !/(split|rebalance|rework|recompute|build|draft|create|update|revise|change|adjust|assign|move|put|give|charge|owe|paid|belongs|shared|replace|remove|add|include|exclude|equal|evenly|everyone)\b/.test(normalizedMessage)
+  }
+
+  return false
+}
+
 export async function runPennyAgent({
   chatId,
   groupId,
@@ -447,6 +464,7 @@ export async function runPennyAgent({
   const finalPlan = { value: null as any }
   const sawActivity = { value: false }
   const currentSplit = Array.isArray(split) ? split : []
+  const allowPlainReply = currentSplit.length > 0 && isInformationalMessage(message)
 
   const logProgress = defineTool({
     name: 'log_progress',
@@ -616,6 +634,7 @@ export async function runPennyAgent({
 
   try {
     await session.prompt(buildPennyPrompt({
+      allowPlainReply,
       imageBase64,
       message,
       people,
