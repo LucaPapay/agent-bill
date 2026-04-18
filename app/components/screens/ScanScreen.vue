@@ -25,6 +25,7 @@ const showCameraCapture = ref(false)
 const title = ref('Dinner receipt')
 const peopleText = ref(people.join(', '))
 const composerVisible = ref(false)
+const previewOverlayReady = ref(false)
 const scrollRef = ref(null)
 const {
   addBillItem,
@@ -103,6 +104,7 @@ const canOpenComposer = computed(() =>
 const showInlineComposer = computed(() =>
   Boolean(composerVisible.value && canOpenComposer.value && selectedGroup.value),
 )
+const showFullStagePreview = computed(() => Boolean(previewUrl.value))
 const composerMessage = computed(() => {
   if (!splitRows.value.length) {
     return 'Save becomes available once Penny proposes a split.'
@@ -205,6 +207,7 @@ function clearInputs() {
 function setFile(file) {
   revokePreview()
   selectedFile.value = file
+  previewOverlayReady.value = false
   previewUrl.value = URL.createObjectURL(file)
 }
 
@@ -213,8 +216,13 @@ function resetDraftInputs() {
   selectedFile.value = null
   title.value = 'Dinner receipt'
   peopleText.value = people.join(', ')
+  previewOverlayReady.value = false
   clearInputs()
   revokePreview()
+}
+
+function onPreviewAnimationFinished() {
+  previewOverlayReady.value = true
 }
 
 function openReceiptPicker() {
@@ -567,75 +575,88 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div v-if="previewUrl" class="scan-chat-preview-dock">
-            <div class="scan-chat-preview-label">
-              Live receipt
-            </div>
-            <ReceiptSplitPreview
-              :image-src="previewUrl"
-              :status="analysis.status.value"
-              :title="safeTitle"
-              :total-label="resolvedTotalCents ? formatMoney(resolvedTotalCents, resolvedCurrency) : ''"
-            />
-          </div>
-
-          <div ref="scrollRef" class="chat-stream scan-chat-stream" :class="{ 'has-preview': previewUrl }">
-            <div class="scan-chat-row">
-              <div class="scan-avatar">
-                <IconGlyph name="sparkle" width="16" height="16" />
-              </div>
-              <div class="scan-bubble assistant">
-                Upload a receipt and I’ll handle the parsing and the first split pass inside this chat.
-              </div>
-            </div>
-
-            <div v-if="previewUrl" class="scan-chat-row user">
-              <div class="scan-bubble user upload">
-                <img
-                  :src="previewUrl"
-                  alt="Receipt preview"
-                  class="scan-upload-image"
-                >
-                <div class="scan-upload-copy">
-                  <div class="scan-upload-title">
-                    Uploaded receipt
-                  </div>
-                  <div class="scan-upload-meta">
-                    {{ safeTitle }} · {{ parsedPeople.join(', ') }}
-                  </div>
-                </div>
-              </div>
+          <div
+            class="scan-chat-stage"
+            :class="{
+              'has-preview': showFullStagePreview,
+              'overlay-ready': previewOverlayReady,
+            }"
+          >
+            <div v-if="showFullStagePreview" class="scan-chat-preview-stage">
+              <ReceiptSplitPreview
+                :image-src="previewUrl"
+                :status="analysis.status.value"
+                :title="safeTitle"
+                :total-label="resolvedTotalCents ? formatMoney(resolvedTotalCents, resolvedCurrency) : ''"
+                @animation-finished="onPreviewAnimationFinished"
+              />
             </div>
 
             <div
-              v-for="(entry, index) in analysis.feed.value"
-              :key="`${entry.text}-${index}`"
-              class="scan-chat-row"
-              :class="entry.who === 'user' ? 'user' : entry.who === 'penny' ? '' : 'system'"
+              ref="scrollRef"
+              class="chat-stream scan-chat-stream"
+              :class="{
+                'has-preview': showFullStagePreview,
+                'overlay-ready': previewOverlayReady,
+              }"
             >
-              <div v-if="entry.who !== 'user'" class="scan-avatar" :class="entry.who === 'penny' ? '' : 'system'">
-                <IconGlyph :name="entry.who === 'penny' ? 'sparkle' : 'scan'" width="16" height="16" />
+              <div v-if="!previewUrl" class="scan-chat-row">
+                <div class="scan-avatar">
+                  <IconGlyph name="sparkle" width="16" height="16" />
+                </div>
+                <div class="scan-bubble assistant">
+                  Upload a receipt and I’ll handle the parsing and the first split pass inside this chat.
+                </div>
               </div>
-              <div class="scan-bubble" :class="entry.who === 'penny' ? 'assistant' : entry.who === 'user' ? 'user' : 'system'">
-                {{ entry.text }}
-              </div>
-            </div>
 
-            <div v-if="assistantReply" class="scan-chat-row">
-              <div class="scan-avatar">
-                <IconGlyph name="sparkle" width="16" height="16" />
+              <div v-if="previewUrl" class="scan-chat-row user">
+                <div class="scan-bubble user upload">
+                  <img
+                    :src="previewUrl"
+                    alt="Receipt preview"
+                    class="scan-upload-image"
+                  >
+                  <div class="scan-upload-copy">
+                    <div class="scan-upload-title">
+                      Uploaded receipt
+                    </div>
+                    <div class="scan-upload-meta">
+                      {{ safeTitle }} · {{ parsedPeople.join(', ') }}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="scan-bubble assistant">
-                {{ assistantReply }}
-              </div>
-            </div>
 
-            <div v-if="analysis.error.value" class="scan-chat-row system">
-              <div class="scan-avatar system">
-                <IconGlyph name="scan" width="16" height="16" />
+              <div
+                v-for="(entry, index) in analysis.feed.value"
+                :key="`${entry.text}-${index}`"
+                class="scan-chat-row"
+                :class="entry.who === 'user' ? 'user' : entry.who === 'penny' ? '' : 'system'"
+              >
+                <div v-if="entry.who !== 'user'" class="scan-avatar" :class="entry.who === 'penny' ? '' : 'system'">
+                  <IconGlyph :name="entry.who === 'penny' ? 'sparkle' : 'scan'" width="16" height="16" />
+                </div>
+                <div class="scan-bubble" :class="entry.who === 'penny' ? 'assistant' : entry.who === 'user' ? 'user' : 'system'">
+                  {{ entry.text }}
+                </div>
               </div>
-              <div class="scan-bubble system error">
-                {{ analysis.error.value }}
+
+              <div v-if="assistantReply" class="scan-chat-row">
+                <div class="scan-avatar">
+                  <IconGlyph name="sparkle" width="16" height="16" />
+                </div>
+                <div class="scan-bubble assistant">
+                  {{ assistantReply }}
+                </div>
+              </div>
+
+              <div v-if="analysis.error.value" class="scan-chat-row system">
+                <div class="scan-avatar system">
+                  <IconGlyph name="scan" width="16" height="16" />
+                </div>
+                <div class="scan-bubble system error">
+                  {{ analysis.error.value }}
+                </div>
               </div>
             </div>
           </div>
@@ -681,7 +702,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
-          <div class="scan-chat-composer">
+          <div v-if="!showFullStagePreview || previewOverlayReady" class="scan-chat-composer">
             <form class="scan-reply-form" @submit.prevent="submitReply">
               <input
                 v-model="replyText"
@@ -1071,6 +1092,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  flex: 1;
   min-width: 0;
   padding: 22px;
   background:
@@ -1078,21 +1100,66 @@ onBeforeUnmount(() => {
     transparent;
 }
 
-.scan-chat-preview-dock {
+.scan-chat-stage {
   position: relative;
-  z-index: 2;
-  margin: 0 22px 4px;
+  flex: 1;
+  min-height: 520px;
 }
 
-.scan-chat-preview-label {
-  margin-bottom: 10px;
-  color: rgba(246, 240, 228, 0.7);
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-align: right;
-  text-transform: uppercase;
+.scan-chat-preview-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  transition:
+    filter 240ms ease,
+    transform 240ms ease;
+}
+
+.scan-chat-preview-stage :deep(.receipt-split-stage) {
+  min-height: 100%;
+  height: 100%;
+}
+
+.scan-chat-stream.has-preview {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(24px);
+  overflow-x: hidden;
+  transition:
+    opacity 220ms ease,
+    transform 260ms ease;
+}
+
+.scan-chat-stream.has-preview::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  backdrop-filter: blur(18px) saturate(0.72);
+  background:
+    linear-gradient(180deg, rgba(7, 8, 10, 0.26) 0%, rgba(7, 8, 10, 0.36) 24%, rgba(7, 8, 10, 0.58) 100%),
+    radial-gradient(circle at top center, rgba(129, 170, 219, 0.12), transparent 44%);
+}
+
+.scan-chat-stream.has-preview > * {
+  position: relative;
+  z-index: 1;
+}
+
+.scan-chat-stream.has-preview.overlay-ready {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.scan-chat-stage.has-preview.overlay-ready .scan-chat-preview-stage {
+  filter: blur(3px) saturate(0.7) brightness(0.5);
+  transform: scale(1.015);
 }
 
 .scan-chat-row {
@@ -1338,19 +1405,6 @@ onBeforeUnmount(() => {
     min-height: calc(100vh - 220px);
   }
 
-  .scan-chat-preview-dock {
-    position: absolute;
-    top: 104px;
-    right: 22px;
-    width: min(320px, calc(100% - 44px));
-    margin: 0;
-  }
-
-  .scan-chat-stream.has-preview {
-    max-height: calc(100vh - 470px);
-    padding-right: 364px;
-  }
-
   .scan-chat-stream {
     max-height: calc(100vh - 470px);
     overflow-y: auto;
@@ -1390,13 +1444,12 @@ onBeforeUnmount(() => {
     justify-content: flex-start;
   }
 
-  .scan-chat-preview-dock {
-    margin-left: 16px;
-    margin-right: 16px;
+  .scan-chat-stage {
+    min-height: 460px;
   }
 
-  .scan-chat-preview-label {
-    text-align: left;
+  .scan-chat-stream.has-preview {
+    padding: 16px;
   }
 
   .scan-split-board {

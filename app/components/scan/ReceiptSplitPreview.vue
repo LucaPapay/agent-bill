@@ -2,6 +2,8 @@
 import { gsap } from 'gsap'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+const emit = defineEmits(['animation-finished'])
+
 const props = defineProps({
   imageSrc: {
     type: String,
@@ -94,7 +96,6 @@ function getNodes() {
   return {
     burst: stage.querySelector('[data-burst]'),
     burstPieces: stage.querySelectorAll('[data-burst-piece]'),
-    captionBar: stage.querySelector('[data-caption]'),
     claw: stage.querySelector('[data-claw]'),
     frame: stage.querySelector('[data-frame]'),
     glow: stage.querySelector('[data-glow]'),
@@ -102,7 +103,6 @@ function getNodes() {
     paperShards: stage.querySelectorAll('[data-paper-shard]'),
     rightHalf: stage.querySelector('[data-half="right"]'),
     slash: stage.querySelector('[data-slash]'),
-    statChip: stage.querySelector('[data-stat-chip]'),
     ticket: stage.querySelector('[data-ticket]'),
   }
 }
@@ -204,7 +204,6 @@ function setBaseState(nodes) {
     x: 0,
     y: 0,
   })
-  gsap.set([nodes.captionBar, nodes.statChip], { opacity: 0, y: 20 })
   gsap.set(nodes.ticket, { opacity: 0, rotate: 7, y: -18 })
 }
 
@@ -216,7 +215,7 @@ function setReducedMotionState(nodes) {
     scaleX: -1,
     scaleY: 1,
     transformOrigin: '86% 48%',
-    x: -56,
+    x: -96,
     y: -8,
   })
   gsap.set(nodes.leftHalf, {
@@ -236,7 +235,7 @@ function setReducedMotionState(nodes) {
   gsap.set(nodes.burst, { opacity: 0 })
   gsap.set(nodes.burstPieces, { opacity: 0 })
   gsap.set(nodes.paperShards, { opacity: 0 })
-  gsap.set([nodes.captionBar, nodes.statChip, nodes.ticket], { opacity: 1, y: 0, rotate: 0 })
+  gsap.set(nodes.ticket, { opacity: 1, y: 0, rotate: 0 })
 }
 
 function killTimeline() {
@@ -263,6 +262,7 @@ async function replay() {
 
   if (reduceMotion.value) {
     setReducedMotionState(nodes)
+    emit('animation-finished')
     return
   }
 
@@ -294,22 +294,12 @@ async function replay() {
       0.28,
     )
     .to(
-      [nodes.captionBar, nodes.statChip],
-      {
-        duration: 0.45,
-        opacity: 1,
-        stagger: 0.08,
-        y: 0,
-      },
-      0.4,
-    )
-    .to(
       nodes.claw,
       {
         duration: 0.24,
         ease: 'power2.out',
         rotate: -4,
-        x: -56,
+        x: -96,
         y: -8,
       },
       0.56,
@@ -319,11 +309,11 @@ async function replay() {
       {
         ease: 'sine.inOut',
         keyframes: [
-          { duration: 0.18, rotate: -18, x: -62, y: -10 },
-          { duration: 0.18, rotate: 10, x: -48, y: -6 },
-          { duration: 0.18, rotate: -15, x: -64, y: -11 },
-          { duration: 0.16, rotate: 7, x: -50, y: -7 },
-          { duration: 0.14, rotate: -4, x: -56, y: -8 },
+          { duration: 0.18, rotate: -18, x: -108, y: -10 },
+          { duration: 0.18, rotate: 10, x: -84, y: -6 },
+          { duration: 0.18, rotate: -15, x: -110, y: -11 },
+          { duration: 0.16, rotate: 7, x: -88, y: -7 },
+          { duration: 0.14, rotate: -4, x: -96, y: -8 },
         ],
       },
       0.8,
@@ -520,6 +510,9 @@ async function replay() {
       },
       2.62,
     )
+    .call(() => {
+      emit('animation-finished')
+    }, [], 2.98)
     .to(
       [nodes.leftHalf, nodes.rightHalf],
       {
@@ -595,27 +588,6 @@ onBeforeUnmount(() => {
         src="/assets/lobster-claw.png"
         alt=""
       >
-
-      <div class="receipt-split-caption" data-caption>
-        <div>
-          <p class="receipt-split-caption-label mono">
-            Penny is working
-          </p>
-          <p class="receipt-split-caption-title">
-            {{ title }}
-          </p>
-          <p class="receipt-split-caption-copy">
-            {{ statusLabel }}
-          </p>
-        </div>
-
-        <div class="receipt-split-caption-side">
-          <div class="receipt-split-stat-chip mono" :class="props.status" data-stat-chip>
-            <span>Status</span>
-            <strong>{{ statusChipLabel }}</strong>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -674,7 +646,7 @@ onBeforeUnmount(() => {
   position: relative;
   min-height: 380px;
   height: 100%;
-  padding: 78px 16px 20px;
+  padding: 78px 16px 16px;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -709,7 +681,7 @@ onBeforeUnmount(() => {
 
 .receipt-split-image-stack {
   position: absolute;
-  inset: 72px 28px 138px;
+  inset: 72px 24px 28px;
   display: grid;
   place-items: center;
 }
@@ -811,85 +783,6 @@ onBeforeUnmount(() => {
   clip-path: polygon(50% 0, 100% 44%, 72% 100%, 0 74%, 10% 18%);
 }
 
-.receipt-split-caption {
-  position: relative;
-  z-index: 2;
-  margin-top: auto;
-  padding: 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 14px;
-  border-radius: 20px;
-  background: rgba(245, 237, 223, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-.receipt-split-caption-side {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  align-self: stretch;
-}
-
-.receipt-split-caption-label {
-  margin: 0 0 6px;
-  color: rgba(22, 19, 15, 0.48);
-  font-size: 10px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-}
-
-.receipt-split-caption-title {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-}
-
-.receipt-split-caption-copy {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.receipt-split-stat-chip {
-  padding: 10px 14px;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 10px;
-  border-radius: 999px;
-  background: rgba(17, 14, 11, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(12px);
-  color: rgba(255, 247, 236, 0.82);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.receipt-split-stat-chip strong {
-  color: #fff5e9;
-  font-size: 11px;
-}
-
-.receipt-split-stat-chip.complete {
-  background: rgba(27, 24, 19, 0.86);
-}
-
-.receipt-split-stat-chip.error {
-  background: rgba(107, 34, 22, 0.88);
-}
-
-.receipt-split-stat-chip.extracting,
-.receipt-split-stat-chip.agent,
-.receipt-split-stat-chip.queued,
-.receipt-split-stat-chip.starting {
-  background: rgba(80, 54, 12, 0.88);
-}
-
 @media (max-width: 640px) {
   .receipt-split-stage {
     padding: 12px;
@@ -900,26 +793,13 @@ onBeforeUnmount(() => {
   }
 
   .receipt-split-image-stack {
-    inset: 72px 16px 142px;
+    inset: 72px 12px 22px;
   }
 
   .receipt-split-claw {
     top: 74px;
     right: -34px;
     width: 190px;
-  }
-
-  .receipt-split-caption {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .receipt-split-caption-side {
-    justify-content: flex-start;
-  }
-
-  .receipt-split-stat-chip {
-    width: fit-content;
   }
 }
 </style>
