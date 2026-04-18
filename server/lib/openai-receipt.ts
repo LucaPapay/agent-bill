@@ -77,7 +77,7 @@ export async function extractReceiptWithOpenAI({
   await onEvent({
     type: 'status',
     phase: 'extracting',
-    message: 'Sending the receipt to OpenAI for structured extraction.',
+    message: 'Penny is shipping the receipt to OpenAI for structured extraction.',
   })
 
   const response = await openai().responses.create({

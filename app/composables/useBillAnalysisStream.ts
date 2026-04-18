@@ -196,7 +196,7 @@ export function useBillAnalysisStream() {
   async function start(input: any) {
     reset()
     status.value = 'starting'
-    pushFeed('log', 'Opening analysis stream...')
+    pushFeed('log', 'Penny is opening the analysis stream and buckling in.')
 
     openStream(useOrpc().analyzeBillStream(input))
 

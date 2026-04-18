@@ -30,10 +30,10 @@ describe('appendBillChatEvent', () => {
     const history: Array<{ text: string; who: string }> = []
 
     expect(
-      appendBillChatEvent(
         appendBillChatEvent(
-          appendBillChatEvent(history, {
-            message: 'Analysis job queued.',
+          appendBillChatEvent(
+            appendBillChatEvent(history, {
+            message: 'Penny is warming up her little receipt engine.',
             phase: 'queued',
             type: 'status',
           }),
@@ -51,7 +51,7 @@ describe('appendBillChatEvent', () => {
       ),
     ).toEqual([
       {
-        text: 'Analysis job queued.',
+        text: 'Penny is warming up her little receipt engine.',
         who: 'log',
       },
       {
