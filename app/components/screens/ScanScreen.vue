@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import IconGlyph from '../app/IconGlyph.vue'
 import ReceiptSplitPreview from '../scan/ReceiptSplitPreview.vue'
-import { people } from '../app/mockData'
+import { avatarColors, people } from '../app/mockData'
 import { useBillAnalysisStream } from '../../composables/useBillAnalysisStream'
 import { useLedgerState } from '../../composables/useLedgerState'
 
@@ -149,6 +149,14 @@ function formatMoney(amountCents, currency = 'EUR') {
 
 function formatAmountInput(amountCents) {
   return ((amountCents || 0) / 100).toFixed(2)
+}
+
+function personColor(name) {
+  return avatarColors[name] || 'rgba(246, 181, 51, 0.3)'
+}
+
+function personInitial(name) {
+  return String(name || '?').trim().charAt(0).toUpperCase()
 }
 
 function revokePreview() {
@@ -373,99 +381,22 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div class="scan-chat-layout">
-      <section class="scan-chat-main">
-        <div ref="scrollRef" class="chat-stream scan-chat-stream">
-          <div class="scan-chat-row">
-            <div class="scan-avatar">
-              <IconGlyph name="sparkle" width="16" height="16" />
-            </div>
-            <div class="scan-bubble assistant">
-              Upload a receipt and I’ll handle the parsing and the first split pass inside this chat.
-            </div>
-          </div>
-
-          <div v-if="previewUrl" class="scan-chat-row user">
-            <div class="scan-bubble user upload">
-              <img
-                :src="previewUrl"
-                alt="Receipt preview"
-                class="scan-upload-image"
-              >
-              <div class="scan-upload-copy">
-                <div class="scan-upload-title">
-                  Uploaded receipt
-                </div>
-                <div class="scan-upload-meta">
-                  {{ safeTitle }} · {{ parsedPeople.join(', ') }}
-                </div>
+    <div class="section-pad scan-chat-layout">
+      <aside class="scan-chat-sidebar">
+        <div class="surface-panel scan-setup-card scan-setup-card-primary">
+          <div class="scan-sidebar-head">
+            <div>
+              <div class="scan-panel-kicker">
+                Receipt setup
+              </div>
+              <div class="scan-panel-title">
+                Start on the left, chat on the right.
               </div>
             </div>
+
+            <div class="scan-sidebar-dot" />
           </div>
 
-          <div
-            v-for="(entry, index) in analysis.feed.value"
-            :key="`${entry.text}-${index}`"
-            class="scan-chat-row"
-            :class="entry.who === 'user' ? 'user' : entry.who === 'penny' ? '' : 'system'"
-          >
-            <div v-if="entry.who !== 'user'" class="scan-avatar" :class="entry.who === 'penny' ? '' : 'system'">
-              <IconGlyph :name="entry.who === 'penny' ? 'sparkle' : 'scan'" width="16" height="16" />
-            </div>
-            <div class="scan-bubble" :class="entry.who === 'penny' ? 'assistant' : entry.who === 'user' ? 'user' : 'system'">
-              {{ entry.text }}
-            </div>
-          </div>
-
-          <div v-if="assistantReply" class="scan-chat-row">
-            <div class="scan-avatar">
-              <IconGlyph name="sparkle" width="16" height="16" />
-            </div>
-            <div class="scan-bubble assistant">
-              {{ assistantReply }}
-            </div>
-          </div>
-
-          <div v-if="analysis.error.value" class="scan-chat-row system">
-            <div class="scan-avatar system">
-              <IconGlyph name="scan" width="16" height="16" />
-            </div>
-            <div class="scan-bubble system error">
-              {{ analysis.error.value }}
-            </div>
-          </div>
-        </div>
-
-        <div class="scan-chat-composer">
-          <div class="scan-composer-stack">
-            <form class="scan-reply-form" @submit.prevent="submitReply">
-              <input
-                v-model="replyText"
-                type="text"
-                class="scan-input scan-reply-input"
-                :disabled="!canReply"
-                :placeholder="canReply ? 'Tell Penny what to change about the split' : 'The reply box unlocks after the first split is ready'"
-              >
-              <button class="btn btn-accent" :disabled="!canReply || !replyText.trim()">
-                Send
-              </button>
-            </form>
-
-            <div class="scan-composer-actions">
-              <button class="btn btn-primary" :disabled="!canPickReceipt" @click="openReceiptPicker">
-                {{ isRunning ? 'Analyzing...' : pickerLabel }}
-              </button>
-
-              <button class="scan-link" @click="resetScan">
-                Reset
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <aside class="scan-chat-sidebar">
-        <div class="scan-setup-card">
           <label class="scan-field">
             <span class="scan-field-label">Bill title</span>
             <input
@@ -481,18 +412,33 @@ onBeforeUnmount(() => {
             <span class="scan-field-label">People</span>
             <textarea
               v-model="peopleText"
-              rows="2"
+              rows="3"
               placeholder="Jojo, Sarah, Miles"
               class="scan-input scan-textarea"
               :disabled="hasSavedChat"
             />
           </label>
 
-          <div class="scan-note">
+          <div v-if="parsedPeople.length" class="scan-person-pills">
+            <div
+              v-for="person in parsedPeople"
+              :key="person"
+              class="scan-person-pill"
+            >
+              <span class="scan-person-pill-avatar" :style="{ background: personColor(person) }">
+                {{ personInitial(person) }}
+              </span>
+              <span>{{ person }}</span>
+            </div>
+          </div>
+
+          <div class="scan-note scan-status-note">
             <div class="scan-note-label">
               Status
             </div>
-            <div>{{ statusLabel }}</div>
+            <div class="scan-status-copy">
+              {{ statusLabel }}
+            </div>
           </div>
 
           <div v-if="hasSavedChat" class="scan-note">
@@ -500,39 +446,22 @@ onBeforeUnmount(() => {
               Resume mode
             </div>
             <div>
-              This thread is now persisted. Keep using the reply box to adapt the split, or reset to start a new receipt.
+              This thread is persisted now. Keep revising on the right, or reset here to start a new receipt.
             </div>
+          </div>
+
+          <div class="scan-sidebar-actions">
+            <button class="btn btn-accent scan-upload-button" :disabled="!canPickReceipt" @click="openReceiptPicker">
+              {{ isRunning ? 'Analyzing...' : pickerLabel }}
+            </button>
+
+            <button class="scan-link" @click="resetScan">
+              Reset
+            </button>
           </div>
         </div>
 
-        <div class="scan-card">
-          <div class="scan-card-head">
-            <div>
-              <div class="scan-note-label">
-                Receipt preview
-              </div>
-              <div class="scan-card-title">
-                {{ previewUrl ? safeTitle : 'Scan a real receipt' }}
-              </div>
-            </div>
-          </div>
-
-          <div style="margin-top: 12px;">
-            <ReceiptSplitPreview
-              v-if="previewUrl"
-              :image-src="previewUrl"
-              :status="analysis.status.value"
-              :title="safeTitle"
-              :total-label="resolvedTotalCents ? formatMoney(resolvedTotalCents, resolvedCurrency) : ''"
-            />
-
-            <div v-else class="scan-note">
-              Use the camera on mobile. Everywhere else, upload an image file.
-            </div>
-          </div>
-        </div>
-
-        <div v-if="extractedReceipt" class="scan-card">
+        <div v-if="extractedReceipt" class="surface-panel scan-card">
           <div class="scan-card-head">
             <div>
               <div class="scan-note-label">
@@ -558,40 +487,160 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
+      </aside>
 
-        <div v-if="splitRows.length" class="scan-card">
-          <div class="scan-card-head">
+      <section class="scan-chat-main">
+        <div class="scan-chat-shell">
+          <div class="scan-chat-shell-head">
             <div>
-              <div class="scan-note-label">
-                Final split
+              <div class="scan-panel-kicker scan-panel-kicker-on-dark">
+                Split chat
               </div>
-              <div class="scan-card-title">
-                {{ analysis.result.value?.summary }}
+              <div class="scan-chat-shell-title">
+                Penny reasons here.
+              </div>
+            </div>
+
+            <div class="scan-chat-shell-meta">
+              <div class="scan-shell-chip">
+                {{ parsedPeople.length }} people
+              </div>
+              <div class="scan-shell-chip" :class="analysis.status.value">
+                {{ analysis.status.value === 'idle' ? 'Ready' : analysis.status.value }}
               </div>
             </div>
           </div>
 
-          <div class="scan-mini-list">
+          <div v-if="previewUrl" class="scan-chat-preview-dock">
+            <div class="scan-chat-preview-label">
+              Live receipt
+            </div>
+            <ReceiptSplitPreview
+              :image-src="previewUrl"
+              :status="analysis.status.value"
+              :title="safeTitle"
+              :total-label="resolvedTotalCents ? formatMoney(resolvedTotalCents, resolvedCurrency) : ''"
+            />
+          </div>
+
+          <div ref="scrollRef" class="chat-stream scan-chat-stream" :class="{ 'has-preview': previewUrl }">
+            <div class="scan-chat-row">
+              <div class="scan-avatar">
+                <IconGlyph name="sparkle" width="16" height="16" />
+              </div>
+              <div class="scan-bubble assistant">
+                Upload a receipt and I’ll handle the parsing and the first split pass inside this chat.
+              </div>
+            </div>
+
+            <div v-if="previewUrl" class="scan-chat-row user">
+              <div class="scan-bubble user upload">
+                <img
+                  :src="previewUrl"
+                  alt="Receipt preview"
+                  class="scan-upload-image"
+                >
+                <div class="scan-upload-copy">
+                  <div class="scan-upload-title">
+                    Uploaded receipt
+                  </div>
+                  <div class="scan-upload-meta">
+                    {{ safeTitle }} · {{ parsedPeople.join(', ') }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-for="(entry, index) in analysis.feed.value"
+              :key="`${entry.text}-${index}`"
+              class="scan-chat-row"
+              :class="entry.who === 'user' ? 'user' : entry.who === 'penny' ? '' : 'system'"
+            >
+              <div v-if="entry.who !== 'user'" class="scan-avatar" :class="entry.who === 'penny' ? '' : 'system'">
+                <IconGlyph :name="entry.who === 'penny' ? 'sparkle' : 'scan'" width="16" height="16" />
+              </div>
+              <div class="scan-bubble" :class="entry.who === 'penny' ? 'assistant' : entry.who === 'user' ? 'user' : 'system'">
+                {{ entry.text }}
+              </div>
+            </div>
+
+            <div v-if="assistantReply" class="scan-chat-row">
+              <div class="scan-avatar">
+                <IconGlyph name="sparkle" width="16" height="16" />
+              </div>
+              <div class="scan-bubble assistant">
+                {{ assistantReply }}
+              </div>
+            </div>
+
+            <div v-if="analysis.error.value" class="scan-chat-row system">
+              <div class="scan-avatar system">
+                <IconGlyph name="scan" width="16" height="16" />
+              </div>
+              <div class="scan-bubble system error">
+                {{ analysis.error.value }}
+              </div>
+            </div>
+          </div>
+
+          <div v-if="splitRows.length" class="scan-split-board">
+            <div class="scan-split-board-head">
+              <div>
+                <div class="scan-panel-kicker">
+                  Final split
+                </div>
+                <div class="scan-split-board-title">
+                  {{ analysis.result.value?.summary }}
+                </div>
+              </div>
+              <div class="scan-split-board-total">
+                {{ formatMoney(resolvedTotalCents, resolvedCurrency) }}
+              </div>
+            </div>
+
             <div
               v-for="row in splitRows"
               :key="row.person"
-              class="scan-mini-row"
+              class="scan-split-row"
             >
-              <span>{{ row.person }}</span>
-              <span>{{ formatMoney(row.amountCents || 0, resolvedCurrency) }}</span>
+              <div class="scan-split-person">
+                <span class="scan-split-avatar" :style="{ background: personColor(row.person) }">
+                  {{ personInitial(row.person) }}
+                </span>
+                <span>{{ row.person }}</span>
+              </div>
+              <span class="scan-split-amount">
+                {{ formatMoney(row.amountCents || 0, resolvedCurrency) }}
+              </span>
+            </div>
+
+            <div class="scan-card-actions">
+              <button class="btn btn-accent" :disabled="!canOpenComposer" @click="openComposer">
+                Open in bill composer
+              </button>
+              <div class="scan-card-hint scan-card-hint-on-dark">
+                {{ composerMessage }}
+              </div>
             </div>
           </div>
 
-          <div class="scan-card-actions">
-            <button class="btn btn-ghost" :disabled="!canOpenComposer" @click="openComposer">
-              Open in bill composer
-            </button>
-            <div class="scan-card-hint">
-              {{ composerMessage }}
-            </div>
+          <div class="scan-chat-composer">
+            <form class="scan-reply-form" @submit.prevent="submitReply">
+              <input
+                v-model="replyText"
+                type="text"
+                class="scan-input scan-reply-input"
+                :disabled="!canReply"
+                :placeholder="canReply ? 'Tell Penny what to change about the split' : 'The reply box unlocks after the first split is ready'"
+              >
+              <button class="btn btn-primary scan-send-button" :disabled="!canReply || !replyText.trim()">
+                Send
+              </button>
+            </form>
           </div>
         </div>
-      </aside>
+      </section>
     </div>
 
     <input
@@ -617,12 +666,12 @@ onBeforeUnmount(() => {
 .scan-chat-screen {
   display: flex;
   flex-direction: column;
-  padding-bottom: 0;
+  padding-bottom: 40px;
 }
 
 .scan-chat-head {
-  padding-top: 14px;
-  padding-bottom: 14px;
+  padding-top: 18px;
+  padding-bottom: 18px;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -637,41 +686,310 @@ onBeforeUnmount(() => {
 
 .scan-chat-copy {
   margin: 14px 0 0;
-  max-width: 40rem;
+  max-width: 44rem;
   color: var(--muted);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.6;
 }
 
 .scan-chat-meta {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .scan-chat-layout {
   display: grid;
-  gap: 16px;
-  padding: 0 16px;
+  gap: 18px;
+  align-items: start;
 }
 
+.scan-chat-sidebar,
 .scan-chat-main {
-  min-width: 0;
   display: flex;
   flex-direction: column;
+  gap: 16px;
+  min-width: 0;
 }
 
-.scan-chat-sidebar {
+.scan-setup-card,
+.scan-card,
+.scan-note {
+  border-radius: 28px;
+  border: 1px solid rgba(20, 18, 16, 0.08);
+  background: rgba(251, 247, 238, 0.92);
+  box-shadow: 0 22px 40px rgba(48, 33, 15, 0.07);
+}
+
+.scan-setup-card {
+  padding: 18px;
+}
+
+.scan-setup-card-primary {
+  background:
+    radial-gradient(circle at top right, rgba(246, 181, 51, 0.2), transparent 34%),
+    linear-gradient(180deg, rgba(251, 247, 238, 0.98) 0%, rgba(246, 240, 228, 0.92) 100%);
+}
+
+.scan-sidebar-head,
+.scan-card-head,
+.scan-split-board-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.scan-sidebar-dot {
+  width: 12px;
+  height: 12px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: var(--tomato);
+  box-shadow: 0 0 0 6px rgba(255, 84, 54, 0.14);
+}
+
+.scan-panel-kicker,
+.scan-field-label,
+.scan-note-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.scan-panel-kicker-on-dark {
+  color: rgba(246, 240, 228, 0.6);
+}
+
+.scan-panel-title,
+.scan-card-title {
+  margin-top: 6px;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.scan-field {
   display: grid;
+  gap: 6px;
+}
+
+.scan-field + .scan-field,
+.scan-note + .scan-note {
+  margin-top: 12px;
+}
+
+.scan-input {
+  width: 100%;
+  border: 1.5px solid rgba(20, 18, 16, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.55);
+  padding: 13px 14px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.scan-input:focus {
+  border-color: rgba(20, 18, 16, 0.3);
+  box-shadow: 0 0 0 4px rgba(246, 181, 51, 0.16);
+}
+
+.scan-input:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.scan-textarea {
+  resize: vertical;
+  min-height: 112px;
+}
+
+.scan-person-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.scan-person-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 999px;
+  background: rgba(20, 18, 16, 0.05);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.scan-person-pill-avatar,
+.scan-split-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.scan-note {
+  padding: 14px;
+}
+
+.scan-status-note {
+  margin-top: 14px;
+  background: rgba(20, 18, 16, 0.04);
+}
+
+.scan-status-copy {
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.scan-sidebar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.scan-upload-button {
+  min-width: 180px;
+}
+
+.scan-card {
+  padding: 18px;
+}
+
+.scan-card-meta {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.scan-mini-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.scan-mini-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(20, 18, 16, 0.08);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.scan-mini-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.scan-chat-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 760px;
+  border-radius: 32px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top right, rgba(246, 181, 51, 0.18), transparent 34%),
+    linear-gradient(180deg, #17130f 0%, #0e0c0a 100%);
+  border: 1px solid rgba(20, 18, 16, 0.18);
+  box-shadow: 0 34px 70px rgba(31, 22, 11, 0.22);
+}
+
+.scan-chat-shell-head {
+  display: flex;
+  justify-content: space-between;
   gap: 14px;
-  align-content: start;
+  align-items: flex-start;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid rgba(246, 240, 228, 0.08);
+}
+
+.scan-chat-shell-title {
+  margin-top: 6px;
+  color: var(--cream);
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.scan-chat-shell-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.scan-shell-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(246, 240, 228, 0.08);
+  color: var(--cream);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scan-shell-chip.complete {
+  background: rgba(143, 197, 106, 0.18);
+  color: #c9efad;
+}
+
+.scan-shell-chip.error {
+  background: rgba(255, 84, 54, 0.18);
+  color: #ffc1b5;
+}
+
+.scan-shell-chip.starting,
+.scan-shell-chip.queued,
+.scan-shell-chip.extracting,
+.scan-shell-chip.agent {
+  background: rgba(246, 181, 51, 0.16);
+  color: #ffe0a3;
 }
 
 .scan-chat-stream {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
+  padding: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 22%),
+    transparent;
+}
+
+.scan-chat-preview-dock {
+  position: relative;
+  z-index: 2;
+  margin: 0 22px 4px;
+}
+
+.scan-chat-preview-label {
+  margin-bottom: 10px;
+  color: rgba(246, 240, 228, 0.7);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-align: right;
+  text-transform: uppercase;
 }
 
 .scan-chat-row {
@@ -685,11 +1003,12 @@ onBeforeUnmount(() => {
 }
 
 .scan-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  background: var(--ink);
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: rgba(246, 181, 51, 0.18);
   color: var(--marigold);
+  border: 1px solid rgba(246, 181, 51, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -697,45 +1016,49 @@ onBeforeUnmount(() => {
 }
 
 .scan-avatar.system {
-  background: rgba(20, 18, 16, 0.08);
-  color: var(--ink);
+  background: rgba(246, 240, 228, 0.08);
+  color: rgba(246, 240, 228, 0.72);
+  border-color: rgba(246, 240, 228, 0.12);
 }
 
 .scan-bubble {
   max-width: min(100%, 34rem);
-  border-radius: 20px;
-  padding: 12px 14px;
+  border-radius: 22px;
+  padding: 14px 16px;
   font-size: 14px;
   line-height: 1.5;
 }
 
 .scan-bubble.assistant {
-  background: var(--ink);
-  color: var(--cream);
-  border-bottom-left-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  border-bottom-left-radius: 8px;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
 }
 
 .scan-bubble.system {
-  background: rgba(20, 18, 16, 0.06);
-  color: var(--ink);
+  background: rgba(246, 240, 228, 0.09);
+  color: rgba(246, 240, 228, 0.82);
+  border: 1px solid rgba(246, 240, 228, 0.1);
 }
 
 .scan-bubble.error {
-  background: rgba(255, 84, 54, 0.12);
-  border: 1px solid rgba(255, 84, 54, 0.24);
-  color: #8f2a16;
+  background: rgba(255, 84, 54, 0.18);
+  border-color: rgba(255, 84, 54, 0.26);
+  color: #ffd0c8;
 }
 
 .scan-bubble.user {
-  background: var(--paper);
-  color: var(--ink);
-  border: 1.5px solid rgba(20, 18, 16, 0.12);
+  background: var(--tomato);
+  color: var(--cream);
+  border: none;
+  box-shadow: 0 16px 28px rgba(255, 84, 54, 0.26);
 }
 
 .scan-bubble.upload {
   display: grid;
-  gap: 10px;
-  width: min(100%, 18rem);
+  gap: 12px;
+  width: min(100%, 20rem);
 }
 
 .scan-upload-image {
@@ -751,94 +1074,14 @@ onBeforeUnmount(() => {
 
 .scan-upload-meta {
   font-size: 12px;
-  color: var(--muted);
+  color: rgba(246, 240, 228, 0.78);
   line-height: 1.5;
-}
-
-.scan-setup-card,
-.scan-card,
-.scan-note {
-  border-radius: 20px;
-  padding: 14px;
-  background: var(--paper);
-  border: 1px solid rgba(20, 18, 16, 0.08);
-}
-
-.scan-field {
-  display: grid;
-  gap: 6px;
-}
-
-.scan-field + .scan-field {
-  margin-top: 12px;
-}
-
-.scan-field-label,
-.scan-note-label {
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.scan-input {
-  width: 100%;
-  border: 1.5px solid rgba(20, 18, 16, 0.12);
-  border-radius: 18px;
-  background: var(--paper);
-  padding: 12px 14px;
-  outline: none;
-}
-
-.scan-textarea {
-  resize: vertical;
-  min-height: 92px;
-}
-
-.scan-note {
-  margin-top: 12px;
-}
-
-.scan-card-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  align-items: flex-start;
-}
-
-.scan-card-title {
-  margin-top: 6px;
-  font-size: 18px;
-  line-height: 1.3;
-  font-weight: 700;
-}
-
-.scan-card-meta {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.scan-mini-list {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.scan-mini-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 13px;
-  line-height: 1.4;
 }
 
 .scan-card-actions {
   display: grid;
-  gap: 8px;
-  margin-top: 14px;
+  gap: 10px;
+  margin-top: 18px;
 }
 
 .scan-card-hint {
@@ -847,43 +1090,95 @@ onBeforeUnmount(() => {
   color: var(--muted);
 }
 
+.scan-card-hint-on-dark {
+  color: rgba(246, 240, 228, 0.64);
+}
+
+.scan-split-board {
+  margin: 0 22px 0;
+  padding: 18px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top right, rgba(246, 181, 51, 0.18), transparent 35%),
+    rgba(251, 247, 238, 0.96);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.16);
+}
+
+.scan-split-board-title {
+  margin-top: 6px;
+  font-size: 20px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.scan-split-board-total {
+  font-family: var(--display);
+  font-size: clamp(36px, 5vw, 52px);
+  line-height: 0.9;
+}
+
+.scan-split-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(20, 18, 16, 0.08);
+}
+
+.scan-split-row:first-of-type {
+  margin-top: 12px;
+}
+
+.scan-split-row:last-of-type {
+  border-bottom: none;
+}
+
+.scan-split-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.scan-split-amount {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 700;
+}
+
 .scan-chat-composer {
   position: sticky;
   bottom: 0;
-  padding: 12px 0 84px;
-  background: linear-gradient(to bottom, transparent, var(--cream) 35%);
-  width: 100%;
-}
-
-.scan-composer-stack {
-  display: grid;
-  gap: 10px;
-  width: 100%;
-  padding: 0;
-  min-width: 0;
+  padding: 18px 22px 22px;
+  background: linear-gradient(to bottom, rgba(14, 12, 10, 0), rgba(14, 12, 10, 0.9) 28%, #0e0c0a 100%);
 }
 
 .scan-reply-form {
   display: flex;
   gap: 10px;
   align-items: center;
-  width: 100%;
-  min-width: 0;
 }
 
 .scan-reply-input {
   flex: 1;
   min-width: 0;
+  border-color: rgba(246, 240, 228, 0.12);
+  background: rgba(246, 240, 228, 0.08);
+  color: var(--cream);
 }
 
-.scan-composer-actions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
+.scan-reply-input::placeholder {
+  color: rgba(246, 240, 228, 0.46);
 }
 
 .scan-hidden-input {
   display: none;
+}
+
+.scan-send-button {
+  flex-shrink: 0;
 }
 
 .scan-link {
@@ -904,18 +1199,39 @@ onBeforeUnmount(() => {
   }
 
   .scan-chat-layout {
-    grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+    grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
     align-items: start;
   }
 
   .scan-chat-main {
-    min-height: calc(100vh - 210px);
+    min-height: calc(100vh - 220px);
+  }
+
+  .scan-chat-sidebar {
+    position: sticky;
+    top: 16px;
+  }
+
+  .scan-chat-shell {
+    min-height: calc(100vh - 220px);
+  }
+
+  .scan-chat-preview-dock {
+    position: absolute;
+    top: 104px;
+    right: 22px;
+    width: min(320px, calc(100% - 44px));
+    margin: 0;
+  }
+
+  .scan-chat-stream.has-preview {
+    max-height: calc(100vh - 470px);
+    padding-right: 364px;
   }
 
   .scan-chat-stream {
-    max-height: calc(100vh - 360px);
+    max-height: calc(100vh - 470px);
     overflow-y: auto;
-    padding-right: 6px;
     overscroll-behavior: contain;
   }
 
@@ -925,12 +1241,7 @@ onBeforeUnmount(() => {
 
   .scan-chat-stream::-webkit-scrollbar-thumb {
     border-radius: 999px;
-    background: rgba(20, 18, 16, 0.18);
-  }
-
-  .scan-chat-sidebar {
-    position: sticky;
-    top: 16px;
+    background: rgba(246, 240, 228, 0.16);
   }
 
   .scan-card-actions {
@@ -940,8 +1251,39 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 640px) {
+  .scan-chat-head {
+    padding-bottom: 14px;
+  }
+
+  .scan-card,
+  .scan-setup-card {
+    padding: 16px;
+  }
+
+  .scan-chat-shell-head {
+    flex-direction: column;
+  }
+
+  .scan-chat-shell-meta {
+    justify-content: flex-start;
+  }
+
+  .scan-chat-preview-dock {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+
+  .scan-chat-preview-label {
+    text-align: left;
+  }
+
+  .scan-split-board {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+
   .scan-reply-form,
-  .scan-composer-actions {
+  .scan-sidebar-actions {
     flex-direction: column;
     align-items: stretch;
   }
