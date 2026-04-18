@@ -334,6 +334,8 @@ watch(() => analysis.chatId.value, (nextChatId) => {
 })
 
 onMounted(() => {
+  void ledger.ensureLoaded()
+
   showCameraCapture.value =
     window.matchMedia('(pointer: coarse)').matches
     || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
@@ -850,6 +852,7 @@ onBeforeUnmount(() => {
   bottom: 0;
   padding: 12px 0 84px;
   background: linear-gradient(to bottom, transparent, var(--cream) 35%);
+  width: 100%;
 }
 
 .scan-composer-stack {
@@ -857,16 +860,20 @@ onBeforeUnmount(() => {
   gap: 10px;
   width: 100%;
   padding: 0;
+  min-width: 0;
 }
 
 .scan-reply-form {
   display: flex;
   gap: 10px;
   align-items: center;
+  width: 100%;
+  min-width: 0;
 }
 
 .scan-reply-input {
   flex: 1;
+  min-width: 0;
 }
 
 .scan-composer-actions {
