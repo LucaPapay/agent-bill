@@ -16,6 +16,7 @@ const {
   billTitle,
   billTotal,
   canCreateBill,
+  consumeBillComposerDraft,
   createBill,
   errorMessage,
   formatCents,
@@ -43,6 +44,10 @@ watch([groupId, duplicateBillId], ([nextGroupId, nextDuplicateBillId]) => {
   }
 
   setSelectedGroup(nextGroupId)
+
+  if (consumeBillComposerDraft(nextGroupId)) {
+    return
+  }
 
   if (nextDuplicateBillId && loadBillFormFromBill(nextGroupId, nextDuplicateBillId, { duplicate: true })) {
     return

@@ -34,6 +34,7 @@ const {
   selectedGroup,
   selectedGroupId,
   setSelectedGroup,
+  stageBillComposerDraft,
 } = ledger
 
 const parsedPeople = computed(() =>
@@ -175,6 +176,15 @@ function setFile(file) {
   previewUrl.value = URL.createObjectURL(file)
 }
 
+function resetDraftInputs() {
+  replyText.value = ''
+  selectedFile.value = null
+  title.value = 'Dinner receipt'
+  peopleText.value = people.join(', ')
+  clearInputs()
+  revokePreview()
+}
+
 function openReceiptPicker() {
   if (!canPickReceipt.value) {
     return
@@ -210,11 +220,8 @@ function onFileChange(event) {
 }
 
 async function resetScan() {
-  replyText.value = ''
-  selectedFile.value = null
+  resetDraftInputs()
   analysis.reset()
-  clearInputs()
-  revokePreview()
 
   if (props.chatId) {
     await navigateTo('/scan')
@@ -240,20 +247,31 @@ async function openComposer() {
   setSelectedGroup(selectedGroupId.value)
   resetBillForm()
 
-  billTitle.value = safeTitle.value
-  billTotal.value = formatAmountInput(resolvedTotalCents.value)
-  billTip.value = formatAmountInput(analysis.result.value?.tipCents || extractedReceipt.value?.tipCents || 0)
-  billItems.value = composerRows.value.map((entry, index) => ({
+  const draftPaidByPersonId = billPaidByPersonId.value && selectedGroup.value?.memberships.some(
+    membership => membership.personId === billPaidByPersonId.value,
+  )
+    ? billPaidByPersonId.value
+    : composerRows.value[0]?.membership?.personId || selectedGroup.value?.memberships?.[0]?.personId || ''
+  const draftItems = composerRows.value.map((entry, index) => ({
     amount: formatAmountInput(entry.row.amountCents),
     assignedPersonIds: [entry.membership.personId],
     id: `scan-split-${Date.now()}-${index}`,
     name: `${entry.row.person} share`,
   }))
-  billPaidByPersonId.value = billPaidByPersonId.value && selectedGroup.value?.memberships.some(
-    membership => membership.personId === billPaidByPersonId.value,
-  )
-    ? billPaidByPersonId.value
-    : composerRows.value[0]?.membership?.personId || selectedGroup.value?.memberships?.[0]?.personId || ''
+
+  billTitle.value = safeTitle.value
+  billTotal.value = formatAmountInput(resolvedTotalCents.value)
+  billTip.value = formatAmountInput(analysis.result.value?.tipCents || extractedReceipt.value?.tipCents || 0)
+  billItems.value = draftItems
+  billPaidByPersonId.value = draftPaidByPersonId
+  stageBillComposerDraft({
+    billItems: draftItems,
+    billPaidByPersonId: draftPaidByPersonId,
+    billTip: billTip.value,
+    billTitle: billTitle.value,
+    billTotal: billTotal.value,
+    groupId: selectedGroupId.value,
+  })
 
   await navigateTo(`/groups/${selectedGroupId.value}/bills/new`)
 }
@@ -284,8 +302,9 @@ watch(
 
 watch(() => props.chatId, (nextChatId, previousChatId) => {
   if (!nextChatId) {
-    if (previousChatId) {
-      void resetScan()
+    if (previousChatId || analysis.chatId.value || analysis.result.value) {
+      resetDraftInputs()
+      analysis.reset()
     }
 
     return
@@ -352,187 +371,36 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div ref="scrollRef" class="chat-stream scan-chat-stream">
-      <div class="scan-chat-row">
-        <div class="scan-avatar">
-          <IconGlyph name="sparkle" width="16" height="16" />
-        </div>
-        <div class="scan-bubble assistant">
-          Upload a receipt and I’ll handle the parsing and the first split pass inside this chat.
-        </div>
-      </div>
-
-      <div class="scan-setup-card">
-        <label class="scan-field">
-          <span class="scan-field-label">Bill title</span>
-          <input
-            v-model="title"
-            type="text"
-            placeholder="Friday dinner"
-            class="scan-input"
-            :disabled="hasSavedChat"
-          >
-        </label>
-
-        <label class="scan-field">
-          <span class="scan-field-label">People</span>
-          <textarea
-            v-model="peopleText"
-            rows="2"
-            placeholder="Jojo, Sarah, Miles"
-            class="scan-input scan-textarea"
-            :disabled="hasSavedChat"
-          />
-        </label>
-
-        <div class="scan-note">
-          <div class="scan-note-label">
-            Status
-          </div>
-          <div>{{ statusLabel }}</div>
-        </div>
-
-        <div v-if="hasSavedChat" class="scan-note">
-          <div class="scan-note-label">
-            Resume mode
-          </div>
-          <div>
-            This thread is now persisted. Keep using the reply box to adapt the split, or reset to start a new receipt.
-          </div>
-        </div>
-      </div>
-
-      <div class="scan-card scan-history-card">
-        <div class="scan-card-head">
-          <div>
-            <div class="scan-note-label">
-              Receipt preview
+    <div class="scan-chat-layout">
+      <section class="scan-chat-main">
+        <div ref="scrollRef" class="chat-stream scan-chat-stream">
+          <div class="scan-chat-row">
+            <div class="scan-avatar">
+              <IconGlyph name="sparkle" width="16" height="16" />
             </div>
-            <div class="scan-card-title">
-              {{ previewUrl ? safeTitle : 'Scan a real receipt' }}
+            <div class="scan-bubble assistant">
+              Upload a receipt and I’ll handle the parsing and the first split pass inside this chat.
             </div>
           </div>
-        </div>
 
-        <div style="margin-top: 12px;">
-          <ReceiptSplitPreview
-            v-if="previewUrl"
-            :image-src="previewUrl"
-            :status="analysis.status.value"
-            :title="safeTitle"
-            :total-label="resolvedTotalCents ? formatMoney(resolvedTotalCents, resolvedCurrency) : ''"
-          />
-
-          <div v-else class="scan-note">
-            Use the camera on mobile. Everywhere else, upload an image file.
-          </div>
-        </div>
-      </div>
-
-      <div v-if="previewUrl" class="scan-chat-row user">
-        <div class="scan-bubble user upload">
-          <img
-            :src="previewUrl"
-            alt="Receipt preview"
-            class="scan-upload-image"
-          >
-          <div class="scan-upload-copy">
-            <div class="scan-upload-title">
-              Uploaded receipt
-            </div>
-            <div class="scan-upload-meta">
-              {{ safeTitle }} · {{ parsedPeople.join(', ') }}
+          <div v-if="previewUrl" class="scan-chat-row user">
+            <div class="scan-bubble user upload">
+              <img
+                :src="previewUrl"
+                alt="Receipt preview"
+                class="scan-upload-image"
+              >
+              <div class="scan-upload-copy">
+                <div class="scan-upload-title">
+                  Uploaded receipt
+                </div>
+                <div class="scan-upload-meta">
+                  {{ safeTitle }} · {{ parsedPeople.join(', ') }}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div v-if="assistantReply" class="scan-chat-row">
-        <div class="scan-avatar">
-          <IconGlyph name="sparkle" width="16" height="16" />
-        </div>
-        <div class="scan-bubble assistant">
-          {{ assistantReply }}
-        </div>
-      </div>
-
-      <div v-if="extractedReceipt" class="scan-card receipt">
-        <div class="scan-card-head">
-          <div>
-            <div class="scan-note-label">
-              Parsed receipt
-            </div>
-            <div class="scan-card-title">
-              {{ extractedReceipt.merchant || safeTitle }}
-            </div>
-          </div>
-          <div class="scan-card-meta">
-            {{ formatMoney(extractedReceipt.totalCents || 0, extractedReceipt.currency || resolvedCurrency) }}
-          </div>
-        </div>
-
-        <div class="scan-mini-list">
-          <div
-            v-for="(item, index) in (extractedReceipt.items || []).slice(0, 8)"
-            :key="`${item.name}-${index}`"
-            class="scan-mini-row"
-          >
-            <span>{{ item.name }}</span>
-            <span>{{ formatMoney(item.amountCents || 0, extractedReceipt.currency || resolvedCurrency) }}</span>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="splitRows.length" class="scan-card split">
-        <div class="scan-card-head">
-          <div>
-            <div class="scan-note-label">
-              Final split
-            </div>
-            <div class="scan-card-title">
-              {{ analysis.result.value?.summary }}
-            </div>
-          </div>
-        </div>
-
-        <div class="scan-mini-list">
-          <div
-            v-for="row in splitRows"
-            :key="row.person"
-            class="scan-mini-row"
-          >
-            <span>{{ row.person }}</span>
-            <span>{{ formatMoney(row.amountCents || 0, resolvedCurrency) }}</span>
-          </div>
-        </div>
-
-        <div class="scan-card-actions">
-          <button class="btn btn-ghost" :disabled="!canOpenComposer" @click="openComposer">
-            Open in bill composer
-          </button>
-          <div class="scan-card-hint">
-            {{ composerMessage }}
-          </div>
-        </div>
-      </div>
-
-      <div v-if="analysis.error.value" class="scan-card error">
-        {{ analysis.error.value }}
-      </div>
-
-      <div v-if="analysis.feed.value.length" class="scan-card scan-feed-shell">
-        <div class="scan-card-head">
-          <div>
-            <div class="scan-note-label">
-              Live feed
-            </div>
-            <div class="scan-card-title">
-              Latest pipeline steps
-            </div>
-          </div>
-        </div>
-
-        <div class="scan-feed-list">
           <div
             v-for="(entry, index) in analysis.feed.value"
             :key="`${entry.text}-${index}`"
@@ -546,53 +414,200 @@ onBeforeUnmount(() => {
               {{ entry.text }}
             </div>
           </div>
+
+          <div v-if="assistantReply" class="scan-chat-row">
+            <div class="scan-avatar">
+              <IconGlyph name="sparkle" width="16" height="16" />
+            </div>
+            <div class="scan-bubble assistant">
+              {{ assistantReply }}
+            </div>
+          </div>
+
+          <div v-if="analysis.error.value" class="scan-chat-row system">
+            <div class="scan-avatar system">
+              <IconGlyph name="scan" width="16" height="16" />
+            </div>
+            <div class="scan-bubble system error">
+              {{ analysis.error.value }}
+            </div>
+          </div>
         </div>
-      </div>
+
+        <div class="scan-chat-composer">
+          <div class="scan-composer-stack">
+            <form class="scan-reply-form" @submit.prevent="submitReply">
+              <input
+                v-model="replyText"
+                type="text"
+                class="scan-input scan-reply-input"
+                :disabled="!canReply"
+                :placeholder="canReply ? 'Tell Penny what to change about the split' : 'The reply box unlocks after the first split is ready'"
+              >
+              <button class="btn btn-accent" :disabled="!canReply || !replyText.trim()">
+                Send
+              </button>
+            </form>
+
+            <div class="scan-composer-actions">
+              <button class="btn btn-primary" :disabled="!canPickReceipt" @click="openReceiptPicker">
+                {{ isRunning ? 'Analyzing...' : pickerLabel }}
+              </button>
+
+              <button class="scan-link" @click="resetScan">
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="scan-chat-sidebar">
+        <div class="scan-setup-card">
+          <label class="scan-field">
+            <span class="scan-field-label">Bill title</span>
+            <input
+              v-model="title"
+              type="text"
+              placeholder="Friday dinner"
+              class="scan-input"
+              :disabled="hasSavedChat"
+            >
+          </label>
+
+          <label class="scan-field">
+            <span class="scan-field-label">People</span>
+            <textarea
+              v-model="peopleText"
+              rows="2"
+              placeholder="Jojo, Sarah, Miles"
+              class="scan-input scan-textarea"
+              :disabled="hasSavedChat"
+            />
+          </label>
+
+          <div class="scan-note">
+            <div class="scan-note-label">
+              Status
+            </div>
+            <div>{{ statusLabel }}</div>
+          </div>
+
+          <div v-if="hasSavedChat" class="scan-note">
+            <div class="scan-note-label">
+              Resume mode
+            </div>
+            <div>
+              This thread is now persisted. Keep using the reply box to adapt the split, or reset to start a new receipt.
+            </div>
+          </div>
+        </div>
+
+        <div class="scan-card">
+          <div class="scan-card-head">
+            <div>
+              <div class="scan-note-label">
+                Receipt preview
+              </div>
+              <div class="scan-card-title">
+                {{ previewUrl ? safeTitle : 'Scan a real receipt' }}
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 12px;">
+            <ReceiptSplitPreview
+              v-if="previewUrl"
+              :image-src="previewUrl"
+              :status="analysis.status.value"
+              :title="safeTitle"
+              :total-label="resolvedTotalCents ? formatMoney(resolvedTotalCents, resolvedCurrency) : ''"
+            />
+
+            <div v-else class="scan-note">
+              Use the camera on mobile. Everywhere else, upload an image file.
+            </div>
+          </div>
+        </div>
+
+        <div v-if="extractedReceipt" class="scan-card">
+          <div class="scan-card-head">
+            <div>
+              <div class="scan-note-label">
+                Parsed receipt
+              </div>
+              <div class="scan-card-title">
+                {{ extractedReceipt.merchant || safeTitle }}
+              </div>
+            </div>
+            <div class="scan-card-meta">
+              {{ formatMoney(extractedReceipt.totalCents || 0, extractedReceipt.currency || resolvedCurrency) }}
+            </div>
+          </div>
+
+          <div class="scan-mini-list">
+            <div
+              v-for="(item, index) in (extractedReceipt.items || []).slice(0, 8)"
+              :key="`${item.name}-${index}`"
+              class="scan-mini-row"
+            >
+              <span>{{ item.name }}</span>
+              <span>{{ formatMoney(item.amountCents || 0, extractedReceipt.currency || resolvedCurrency) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="splitRows.length" class="scan-card">
+          <div class="scan-card-head">
+            <div>
+              <div class="scan-note-label">
+                Final split
+              </div>
+              <div class="scan-card-title">
+                {{ analysis.result.value?.summary }}
+              </div>
+            </div>
+          </div>
+
+          <div class="scan-mini-list">
+            <div
+              v-for="row in splitRows"
+              :key="row.person"
+              class="scan-mini-row"
+            >
+              <span>{{ row.person }}</span>
+              <span>{{ formatMoney(row.amountCents || 0, resolvedCurrency) }}</span>
+            </div>
+          </div>
+
+          <div class="scan-card-actions">
+            <button class="btn btn-ghost" :disabled="!canOpenComposer" @click="openComposer">
+              Open in bill composer
+            </button>
+            <div class="scan-card-hint">
+              {{ composerMessage }}
+            </div>
+          </div>
+        </div>
+      </aside>
     </div>
 
-    <div class="scan-chat-composer">
-      <input
-        ref="cameraInput"
-        type="file"
-        accept="image/*"
-        capture="environment"
-        class="scan-hidden-input"
-        @change="onFileChange"
-      >
+    <input
+      ref="cameraInput"
+      type="file"
+      accept="image/*"
+      capture="environment"
+      class="scan-hidden-input"
+      @change="onFileChange"
+    >
 
-      <input
-        ref="fileInput"
-        type="file"
-        accept="image/*"
-        class="scan-hidden-input"
-        @change="onFileChange"
-      >
-
-      <div class="scan-composer-stack">
-        <form class="scan-reply-form" @submit.prevent="submitReply">
-          <input
-            v-model="replyText"
-            type="text"
-            class="scan-input scan-reply-input"
-            :disabled="!canReply"
-            :placeholder="canReply ? 'Tell Penny what to change about the split' : 'The reply box unlocks after the first split is ready'"
-          >
-          <button class="btn btn-accent" :disabled="!canReply || !replyText.trim()">
-            Send
-          </button>
-        </form>
-
-        <div class="scan-composer-actions">
-          <button class="btn btn-primary" :disabled="!canPickReceipt" @click="openReceiptPicker">
-            {{ isRunning ? 'Analyzing...' : pickerLabel }}
-          </button>
-
-          <button class="scan-link" @click="resetScan">
-            Reset
-          </button>
-        </div>
-      </div>
-    </div>
+    <input
+      ref="fileInput"
+      type="file"
+      accept="image/*"
+      class="scan-hidden-input"
+      @change="onFileChange"
+    >
   </div>
 </template>
 
@@ -632,11 +647,29 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
+.scan-chat-layout {
+  display: grid;
+  gap: 16px;
+  padding: 0 16px;
+}
+
+.scan-chat-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.scan-chat-sidebar {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
 .scan-chat-stream {
-  padding: 0 16px 120px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
 }
 
 .scan-chat-row {
@@ -683,6 +716,12 @@ onBeforeUnmount(() => {
 .scan-bubble.system {
   background: rgba(20, 18, 16, 0.06);
   color: var(--ink);
+}
+
+.scan-bubble.error {
+  background: rgba(255, 84, 54, 0.12);
+  border: 1px solid rgba(255, 84, 54, 0.24);
+  color: #8f2a16;
 }
 
 .scan-bubble.user {
@@ -760,24 +799,6 @@ onBeforeUnmount(() => {
   margin-top: 12px;
 }
 
-.scan-card.receipt,
-.scan-card.split,
-.scan-card.error,
-.scan-feed-shell {
-  margin-left: 40px;
-}
-
-.scan-history-card {
-  margin-left: 40px;
-}
-
-.scan-card.error {
-  background: rgba(255, 84, 54, 0.12);
-  border-color: rgba(255, 84, 54, 0.25);
-  color: #8f2a16;
-  font-weight: 600;
-}
-
 .scan-card-head {
   display: flex;
   justify-content: space-between;
@@ -798,25 +819,6 @@ onBeforeUnmount(() => {
   color: var(--muted);
 }
 
-.scan-feed-list {
-  display: grid;
-  gap: 12px;
-  max-height: 320px;
-  margin-top: 12px;
-  overflow-y: auto;
-  padding-right: 4px;
-  overscroll-behavior: contain;
-}
-
-.scan-feed-list::-webkit-scrollbar {
-  width: 8px;
-}
-
-.scan-feed-list::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: rgba(20, 18, 16, 0.18);
-}
-
 .scan-mini-list {
   display: grid;
   gap: 8px;
@@ -829,53 +831,6 @@ onBeforeUnmount(() => {
   gap: 12px;
   font-size: 13px;
   line-height: 1.4;
-}
-
-.scan-history-list {
-  display: grid;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.scan-history-item {
-  border: 1.5px solid rgba(20, 18, 16, 0.08);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.55);
-  padding: 12px 14px;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  text-align: left;
-}
-
-.scan-history-item.active {
-  border-color: var(--ink);
-  background: rgba(255, 217, 102, 0.2);
-}
-
-.scan-history-title {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.scan-history-meta,
-.scan-history-summary {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.45;
-}
-
-.scan-history-side {
-  display: grid;
-  justify-items: flex-end;
-  gap: 6px;
-}
-
-.scan-history-amount {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .scan-card-actions {
@@ -893,7 +848,7 @@ onBeforeUnmount(() => {
 .scan-chat-composer {
   position: sticky;
   bottom: 0;
-  padding: 12px 16px 84px;
+  padding: 12px 0 84px;
   background: linear-gradient(to bottom, transparent, var(--cream) 35%);
 }
 
@@ -901,6 +856,7 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 10px;
   width: 100%;
+  padding: 0;
 }
 
 .scan-reply-form {
@@ -940,6 +896,36 @@ onBeforeUnmount(() => {
     justify-content: flex-end;
   }
 
+  .scan-chat-layout {
+    grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+    align-items: start;
+  }
+
+  .scan-chat-main {
+    min-height: calc(100vh - 210px);
+  }
+
+  .scan-chat-stream {
+    max-height: calc(100vh - 360px);
+    overflow-y: auto;
+    padding-right: 6px;
+    overscroll-behavior: contain;
+  }
+
+  .scan-chat-stream::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .scan-chat-stream::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(20, 18, 16, 0.18);
+  }
+
+  .scan-chat-sidebar {
+    position: sticky;
+    top: 16px;
+  }
+
   .scan-card-actions {
     grid-template-columns: auto 1fr;
     align-items: center;
@@ -947,14 +933,6 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 640px) {
-  .scan-history-item {
-    flex-direction: column;
-  }
-
-  .scan-history-side {
-    justify-items: flex-start;
-  }
-
   .scan-reply-form,
   .scan-composer-actions {
     flex-direction: column;
