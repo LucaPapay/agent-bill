@@ -8,6 +8,8 @@ Built for the **OpenAI Codex Community Hackathon**.
 
 You scan a receipt, Penny helps split it, and the app keeps a proper little ledger underneath.
 
+![agent-bill screenshot](./design/SCR-20260418-ozqw.png)
+
 ## What It Does
 
 - scan a receipt
@@ -37,12 +39,6 @@ Then the ledger takes over and stores the boring truth.
 - tip splitting
 - saved bill runs
 - simplified settlement view
-
-## Screens
-
-| Home | Groups |
-| --- | --- |
-| ![Home screen](./design/home%20screenshot.png) | ![Groups screen](./design/groups%20screenshot.png) |
 
 ## Stack
 
