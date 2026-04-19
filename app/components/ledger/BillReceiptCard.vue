@@ -34,50 +34,49 @@ defineProps({
 <template>
   <div
     v-if="bill && group"
-    class="receipt perforated-top perforated-bottom"
-    style="width: 100%; max-width: 960px; margin: 0 auto; padding: 28px 22px; font-family: var(--mono);"
+    class="receipt perforated-top perforated-bottom mx-auto w-full max-w-[960px] px-[22px] py-7 font-mono"
   >
-    <div style="text-align: center;">
-      <div style="font-size: 10px; letter-spacing: 0.12em; color: var(--muted);">
+    <div class="text-center">
+      <div class="text-[10px] tracking-[0.12em] text-muted">
         AGENT-BILL · {{ group.name.toUpperCase() }}
       </div>
-      <div class="h-display" style="font-size: 28px; margin: 8px 0 2px;">
+      <div class="h-display my-2 text-[28px]">
         {{ bill.title }}
       </div>
-      <div style="font-size: 10px; letter-spacing: 0.08em; color: var(--muted);">
+      <div class="text-[10px] tracking-[0.08em] text-muted">
         {{ bill.items.length }} ITEMS · {{ bill.shares.length }} PEOPLE · PAID BY {{ bill.paidByPerson?.name || 'UNKNOWN' }}
       </div>
-      <div v-if="bill.billDate" style="font-size: 10px; letter-spacing: 0.08em; color: var(--muted); margin-top: 4px;">
+      <div v-if="bill.billDate" class="mt-1 text-[10px] tracking-[0.08em] text-muted">
         {{ formatBillDate(bill.billDate) }}
       </div>
     </div>
 
-    <div style="border-top: 1.5px dashed var(--ink); margin: 16px 0;" />
+    <div class="my-4 border-t-[1.5px] border-dashed border-ink" />
 
     <div
       v-for="share in bill.shares"
       :key="share.id"
-      style="display: flex; align-items: center; gap: 10px; padding: 8px 0;"
+      class="flex items-center gap-2.5 py-2"
     >
       <AvatarBadge :name="share.person.name" size="sm" />
-      <div style="flex: 1; font-size: 13px; font-family: var(--ui); font-weight: 600;">
+      <div class="flex-1 font-ui text-[13px] font-semibold">
         {{ share.person.name }}
       </div>
-      <div style="font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;">
+      <div class="text-[10px] font-bold uppercase tracking-[0.08em] text-muted">
         {{ formatCents(share.itemAmountCents) }} + {{ formatCents(share.tipAmountCents) }}
       </div>
-      <div class="mono" style="width: 72px; text-align: right; font-weight: 700; font-size: 13px;">
+      <div class="mono w-[72px] text-right text-[13px] font-bold">
         {{ formatCents(share.totalAmountCents) }}
       </div>
     </div>
 
-    <div style="border-top: 1.5px dashed var(--ink); margin: 12px 0 4px;" />
-    <div style="display: flex; justify-content: space-between; font-weight: 700; font-size: 14px;">
+    <div class="mb-1 mt-3 border-t-[1.5px] border-dashed border-ink" />
+    <div class="flex justify-between text-sm font-bold">
       <span>TOTAL</span>
       <span>{{ formatCents(bill.totalAmountCents) }}</span>
     </div>
 
-    <div style="margin-top: 18px; text-align: center; font-size: 9px; letter-spacing: 0.15em; color: var(--muted);">
+    <div class="mt-[18px] text-center text-[9px] tracking-[0.15em] text-muted">
       RAW SHARES STORED · TRANSFERS DERIVED
     </div>
   </div>

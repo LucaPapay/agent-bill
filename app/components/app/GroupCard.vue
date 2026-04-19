@@ -38,67 +38,47 @@ const emit = defineEmits(['select'])
 
 <template>
   <button
-    class="surface-panel"
-    :style="{
-      padding: '16px 18px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'stretch',
-      justifyContent: 'flex-start',
-      textAlign: 'left',
-      borderColor: selected ? 'var(--ink)' : 'rgba(20,18,16,0.08)',
-      boxShadow: selected ? '0 0 0 2px rgba(20,18,16,0.06)' : '',
-      width: '100%',
-    }"
+    class="surface-panel flex w-full self-start flex-col items-stretch justify-start px-[18px] py-4 text-left"
+    :class="selected ? 'border-ink shadow-[0_0_0_2px_rgba(20,18,16,0.06)]' : 'border-black/8'"
     @click="emit('select')"
   >
-    <div style="display: flex; align-items: center; gap: 12px;">
+    <div class="flex items-center gap-3">
       <div
+        class="flex h-[52px] w-[52px] items-center justify-center rounded-2xl border-[1.5px] border-ink text-2xl leading-none font-bold"
         :style="{
-          width: '52px',
-          height: '52px',
-          borderRadius: '16px',
           background: iconBackground,
           color: iconColor,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '24px',
-          lineHeight: 1,
-          fontWeight: 700,
-          border: '1.5px solid var(--ink)',
         }"
       >
         {{ iconLabel }}
       </div>
 
-      <div style="flex: 1; min-width: 0;">
-        <div style="font-weight: 700; font-size: 17px;">
+      <div class="min-w-0 flex-1">
+        <div class="text-[17px] font-bold">
           {{ title }}
         </div>
-        <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
+        <div class="mt-0.5 text-xs text-muted">
           {{ subtitle }}
         </div>
       </div>
 
-      <div class="mono" style="font-weight: 700; font-size: 13px; text-align: right;">
+      <div class="mono text-right text-[13px] font-bold">
         {{ amountLabel }}
       </div>
     </div>
 
-    <div style="display: flex; margin-top: 12px; padding-left: 4px;">
+    <div class="mt-3 flex pl-1">
       <div
         v-for="(name, index) in avatarNames.slice(0, 4)"
         :key="name"
-        :style="{ marginLeft: index === 0 ? 0 : '-10px' }"
+        :class="index === 0 ? 'ml-0' : 'ml-[-10px]'"
       >
         <AvatarBadge :name="name" size="sm" />
       </div>
 
       <div
         v-if="avatarNames.length > 4"
-        class="avatar sm"
-        style="margin-left: -10px; background: var(--cream-2);"
+        class="avatar sm ml-[-10px] bg-cream-2"
       >
         +{{ avatarNames.length - 4 }}
       </div>

@@ -52,46 +52,46 @@ const settings = computed(() => [
 
 <template>
   <div class="screen">
-    <div class="section-pad" style="padding-top: 8px; padding-bottom: 20px;">
-      <h1 class="h-display" style="font-size: 42px; line-height: 1; margin: 0;">
+    <div class="section-pad pb-5 pt-2">
+      <h1 class="h-display m-0 text-[42px] leading-none">
         You
       </h1>
     </div>
 
     <div class="section-pad profile-grid">
-      <div class="surface-panel" style="padding: 20px;">
-        <div style="display: flex; gap: 14px; align-items: center;">
+      <div class="surface-panel p-5">
+        <div class="flex items-center gap-[14px]">
           <AvatarBadge :name="currentUser?.name || 'You'" size="lg" />
-          <div style="flex: 1;">
-            <div style="font-weight: 700; font-size: 18px;">
+          <div class="flex-1">
+            <div class="text-lg font-bold">
               {{ currentUser?.name || 'Signed in' }}
             </div>
-            <div style="font-size: 12px; color: var(--muted);">
+            <div class="text-xs text-muted">
               {{ currentUser?.email || 'Google account' }}
             </div>
           </div>
-          <button class="btn btn-ghost" style="padding: 10px 14px; font-size: 12px;" @click="emit('logout')">
+          <button class="btn btn-ghost px-[14px] py-2.5 text-xs" @click="emit('logout')">
             Log out
           </button>
         </div>
 
-        <div v-if="errorMessage" style="margin-top: 12px; padding: 12px 14px; border-radius: 16px; background: #fff0ec; color: #7d2f21; border: 1px solid rgba(255,84,54,0.2); font-size: 13px;">
+        <div v-if="errorMessage" class="callout-error mt-3">
           {{ errorMessage }}
         </div>
       </div>
 
       <div>
-        <div style="background: var(--ink); color: var(--cream); border-radius: 22px; padding: 18px;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="width: 44px; height: 44px; border-radius: 14px; background: var(--marigold); color: var(--ink); display: flex; align-items: center; justify-content: center;">
+        <div class="rounded-[22px] bg-ink p-[18px] text-cream">
+          <div class="flex items-center gap-3">
+            <div class="flex h-11 w-11 items-center justify-center rounded-[14px] bg-marigold text-ink">
               <IconGlyph name="sparkle" width="24" height="24" />
             </div>
 
-            <div style="flex: 1;">
-              <div style="font-weight: 700; font-size: 16px;">
+            <div class="flex-1">
+              <div class="text-base font-bold">
                 Penny
               </div>
-              <div style="font-size: 12px; opacity: 0.7;">
+              <div class="text-xs opacity-70">
                 Your bill-splitting copilot
               </div>
             </div>
@@ -101,51 +101,47 @@ const settings = computed(() => [
             </div>
           </div>
 
-          <div style="font-size: 13px; margin-top: 14px; opacity: 0.85; line-height: 1.4;">
+          <div class="mt-[14px] text-[13px] leading-[1.4] opacity-[0.85]">
             She reads receipts, suggests who owes what, and turns messy group tabs into a split you can actually settle.
           </div>
         </div>
       </div>
     </div>
 
-    <div class="section-pad" style="margin-top: 16px;">
-      <div class="surface-panel" style="overflow: hidden;">
+    <div class="section-pad mt-4">
+      <div class="surface-panel overflow-hidden">
         <div
           v-for="([label, detail], index) in settings"
           :key="label"
-          :style="{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '14px 16px',
-            borderBottom: index < settings.length - 1 ? '1px solid rgba(20,18,16,0.08)' : 'none',
-          }"
+          class="flex items-center px-4 py-[14px]"
+          :class="index < settings.length - 1 ? 'border-b border-black/8' : ''"
         >
-          <div style="flex: 1; font-size: 15px; font-weight: 500;">
+          <div class="flex-1 text-[15px] font-medium">
             {{ label }}
           </div>
-          <span v-if="detail" class="mono" style="font-size: 12px; color: var(--muted); margin-right: 8px;">
+          <span v-if="detail" class="mono mr-2 text-xs text-muted">
             {{ detail }}
           </span>
         </div>
       </div>
     </div>
 
-    <div class="section-pad" style="margin-top: 16px;">
-      <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">
+    <div class="section-pad mt-4">
+      <div class="section-label mb-2.5">
         Debug tools
       </div>
-      <div class="surface-panel" style="padding: 18px; margin-bottom: 12px;">
-        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+      <div class="surface-panel mb-3 p-[18px]">
+        <div class="flex flex-wrap items-center gap-2.5">
           <button
             class="btn btn-accent"
             :disabled="saving"
-            style="padding: 10px 16px; font-size: 12px;"
+            :class="'btn-xs'"
             @click="emit('add-to-all-groups')"
           >
             {{ saving ? 'Adding you...' : 'Add me to all groups' }}
           </button>
 
-          <div class="mono" style="font-size: 10px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase;">
+          <div class="mono text-[10px] uppercase tracking-[0.12em] text-muted">
             Testing only
           </div>
         </div>
@@ -158,8 +154,8 @@ const settings = computed(() => [
       />
     </div>
 
-    <div class="section-pad" style="margin-top: 22px; text-align: center;">
-      <div class="mono" style="font-size: 10px; color: var(--muted); letter-spacing: 0.15em;">
+    <div class="section-pad mt-[22px] text-center">
+      <div class="mono text-[10px] tracking-[0.15em] text-muted">
         KEEP THE TAB FAIR · KEEP THE LEDGER CLEAN
       </div>
     </div>

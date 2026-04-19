@@ -61,24 +61,24 @@ function submitGroup() {
 <template>
   <PageShell>
     <div class="screen">
-      <div class="section-pad" style="padding-top: 8px; padding-bottom: 16px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <div class="section-pad pb-4 pt-2">
+        <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 class="h-display" style="font-size: 42px; line-height: 1; margin: 0;">
+            <h1 class="h-display m-0 text-[42px] leading-none">
               Groups
             </h1>
-            <div class="mono" style="font-size: 11px; color: var(--muted); margin-top: 6px;">
+            <div class="mono mt-1.5 text-[11px] text-muted">
               {{ groupsHeaderLabel() }}
             </div>
           </div>
 
-          <NuxtLink class="btn btn-accent" style="text-decoration: none;" to="/scan">
+          <NuxtLink class="btn btn-accent no-underline" to="/scan">
             Scan receipt
           </NuxtLink>
         </div>
       </div>
 
-      <div class="section-pad groups-grid" style="padding-bottom: 96px;">
+      <div class="section-pad groups-grid pb-24">
         <GroupCard
           v-for="group in ledger.groups"
           :key="group.id"
@@ -92,23 +92,22 @@ function submitGroup() {
         />
 
         <form
-          class="surface-panel"
-          style="padding: 16px 18px; text-align: left; display: flex; flex-direction: column; justify-content: space-between; min-height: 170px;"
+          class="surface-panel self-start px-[18px] py-4 text-left"
           @submit.prevent="submitGroup"
         >
-          <div>
-            <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="grid gap-4">
+            <div class="flex items-center gap-3">
               <div
-                style="width: 52px; height: 52px; border-radius: 16px; background: var(--cream-2); color: var(--ink); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; border: 1.5px dashed rgba(20,18,16,0.35);"
+                class="flex h-[52px] w-[52px] items-center justify-center rounded-2xl border-[1.5px] border-dashed border-black/35 bg-cream-2 text-2xl font-bold text-ink"
               >
                 AI
               </div>
 
-              <div style="flex: 1; min-width: 0;">
-                <div style="font-weight: 700; font-size: 17px;">
+              <div class="min-w-0 flex-1">
+                <div class="text-[17px] font-bold">
                   Create a new group
                 </div>
-                <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
+                <div class="mt-0.5 max-w-[36ch] text-xs text-muted">
                   Start a shared ledger for dinner, travel, or the flat. Penny picks the icon and background color.
                 </div>
               </div>
@@ -118,26 +117,26 @@ function submitGroup() {
               :value="groupName"
               type="text"
               placeholder="Flat dinner club"
-              style="width: 100%; margin-top: 16px; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
+              class="form-input mt-4"
               @input="updateGroupName"
             >
 
             <div
               v-if="errorMessage"
-              style="margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: #fff0ec; color: #7d2f21; border: 1px solid rgba(255,84,54,0.2); font-size: 13px; line-height: 1.4;"
+              class="callout-error mt-2.5 rounded-[14px] px-3 py-2.5"
             >
               {{ errorMessage }}
             </div>
-          </div>
 
-          <div style="display: flex; justify-content: space-between; align-items: end; gap: 12px; margin-top: 16px;">
-            <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="mono text-[11px] uppercase tracking-[0.08em] text-muted">
               You join as the first member
-            </div>
+              </div>
 
-            <button class="btn btn-accent" style="padding: 10px 16px;" :disabled="saving || !groupName.trim()">
-              Create group
-            </button>
+              <button class="btn btn-accent btn-sm" :disabled="saving || !groupName.trim()">
+                Create group
+              </button>
+            </div>
           </div>
         </form>
       </div>

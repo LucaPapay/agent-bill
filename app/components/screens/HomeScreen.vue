@@ -22,57 +22,46 @@ const emit = defineEmits(['nav', 'open-bill'])
 
 <template>
   <div class="screen">
-    <div class="section-pad" style="padding-top: 24px; padding-bottom: 28px;">
+    <div class="section-pad pb-7 pt-6">
       <div class="home-hero">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
+        <div class="flex items-start justify-between gap-5">
           <div>
-            <div class="mono" style="font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);">
+            <div class="section-label-tight">
               {{ summary.dateLabel }}
             </div>
-            <h1 class="h-display" style="font-size: clamp(40px, 6vw, 68px); line-height: 0.95; margin: 10px 0 0; max-width: 8ch;">
+            <h1 class="h-display mt-2.5 max-w-[8ch] text-[clamp(40px,6vw,68px)] leading-[0.95]">
               Split bills without the spreadsheet energy.
             </h1>
-            <p style="max-width: 38rem; margin: 18px 0 0; font-size: 16px; line-height: 1.6; color: var(--muted);">
+            <p class="mt-[18px] max-w-[38rem] text-base leading-[1.6] text-muted">
               Scan a receipt, sort out who owes what, and keep every item, share, and transfer in one local ledger your group can trust.
             </p>
           </div>
 
-          <button style="position: relative; padding: 8px; flex-shrink: 0;" @click="emit('nav', 'profile')">
+          <button class="relative shrink-0 p-2" @click="emit('nav', 'profile')">
             <IconGlyph name="bell" width="22" height="22" />
             <div
-              :style="{
-                position: 'absolute',
-                top: '6px',
-                right: '6px',
-                width: '8px',
-                height: '8px',
-                borderRadius: '4px',
-                background: health?.databaseConfigured ? 'var(--mint)' : 'var(--tomato)',
-              }"
+              class="absolute right-[6px] top-[6px] h-2 w-2 rounded-[4px]"
+              :class="health?.databaseConfigured ? 'bg-mint' : 'bg-tomato'"
             />
           </button>
         </div>
 
-        <div style="background: var(--ink); color: var(--cream); border-radius: 28px; padding: 24px 22px; position: relative; overflow: visible; min-height: 100%;">
-          <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.6;">
+        <div class="relative min-h-full overflow-visible rounded-[28px] bg-ink px-[22px] py-6 text-cream">
+          <div class="text-xs font-semibold uppercase tracking-[0.1em] opacity-60">
             {{ summary.netBalanceTitle }}
           </div>
 
           <div
             class="h-display"
-            style="font-size: clamp(56px, 8vw, 86px); line-height: 1; margin-top: 10px; letter-spacing: -0.03em;"
-            :style="{
-              color: summary.netBalanceTone === 'tomato'
-                ? 'var(--tomato)'
-                : summary.netBalanceTone === 'mint'
-                  ? 'var(--cream)'
-                  : 'var(--cream)',
-            }"
+            :class="[
+              'mt-2.5 text-[clamp(56px,8vw,86px)] leading-none tracking-[-0.03em]',
+              summary.netBalanceTone === 'tomato' ? 'text-tomato' : 'text-cream',
+            ]"
           >
             {{ summary.netBalanceLabel }}
           </div>
 
-          <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap;">
+          <div class="mt-4 flex flex-wrap gap-2">
             <button class="chip chip-action" type="button" style="background: var(--tomato);" @click="emit('nav', 'groups')">
               You owe {{ summary.youOweLabel }}
             </button>
@@ -84,44 +73,44 @@ const emit = defineEmits(['nav', 'open-bill'])
             </button>
           </div>
 
-          <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.1);">
-            <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;">
-              <div class="mono" style="font-size: 11px; color: rgba(255,255,255,0.58); text-transform: uppercase; letter-spacing: 0.1em;">
+          <div class="mt-[18px] border-t border-white/10 pt-[14px]">
+            <div class="flex flex-wrap items-baseline justify-between gap-3">
+              <div class="mono text-[11px] uppercase tracking-[0.1em] text-white/[0.58]">
                 By group
               </div>
-              <button class="mono" type="button" style="font-size: 11px; color: rgba(255,255,255,0.58);" @click="emit('nav', 'groups')">
+              <button class="mono text-[11px] text-white/[0.58]" type="button" @click="emit('nav', 'groups')">
                 {{ summary.groupsCount }} groups in ledger
               </button>
             </div>
 
-            <div v-if="summary.groupBalances.length" style="display: grid; gap: 8px; margin-top: 12px;">
+            <div v-if="summary.groupBalances.length" class="mt-3 grid gap-2">
               <div
                 v-for="group in summary.groupBalances"
                 :key="group.groupId"
-                style="display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 16px; background: rgba(255,255,255,0.06);"
+                class="flex items-center justify-between gap-3 rounded-2xl bg-white/[0.06] px-3 py-2.5"
               >
                 <div>
-                  <div style="font-weight: 700; font-size: 14px;">
+                  <div class="text-sm font-bold">
                     {{ group.groupName }}
                   </div>
-                  <div class="mono" style="font-size: 11px; color: rgba(255,255,255,0.58); margin-top: 4px;">
+                  <div class="mono mt-1 text-[11px] text-white/[0.58]">
                     {{ group.helperLabel }}
                   </div>
                 </div>
 
-                <div style="text-align: right;">
-                  <div class="mono" style="font-size: 11px; color: rgba(255,255,255,0.58);">
+                <div class="text-right">
+                  <div class="mono text-[11px] text-white/[0.58]">
                     {{ group.directionLabel }}
                   </div>
                   <div
-                    style="font-size: 14px; font-weight: 700; margin-top: 4px;"
-                    :style="{
-                      color: group.tone === 'tomato'
-                        ? 'var(--tomato)'
+                    :class="[
+                      'mt-1 text-sm font-bold',
+                      group.tone === 'tomato'
+                        ? 'text-tomato'
                         : group.tone === 'mint'
-                          ? 'var(--mint)'
-                          : 'rgba(255,255,255,0.72)',
-                    }"
+                          ? 'text-mint'
+                          : 'text-white/[0.72]',
+                    ]"
                   >
                     {{ group.amountLabel }}
                   </div>
@@ -129,38 +118,38 @@ const emit = defineEmits(['nav', 'open-bill'])
               </div>
             </div>
 
-            <div v-else style="margin-top: 12px; padding: 10px 12px; border-radius: 16px; background: rgba(255,255,255,0.06); font-size: 13px;">
+            <div v-else class="mt-3 rounded-2xl bg-white/[0.06] px-3 py-2.5 text-[13px]">
               Start a group to see what you owe and what is coming back to you.
             </div>
           </div>
 
-          <div style="position: absolute; right: 8px; top: -10px; transform: rotate(6deg); background: var(--marigold); color: var(--ink); padding: 4px 14px; font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; box-shadow: 1px 1px 0 rgba(0,0,0,0.15);">
+          <div class="absolute right-2 top-[-10px] rotate-[6deg] bg-marigold px-[14px] py-1 font-mono text-[10px] font-bold tracking-[0.1em] text-ink shadow-[1px_1px_0_rgba(0,0,0,0.15)]">
             YOUR · BALANCE
           </div>
         </div>
       </div>
     </div>
 
-    <div class="section-pad" style="margin-top: 6px;">
+    <div class="section-pad mt-1.5">
       <div class="home-main">
-        <div class="surface-panel" style="padding: 18px;">
-          <div style="display: flex; gap: 12px; align-items: flex-start;">
-            <div style="width: 40px; height: 40px; border-radius: 14px; background: var(--ink); display: flex; align-items: center; justify-content: center; color: var(--marigold); flex-shrink: 0;">
+        <div class="surface-panel p-[18px]">
+          <div class="flex items-start gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-ink text-marigold">
               <IconGlyph name="sparkle" width="20" height="20" />
             </div>
 
-            <div style="flex: 1;">
-              <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);">
+            <div class="flex-1">
+              <div class="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
                 Penny · quick start
               </div>
-              <div style="font-size: 15px; line-height: 1.45; margin-top: 6px;">
+              <div class="mt-1.5 text-[15px] leading-[1.45]">
                 Start with a group, add an itemized bill, or jump straight into a receipt scan. Penny keeps the split fast and the ledger honest.
               </div>
-              <div style="display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap;">
-                <button class="btn btn-accent" style="padding: 10px 16px; font-size: 13px;" @click="emit('nav', 'groups')">
+              <div class="mt-[14px] flex flex-wrap gap-2">
+                <button class="btn btn-accent btn-sm" @click="emit('nav', 'groups')">
                   Open groups
                 </button>
-                <button class="btn btn-ghost" style="padding: 10px 16px; font-size: 13px;" @click="emit('nav', 'scan')">
+                <button class="btn btn-ghost btn-sm" @click="emit('nav', 'scan')">
                   Scan a receipt
                 </button>
               </div>
@@ -169,16 +158,16 @@ const emit = defineEmits(['nav', 'open-bill'])
         </div>
 
         <div>
-          <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px;">
-            <h3 class="h-ui" style="font-size: 18px; margin: 0;">
+          <div class="mb-2.5 flex items-baseline justify-between">
+            <h3 class="h-ui m-0 text-lg">
               Recent bills
             </h3>
-            <span class="mono" style="font-size: 11px; color: var(--muted);">
+            <span class="mono text-[11px] text-muted">
               {{ summary.peopleCount }} people in ledger
             </span>
           </div>
 
-          <div v-if="recentBills.length" style="display: flex; flex-direction: column; gap: 10px;">
+          <div v-if="recentBills.length" class="flex flex-col gap-2.5">
             <ActivityRow
               v-for="bill in recentBills"
               :key="bill.billId"
@@ -192,11 +181,11 @@ const emit = defineEmits(['nav', 'open-bill'])
             />
           </div>
 
-          <div v-else class="surface-panel" style="padding: 18px;">
-            <div class="mono" style="font-size: 11px; letter-spacing: 0.12em; color: var(--muted); text-transform: uppercase;">
+          <div v-else class="surface-panel p-[18px]">
+            <div class="section-label-tight">
               No saved bills yet
             </div>
-            <div style="margin-top: 8px; font-size: 14px; line-height: 1.5;">
+            <div class="mt-2 text-sm leading-[1.5]">
               Start in Groups to create a ledger group, then open a split chat from Scan or review saved ones in Splits.
             </div>
           </div>

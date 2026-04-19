@@ -1,20 +1,36 @@
 @import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
+@theme {
+  --color-cream: #f6f0e4;
+  --color-cream-2: #efe6d3;
+  --color-paper: #fbf7ee;
+  --color-ink: #141210;
+  --color-muted: #8a7f6f;
+  --color-tomato: #ff5436;
+  --color-marigold: #f6b533;
+  --color-mint: #8fc56a;
+  --color-lilac: #b9a6e8;
+  --color-sky: #7fb8d9;
+  --font-display: "Instrument Serif", "Times New Roman", serif;
+  --font-ui: "Space Grotesk", "Helvetica Neue", sans-serif;
+  --font-mono: "JetBrains Mono", "Menlo", monospace;
+}
+
 :root {
-  --cream: #f6f0e4;
-  --cream-2: #efe6d3;
-  --paper: #fbf7ee;
-  --ink: #141210;
-  --muted: #8a7f6f;
-  --tomato: #ff5436;
-  --marigold: #f6b533;
-  --mint: #8fc56a;
-  --lilac: #b9a6e8;
-  --sky: #7fb8d9;
-  --display: "Instrument Serif", "Times New Roman", serif;
-  --ui: "Space Grotesk", "Helvetica Neue", sans-serif;
-  --mono: "JetBrains Mono", "Menlo", monospace;
+  --cream: var(--color-cream);
+  --cream-2: var(--color-cream-2);
+  --paper: var(--color-paper);
+  --ink: var(--color-ink);
+  --muted: var(--color-muted);
+  --tomato: var(--color-tomato);
+  --marigold: var(--color-marigold);
+  --mint: var(--color-mint);
+  --lilac: var(--color-lilac);
+  --sky: var(--color-sky);
+  --display: var(--font-display);
+  --ui: var(--font-ui);
+  --mono: var(--font-mono);
 }
 
 * {
@@ -35,25 +51,27 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-button,
-input {
-  font: inherit;
-}
+@layer base {
+  button,
+  input {
+    font: inherit;
+  }
 
-button {
-  cursor: pointer;
-  border: none;
-  background: none;
-  color: inherit;
-  padding: 0;
-}
+  button {
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: inherit;
+    padding: 0;
+  }
 
-input::placeholder {
-  color: var(--muted);
-}
+  input::placeholder {
+    color: var(--muted);
+  }
 
-::selection {
-  background: rgba(246, 181, 51, 0.35);
+  ::selection {
+    background: rgba(246, 181, 51, 0.35);
+  }
 }
 
 .app-root {
@@ -681,6 +699,81 @@ input::placeholder {
 .assign-inline-button {
   padding: 10px 16px;
   min-height: 40px;
+}
+
+@layer components {
+  .btn-sm {
+    @apply px-4 py-2.5 text-[13px];
+  }
+
+  .btn-xs {
+    @apply px-4 py-2.5 text-xs;
+  }
+
+  .field-label {
+    @apply font-mono text-[10px] uppercase tracking-[0.1em] text-muted;
+  }
+
+  .section-label {
+    @apply font-mono text-[11px] uppercase tracking-[0.1em] text-muted;
+  }
+
+  .section-label-tight {
+    @apply font-mono text-[11px] uppercase tracking-[0.12em] text-muted;
+  }
+
+  .form-input {
+    @apply w-full rounded-2xl border-[1.5px] border-black/12 bg-paper px-[14px] py-3 outline-none;
+  }
+
+  .callout-error {
+    @apply rounded-2xl border border-tomato/20 bg-[#fff0ec] px-[14px] py-3 text-[13px] leading-[1.4] text-[#7d2f21];
+  }
+
+  .callout-muted {
+    @apply rounded-2xl border border-black/8 bg-black/[0.04] px-[14px] py-3 text-[13px] leading-[1.5] text-ink;
+  }
+
+  .tape-mint {
+    background: var(--mint);
+  }
+
+  .chip-tomato {
+    @apply bg-tomato text-cream;
+  }
+
+  .chip-mint-soft {
+    background: rgba(104, 217, 151, 0.2);
+    color: var(--mint);
+  }
+
+  .chip-glass {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--cream);
+  }
+
+  .chip-status-on {
+    @apply bg-mint text-ink;
+  }
+
+  .chip-status-off {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--cream);
+  }
+
+  .chip-danger-soft {
+    background: rgba(255, 84, 54, 0.14);
+    color: #8f2e1f;
+  }
+
+  .chip-selected {
+    @apply bg-ink text-cream;
+  }
+
+  .chip-unselected {
+    background: rgba(20, 18, 16, 0.08);
+    color: var(--ink);
+  }
 }
 
 @media (min-width: 900px) {

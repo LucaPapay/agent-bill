@@ -108,46 +108,46 @@ function submitPayment(transfer: SettlementTransfer) {
 </script>
 
 <template>
-  <div class="surface-panel" style="padding: 18px;">
-    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;">
-      <h3 class="h-ui" style="font-size: 18px; margin: 0;">
+  <div class="surface-panel p-[18px]">
+    <div class="flex flex-wrap items-baseline justify-between gap-3">
+      <h3 class="h-ui m-0 text-lg">
         Group settlement
       </h3>
-      <span class="mono" style="font-size: 11px; color: var(--muted);">
+      <span class="mono text-[11px] text-muted">
         {{ transfers.length }} payments open · {{ formatCents(totalCents) }}
       </span>
     </div>
 
-    <div style="font-size: 13px; line-height: 1.45; color: var(--muted); margin-top: 8px;">
+    <div class="mt-2 text-[13px] leading-[1.45] text-muted">
       Bill transfers stay immutable. Settlement payments are recorded separately and the open group balance is recomputed from there.
     </div>
 
-    <div v-if="transfers.length" style="display: grid; gap: 10px; margin-top: 14px;">
+    <div v-if="transfers.length" class="mt-[14px] grid gap-2.5">
       <div
         v-for="transfer in transfers"
         :key="transfer.id"
-        style="padding: 12px 14px; border-radius: 18px; background: var(--paper);"
+        class="rounded-[18px] bg-paper px-[14px] py-3"
       >
-        <div style="display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap;">
+        <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div style="font-weight: 700; font-size: 14px;">
+            <div class="text-sm font-bold">
               {{ transfer.fromPerson.name }} owes {{ transfer.toPerson.name }}
             </div>
-            <div class="mono" style="font-size: 12px; margin-top: 4px; color: var(--muted);">
+            <div class="mono mt-1 text-xs text-muted">
               {{ formatCents(transfer.amountCents) }} still open
             </div>
           </div>
 
-          <div class="mono" style="font-size: 11px; color: var(--muted);">
+          <div class="mono text-[11px] text-muted">
             simplified from {{ rawTransferCount }} raw transfers
           </div>
         </div>
 
-        <form style="display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap;" @submit.prevent="submitPayment(transfer)">
+        <form class="mt-3 flex flex-wrap gap-2" @submit.prevent="submitPayment(transfer)">
           <MoneyInput
+            class="min-w-[120px] flex-[1_1_120px] rounded-[14px] border-[1.5px] border-black/12 bg-white px-3 py-2.5 outline-none"
             :model-value="paymentAmounts[transfer.id]"
             :disabled="saving"
-            :input-style="{ flex: '1 1 120px', border: '1.5px solid rgba(20,18,16,0.12)', borderRadius: '14px', background: 'white', padding: '10px 12px', outline: 'none' }"
             @update:model-value="paymentAmounts[transfer.id] = $event"
           />
 
@@ -167,27 +167,27 @@ function submitPayment(transfer: SettlementTransfer) {
       </div>
     </div>
 
-    <div v-else style="margin-top: 14px; padding: 12px 14px; border-radius: 16px; background: var(--paper); font-size: 13px;">
+    <div v-else class="mt-[14px] rounded-2xl bg-paper px-[14px] py-3 text-[13px]">
       Nobody owes anyone anything in this group right now.
     </div>
 
-    <div style="margin-top: 18px;">
-      <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
+    <div class="mt-[18px]">
+      <div class="section-label">
         Settlement history
       </div>
 
-      <div v-if="payments.length" style="display: grid; gap: 10px; margin-top: 12px;">
+      <div v-if="payments.length" class="mt-3 grid gap-2.5">
         <div
           v-for="payment in payments"
           :key="payment.id"
-          style="padding: 12px 14px; border-radius: 18px; background: var(--paper);"
+          class="rounded-[18px] bg-paper px-[14px] py-3"
         >
-          <div style="display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap;">
+          <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div style="font-weight: 700; font-size: 14px;">
+              <div class="text-sm font-bold">
                 {{ payment.fromPerson.name }} paid {{ payment.toPerson.name }}
               </div>
-              <div class="mono" style="font-size: 12px; margin-top: 4px; color: var(--muted);">
+              <div class="mono mt-1 text-xs text-muted">
                 {{ formatCents(payment.amountCents) }} · {{ formatTimestamp(payment.createdAt) }}
               </div>
             </div>
@@ -195,7 +195,7 @@ function submitPayment(transfer: SettlementTransfer) {
             <button
               v-if="!payment.isVoided"
               class="btn btn-ghost"
-              style="padding: 8px 12px;"
+              :class="'px-3 py-2 text-[13px]'"
               :disabled="saving"
               @click="emit('undo-payment', payment.id)"
             >
@@ -204,8 +204,7 @@ function submitPayment(transfer: SettlementTransfer) {
 
             <div
               v-else
-              class="mono"
-              style="font-size: 11px; color: var(--muted);"
+              class="mono text-[11px] text-muted"
             >
               Undone
             </div>
@@ -213,7 +212,7 @@ function submitPayment(transfer: SettlementTransfer) {
         </div>
       </div>
 
-      <div v-else style="margin-top: 12px; padding: 12px 14px; border-radius: 16px; background: var(--paper); font-size: 13px;">
+      <div v-else class="mt-3 rounded-2xl bg-paper px-[14px] py-3 text-[13px]">
         No settlement payments recorded yet.
       </div>
     </div>

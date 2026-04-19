@@ -39,52 +39,41 @@ watch(groupId, (value) => {
 <template>
   <PageShell>
     <div class="screen">
-      <div v-if="group" class="section-pad" style="padding-top: 24px; padding-bottom: 96px;">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap;">
-          <div style="display: flex; align-items: flex-start; gap: 14px;">
+      <div v-if="group" class="section-pad pb-24 pt-6">
+        <div class="flex flex-wrap items-start justify-between gap-[14px]">
+          <div class="flex items-start gap-[14px]">
             <div
+              class="flex h-[58px] w-[58px] shrink-0 items-center justify-center rounded-[18px] border-[1.5px] border-ink text-[28px] leading-none font-bold text-ink"
               :style="{
-                width: '58px',
-                height: '58px',
-                borderRadius: '18px',
                 background: getGroupIconBackground(group),
-                color: 'var(--ink)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '28px',
-                lineHeight: 1,
-                fontWeight: 700,
-                border: '1.5px solid var(--ink)',
-                flexShrink: 0,
               }"
             >
               {{ getGroupIconLabel(group) }}
             </div>
 
             <div>
-              <NuxtLink class="mono" style="font-size: 11px; color: var(--muted); text-decoration: none;" to="/groups">
+              <NuxtLink class="mono text-[11px] text-muted no-underline" to="/groups">
                 ALL GROUPS
               </NuxtLink>
-              <h1 class="h-display" style="font-size: 40px; line-height: 1; margin: 10px 0 0;">
+              <h1 class="h-display mt-2.5 text-[40px] leading-none">
                 {{ group.name }}
               </h1>
-              <div class="mono" style="font-size: 11px; color: var(--muted); margin-top: 6px;">
+              <div class="mono mt-1.5 text-[11px] text-muted">
                 {{ group.memberships.length }} PEOPLE · {{ group.bills.length }} SAVED BILLS
               </div>
             </div>
           </div>
 
-          <NuxtLink class="btn btn-accent" style="text-decoration: none;" :to="`/groups/${group.id}/bills/new`">
+          <NuxtLink class="btn btn-accent no-underline" :to="`/groups/${group.id}/bills/new`">
             New bill
           </NuxtLink>
         </div>
 
-        <div v-if="errorMessage" style="margin-top: 16px; padding: 12px 14px; border-radius: 16px; background: #fff0ec; color: #7d2f21; border: 1px solid rgba(255,84,54,0.2); font-size: 13px;">
+        <div v-if="errorMessage" class="callout-error mt-4">
           {{ errorMessage }}
         </div>
 
-        <div style="display: grid; gap: 18px; margin-top: 18px;" class="home-main">
+        <div class="home-main mt-[18px] grid gap-[18px]">
           <GroupMembersPanel
             :can-add-person-to-group="canAddPersonToGroup"
             :format-cents="formatCents"
@@ -95,7 +84,7 @@ watch(groupId, (value) => {
             @update:person-to-add-email="personToAddEmail = $event"
           />
 
-          <div style="display: grid; gap: 18px;">
+          <div class="grid gap-[18px]">
             <GroupSettlementPanel
               :format-cents="formatCents"
               :payments="selectedGroupSettlementPayments"
@@ -116,12 +105,12 @@ watch(groupId, (value) => {
         </div>
       </div>
 
-      <div v-else-if="ledgerLoaded" class="section-pad" style="padding-top: 24px;">
-        <div class="surface-panel" style="padding: 20px;">
-          <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
+      <div v-else-if="ledgerLoaded" class="section-pad pt-6">
+        <div class="surface-panel p-5">
+          <div class="section-label">
             Group not found
           </div>
-          <div style="font-size: 15px; line-height: 1.5; margin-top: 8px;">
+          <div class="mt-2 text-[15px] leading-[1.5]">
             This route does not match a saved group in the local ledger.
           </div>
         </div>
