@@ -14,10 +14,6 @@ const props = defineProps({
     type: String,
     default: '',
   },
-  visibleNotes: {
-    type: Array,
-    default: () => [],
-  },
 })
 
 const resolvedCurrency = computed(() => String(props.receipt?.currency || 'EUR'))
@@ -37,6 +33,11 @@ const taxRowLabel = computed(() => (
 ))
 const hasVerifiedTotal = computed(() => (
   noteList.value.some(note => /^Total matches sum of subtotal and tax\.?$/i.test(note))
+))
+const visibleNotes = computed(() => noteList.value.filter((note) =>
+  !/^Bill time\b/i.test(note)
+  && !/^Contains\b.*\bVAT\b/i.test(note)
+  && !/^Total matches sum of subtotal and tax\.?$/i.test(note),
 ))
 const summaryText = computed(() => (
   String(props.summary || '').trim() || `Parsed ${parsedItemCount.value} bill items.`

@@ -1,25 +1,21 @@
-import { normalizeBillChatMessages } from './bill-chat-history'
-
-function parseJsonValue(value: unknown) {
-  if (typeof value !== 'string' || !value) {
-    return value
-  }
-
-  return JSON.parse(value)
-}
+import { normalizeBillChatMessages } from './bill-chat-messages'
 
 function normalizeText(value: unknown) {
   return String(value || '').trim()
 }
 
-export function normalizePeople(value: unknown) {
-  const parsedValue = parseJsonValue(value)
+function asObject(value: any) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value
+    : null
+}
 
-  if (!Array.isArray(parsedValue)) {
+export function normalizePeople(value: unknown) {
+  if (!Array.isArray(value)) {
     return []
   }
 
-  return parsedValue
+  return value
     .map(entry => normalizeText(entry))
     .filter(Boolean)
 }
@@ -86,38 +82,13 @@ function normalizeStatus(status: unknown, source: string) {
 }
 
 function buildMessages(payload: any) {
-  const messages = normalizeBillChatMessages(payload?.messages)
-
-  if (messages.length) {
-    return messages
-  }
-
-  const history = parseJsonValue(payload?.history)
-
-  if (!Array.isArray(history)) {
-    return []
-  }
-
-  return normalizeBillChatMessages(history.map((entry: any) => {
-    const who = normalizeText(entry?.who)
-    const text = normalizeText(entry?.text)
-
-    if (!text || (who !== 'penny' && who !== 'user')) {
-      return null
-    }
-
-    return {
-      data: {},
-      role: who === 'penny' ? 'assistant' : 'user',
-      text,
-    }
-  }).filter(Boolean))
+  return normalizeBillChatMessages(payload?.messages)
 }
 
 export function normalizeSavedRunPayload(value: unknown) {
-  const payload = parseJsonValue(value)
+  const payload: any = asObject(value)
 
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+  if (!payload) {
     return {
       billDate: '',
       billItems: [],
@@ -140,14 +111,8 @@ export function normalizeSavedRunPayload(value: unknown) {
     }
   }
 
-  const context = payload.context && typeof payload.context === 'object' && !Array.isArray(payload.context)
-    ? payload.context
-    : {}
-  const receipt = payload.receipt && typeof payload.receipt === 'object'
-    ? payload.receipt
-    : context.receipt && typeof context.receipt === 'object'
-      ? context.receipt
-      : undefined
+  const context = asObject(payload.context) || {}
+  const receipt = asObject(payload.receipt) || asObject(context.receipt) || undefined
   const source = normalizeSource(payload.source || context.source)
   const normalizedPayload: any = {
     billDate: normalizeText(payload.billDate || context.billDate || receipt?.billDate),

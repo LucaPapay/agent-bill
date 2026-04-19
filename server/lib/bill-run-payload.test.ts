@@ -6,8 +6,8 @@ import {
 } from './bill-run-payload'
 
 describe('normalizePeople', () => {
-  it('accepts JSON-backed arrays from persisted chat rows', () => {
-    expect(normalizePeople('[" Jojo ","Sarah",""]')).toEqual([
+  it('keeps plain arrays from persisted chat rows', () => {
+    expect(normalizePeople([' Jojo ', 'Sarah', ''])).toEqual([
       'Jojo',
       'Sarah',
     ])
@@ -49,7 +49,7 @@ describe('normalizeSavedRunPayload', () => {
     expect(result.receipt).toBeUndefined()
   })
 
-  it('still reads old context/history payloads without storing them back out', () => {
+  it('does not rebuild messages from history', () => {
     const result = normalizeSavedRunPayload({
       context: {
         currency: 'USD',
@@ -66,13 +66,8 @@ describe('normalizeSavedRunPayload', () => {
     expect(result.currency).toBe('USD')
     expect(result.groupId).toBe('group-1')
     expect(result.status).toBe('needs_input')
-    expect(result.messages).toEqual([{
-      data: {},
-      role: 'user',
-      text: 'Use the dinner group',
-    }])
+    expect(result.messages).toEqual([])
     expect('context' in result).toBe(false)
-    expect('history' in result).toBe(false)
   })
 })
 

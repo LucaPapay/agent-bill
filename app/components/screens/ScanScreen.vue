@@ -12,6 +12,7 @@ const props = defineProps({
 
 const {
   cameraInput,
+  canOpenBillComposer,
   canPickReceipt,
   canRecordVoice,
   canReset,
@@ -30,10 +31,11 @@ const {
   openReceiptPicker,
   resetScan,
   selectedGroup,
+  showCreateGroupsHint,
   showShellTitle,
   showVoiceButton,
   toggleVoiceInput,
-  transcriptBlocks,
+  transcriptMessages,
   uploadLabel,
   voiceStatusLabel,
 } = useScanScreenState(props)
@@ -64,10 +66,27 @@ const {
         </div>
 
         <ScanChatTranscript
-          :blocks="transcriptBlocks"
-          @open-bill-composer="openBillComposerFromScan"
+          :messages="transcriptMessages"
           @pick-group="onPickGroupId"
         />
+
+        <div v-if="showCreateGroupsHint" class="scan-chat-helper-panel">
+          <div class="scan-chat-helper-copy">
+            Create a group first, then come back here to scan receipts.
+          </div>
+          <NuxtLink class="scan-choice-button scan-choice-link" to="/groups">
+            Open groups
+          </NuxtLink>
+        </div>
+
+        <div v-else-if="canOpenBillComposer" class="scan-chat-helper-panel">
+          <div class="scan-chat-helper-copy">
+            The receipt is parsed. Continue into the bill composer when you are ready.
+          </div>
+          <button type="button" class="btn scan-composer-toggle" @click="openBillComposerFromScan">
+            Open bill composer
+          </button>
+        </div>
 
         <ScanChatComposer
           v-model="composerText"
@@ -194,6 +213,20 @@ const {
   flex-direction: column;
   gap: 14px;
   padding: 20px;
+}
+
+.scan-chat-helper-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 20px 16px;
+}
+
+.scan-chat-helper-copy {
+  color: rgba(246, 240, 228, 0.78);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .scan-chat-row {

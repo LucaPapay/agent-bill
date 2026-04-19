@@ -2,7 +2,7 @@ import {
   appendBillChatAssistantMessage,
   appendBillChatMessages,
   normalizeBillChatMessages,
-} from '../bill-chat-history'
+} from '../bill-chat-messages'
 import {
   createAgentAnalysis,
   normalizePeople,
@@ -15,7 +15,7 @@ import {
   getGroupMemberNames,
   saveBillRun,
 } from '../db'
-import { runPennySession } from './session'
+import { runPennySession } from './run'
 
 function normalizeText(value: unknown) {
   return String(value || '').trim()

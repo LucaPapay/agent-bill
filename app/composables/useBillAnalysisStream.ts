@@ -16,47 +16,194 @@ function fileToBase64(file: File) {
   })
 }
 
-function buildMessageEntry(message: any) {
-  const text = String(message?.text || '').trim()
+function normalizeText(value: unknown) {
+  return String(value || '').trim()
+}
 
-  if (!text) {
+function normalizeMessageData(value: any) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value
+    : {}
+}
+
+function createMessageId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function normalizeRole(value: unknown) {
+  const role = normalizeText(value)
+
+  if (role === 'user' || role === 'assistant' || role === 'system') {
+    return role
+  }
+
+  return 'assistant'
+}
+
+function normalizeKind(value: unknown) {
+  const kind = normalizeText(value)
+
+  if (
+    kind === 'group_select'
+    || kind === 'loading'
+    || kind === 'preview'
+    || kind === 'receipt'
+    || kind === 'text'
+    || kind === 'tool'
+  ) {
+    return kind
+  }
+
+  return 'text'
+}
+
+function normalizeStoredMessage(message: any, index: number) {
+  if (!message || typeof message !== 'object' || Array.isArray(message)) {
+    return null
+  }
+
+  const role = normalizeRole(message.role)
+  const kind = normalizeKind(message.kind)
+  const text = normalizeText(message.text)
+  const data = normalizeMessageData(message.data)
+
+  if (!text && !Object.keys(data).length) {
     return null
   }
 
   return {
-    kind: 'message',
+    data,
+    id: normalizeText(message.id) || `saved-${index}`,
+    kind,
+    role,
     text,
-    who: message?.role === 'assistant' ? 'penny' : 'user',
   }
 }
 
-function buildFeed(result: any) {
-  if (!Array.isArray(result?.messages)) {
-    return []
+function normalizeStoredMessages(result: any) {
+  const messages = Array.isArray(result?.messages)
+    ? result.messages
+      .map(normalizeStoredMessage)
+      .filter(Boolean)
+      .slice(-120)
+    : []
+
+  const summary = normalizeText(result?.summary)
+  const hasErrorMessage = messages.some((entry: any) =>
+    entry?.kind === 'text'
+    && entry?.role === 'system'
+    && entry?.text === summary,
+  )
+
+  if (normalizeText(result?.status) === 'error' && summary && !hasErrorMessage) {
+    return [...messages, {
+      data: {},
+      id: 'error-summary',
+      kind: 'text',
+      role: 'system',
+      text: summary,
+    }].slice(-120)
   }
 
-  return result.messages
-    .map(buildMessageEntry)
-    .filter(Boolean)
-    .slice(-120)
+  return messages
+}
+
+function buildReceiptMessage({
+  receipt,
+  splitRows,
+  summary,
+}: {
+  receipt?: any
+  splitRows?: any[]
+  summary?: string
+}) {
+  if (!receipt || typeof receipt !== 'object') {
+    return null
+  }
+
+  return {
+    data: {
+      receipt,
+      splitRows: Array.isArray(splitRows) ? splitRows : [],
+      summary: normalizeText(summary),
+    },
+    id: 'receipt',
+    kind: 'receipt',
+    role: 'assistant',
+    text: normalizeText(summary),
+  }
+}
+
+function buildLoadingMessage(status: string, loadingChat: boolean) {
+  if (!loadingChat && !['agent', 'extracting', 'queued', 'starting'].includes(status)) {
+    return null
+  }
+
+  return {
+    data: {
+      loadingChat,
+      status,
+    },
+    id: 'loading',
+    kind: 'loading',
+    role: 'assistant',
+    text: '',
+  }
 }
 
 function isPendingResult(result: any) {
-  return String(result?.status || '').trim() === 'running'
+  return normalizeText(result?.status) === 'running'
 }
 
 export function useBillAnalysisStream() {
+  const baseMessages = useState<any[]>('bill-analysis:base-messages', () => [])
   const chatId = useState('bill-analysis:chat-id', () => '')
   const error = useState('bill-analysis:error', () => '')
-  const feed = useState<any[]>('bill-analysis:feed', () => [])
+  const groupSelectMessage = useState<any>('bill-analysis:group-select-message', () => null)
   const loadingChat = useState('bill-analysis:loading-chat', () => false)
-  const receipt = useState<any>('bill-analysis:receipt', () => null)
+  const loadingMessage = useState<any>('bill-analysis:loading-message', () => null)
+  const previewMessage = useState<any>('bill-analysis:preview-message', () => null)
   const recentChats = useState<any[]>('bill-analysis:recent-chats', () => [])
+  const receipt = useState<any>('bill-analysis:receipt', () => null)
+  const receiptMessage = useState<any>('bill-analysis:receipt-message', () => null)
   const result = useState<any>('bill-analysis:result', () => null)
   const status = useState('bill-analysis:status', () => 'idle')
   const parsedReceipt = computed(() => result.value?.receipt || receipt.value)
   const splitRows = computed(() => Array.isArray(result.value?.split) ? result.value.split : [])
-  const groupId = computed(() => String(result.value?.groupId || '').trim())
+  const groupId = computed(() => normalizeText(result.value?.groupId))
+  const messages = computed(() => {
+    const nextMessages = [...baseMessages.value]
+
+    if (previewMessage.value) {
+      nextMessages.push(previewMessage.value)
+    }
+
+    if (receiptMessage.value) {
+      nextMessages.push(receiptMessage.value)
+    }
+
+    if (groupSelectMessage.value) {
+      nextMessages.push(groupSelectMessage.value)
+    }
+
+    if (loadingMessage.value) {
+      nextMessages.push(loadingMessage.value)
+    }
+
+    return nextMessages.slice(-120)
+  })
+
+  function syncReceiptMessage() {
+    receiptMessage.value = buildReceiptMessage({
+      receipt: parsedReceipt.value,
+      splitRows: splitRows.value,
+      summary: result.value?.summary,
+    })
+  }
+
+  function syncLoadingMessage() {
+    loadingMessage.value = buildLoadingMessage(status.value, loadingChat.value)
+  }
 
   function stop() {
     if (!currentCancel) {
@@ -68,10 +215,14 @@ export function useBillAnalysisStream() {
   }
 
   function clearCurrent() {
+    baseMessages.value = []
     chatId.value = ''
     error.value = ''
-    feed.value = []
+    groupSelectMessage.value = null
+    loadingMessage.value = null
+    previewMessage.value = null
     receipt.value = null
+    receiptMessage.value = null
     result.value = null
     status.value = 'idle'
   }
@@ -81,39 +232,69 @@ export function useBillAnalysisStream() {
     clearCurrent()
   }
 
-  function pushFeed(entry: any) {
-    feed.value = [...feed.value, entry].slice(-120)
+  function pushBaseMessage(entry: any) {
+    baseMessages.value = [...baseMessages.value, entry].slice(-120)
   }
 
-  function pushUserMessage(text: string) {
-    const normalizedText = String(text || '').trim()
+  function appendLocalMessage(role: string, text: string) {
+    const normalizedText = normalizeText(text)
 
     if (!normalizedText) {
       return
     }
 
-    pushFeed({
-      kind: 'message',
+    pushBaseMessage({
+      data: {},
+      id: createMessageId('local'),
+      kind: 'text',
+      role: normalizeRole(role),
       text: normalizedText,
-      who: 'user',
     })
   }
 
-  function markToolFeed(toolName: string, isError: boolean) {
-    for (let index = feed.value.length - 1; index >= 0; index -= 1) {
-      const entry = feed.value[index]
+  function setPreviewMessage(entry: any) {
+    previewMessage.value = entry
+      ? {
+        data: normalizeMessageData(entry.data),
+        id: normalizeText(entry.id) || 'preview',
+        kind: 'preview',
+        role: normalizeRole(entry.role || 'user'),
+        text: normalizeText(entry.text),
+      }
+      : null
+  }
 
-      if (entry?.kind !== 'tool' || entry.toolName !== toolName || entry.toolState !== 'running') {
+  function setGroupSelectMessage(entry: any) {
+    groupSelectMessage.value = entry
+      ? {
+        data: normalizeMessageData(entry.data),
+        id: normalizeText(entry.id) || 'group-select',
+        kind: 'group_select',
+        role: normalizeRole(entry.role || 'assistant'),
+        text: normalizeText(entry.text),
+      }
+      : null
+  }
+
+  function markToolMessage(toolName: string, isError: boolean) {
+    for (let index = baseMessages.value.length - 1; index >= 0; index -= 1) {
+      const entry = baseMessages.value[index]
+      const data = normalizeMessageData(entry?.data)
+
+      if (entry?.kind !== 'tool' || data.toolName !== toolName || data.state !== 'running') {
         continue
       }
 
-      feed.value = [
-        ...feed.value.slice(0, index),
+      baseMessages.value = [
+        ...baseMessages.value.slice(0, index),
         {
           ...entry,
-          toolState: isError ? 'error' : 'done',
+          data: {
+            ...data,
+            state: isError ? 'error' : 'done',
+          },
         },
-        ...feed.value.slice(index + 1),
+        ...baseMessages.value.slice(index + 1),
       ]
       return
     }
@@ -122,9 +303,9 @@ export function useBillAnalysisStream() {
   function applyResult(nextResult: any) {
     chatId.value = nextResult?.chatId || ''
     error.value = nextResult?.status === 'error'
-      ? String(nextResult?.summary || '').trim()
+      ? normalizeText(nextResult?.summary)
       : ''
-    feed.value = buildFeed(nextResult)
+    baseMessages.value = normalizeStoredMessages(nextResult)
     receipt.value = nextResult?.receipt || null
     result.value = nextResult
     status.value = nextResult?.status === 'error'
@@ -132,6 +313,8 @@ export function useBillAnalysisStream() {
       : isPendingResult(nextResult)
         ? 'agent'
         : 'complete'
+    syncReceiptMessage()
+    syncLoadingMessage()
   }
 
   function applyPayload(payload: any) {
@@ -142,25 +325,32 @@ export function useBillAnalysisStream() {
 
     if (payload.type === 'status') {
       status.value = payload.phase
+      syncLoadingMessage()
       return
     }
 
     if (payload.type === 'receipt_extracted') {
       receipt.value = payload.receipt
+      syncReceiptMessage()
       return
     }
 
     if (payload.type === 'agent_tool_start') {
-      pushFeed({
+      pushBaseMessage({
+        data: {
+          state: 'running',
+          toolName: payload.toolName,
+        },
+        id: createMessageId(`tool-${payload.toolName}`),
         kind: 'tool',
-        toolName: payload.toolName,
-        toolState: 'running',
+        role: 'assistant',
+        text: '',
       })
       return
     }
 
     if (payload.type === 'agent_tool_end') {
-      markToolFeed(payload.toolName, payload.isError)
+      markToolMessage(payload.toolName, payload.isError)
       return
     }
 
@@ -174,10 +364,13 @@ export function useBillAnalysisStream() {
     if (payload.type === 'error') {
       error.value = payload.message
       status.value = 'error'
-      pushFeed({
-        kind: 'message',
+      syncLoadingMessage()
+      pushBaseMessage({
+        data: {},
+        id: createMessageId('error'),
+        kind: 'text',
+        role: 'system',
         text: payload.message,
-        who: 'system',
       })
       stop()
     }
@@ -195,10 +388,13 @@ export function useBillAnalysisStream() {
 
         error.value = streamError?.message || 'The live analysis stream disconnected.'
         status.value = 'error'
-        pushFeed({
-          kind: 'message',
+        syncLoadingMessage()
+        pushBaseMessage({
+          data: {},
+          id: createMessageId('disconnect'),
+          kind: 'text',
+          role: 'system',
           text: error.value,
-          who: 'system',
         })
       },
       onFinish: () => {
@@ -213,7 +409,7 @@ export function useBillAnalysisStream() {
   }
 
   async function loadChat(nextChatId: string) {
-    const normalizedChatId = String(nextChatId || '').trim()
+    const normalizedChatId = normalizeText(nextChatId)
 
     if (!normalizedChatId) {
       reset()
@@ -228,6 +424,7 @@ export function useBillAnalysisStream() {
     loadingChat.value = true
     error.value = ''
     status.value = 'starting'
+    syncLoadingMessage()
 
     return await useOrpc().getBillChat({ chatId: normalizedChatId }).then(
       (value: any) => {
@@ -238,10 +435,12 @@ export function useBillAnalysisStream() {
         clearCurrent()
         error.value = loadError?.message || 'Could not load that saved split chat.'
         status.value = 'error'
+        syncLoadingMessage()
         return null
       },
     ).finally(() => {
       loadingChat.value = false
+      syncLoadingMessage()
     })
   }
 
@@ -258,6 +457,7 @@ export function useBillAnalysisStream() {
     }
 
     status.value = 'starting'
+    syncLoadingMessage()
     openStream(useOrpc().chatStream({
       chatId: options.resetChat ? undefined : chatId.value || undefined,
       messages: nextMessages,
@@ -269,15 +469,15 @@ export function useBillAnalysisStream() {
   async function start(input: any) {
     const message = {
       data: {
-        groupId: String(input?.groupId || '').trim() || undefined,
-        imageBase64: String(input?.imageBase64 || '').trim() || undefined,
-        mimeType: String(input?.mimeType || '').trim() || undefined,
+        groupId: normalizeText(input?.groupId) || undefined,
+        imageBase64: normalizeText(input?.imageBase64) || undefined,
+        mimeType: normalizeText(input?.mimeType) || undefined,
         people: Array.isArray(input?.people) ? input.people : [],
-        rawText: String(input?.rawText || '').trim() || undefined,
-        title: String(input?.title || '').trim() || undefined,
+        rawText: normalizeText(input?.rawText) || undefined,
+        title: normalizeText(input?.title) || undefined,
       },
       role: 'user',
-      text: String(input?.text || '').trim(),
+      text: normalizeText(input?.text),
     }
 
     return await sendMessages([message], {
@@ -306,17 +506,17 @@ export function useBillAnalysisStream() {
   }
 
   async function revise(message: string, people: string[] = [], groupId = '') {
-    const nextMessage = String(message || '').trim()
+    const nextMessage = normalizeText(message)
 
     if (!nextMessage || !chatId.value || !parsedReceipt.value) {
       return null
     }
 
-    pushUserMessage(nextMessage)
+    appendLocalMessage('user', nextMessage)
 
     await sendMessages([{
       data: {
-        groupId: String(groupId || '').trim() || undefined,
+        groupId: normalizeText(groupId) || undefined,
         people,
       },
       role: 'user',
@@ -327,18 +527,18 @@ export function useBillAnalysisStream() {
   }
 
   async function confirmGroupSelection(groupName: string, people: string[] = [], displayUserMessage = '', groupId = '') {
-    const normalizedGroupName = String(groupName || '').trim()
+    const normalizedGroupName = normalizeText(groupName)
 
     if (!normalizedGroupName || !chatId.value || !parsedReceipt.value) {
       return null
     }
 
-    const nextMessage = String(displayUserMessage || normalizedGroupName).trim() || normalizedGroupName
-    pushUserMessage(nextMessage)
+    const nextMessage = normalizeText(displayUserMessage || normalizedGroupName) || normalizedGroupName
+    appendLocalMessage('user', nextMessage)
 
     await sendMessages([{
       data: {
-        groupId: String(groupId || '').trim() || undefined,
+        groupId: normalizeText(groupId) || undefined,
         people,
       },
       role: 'user',
@@ -349,20 +549,23 @@ export function useBillAnalysisStream() {
   }
 
   return {
+    appendLocalMessage,
     chatId,
+    confirmGroupSelection,
     error,
-    feed,
     groupId,
     loadChat,
     loadChats,
     loadingChat,
+    messages,
     parsedReceipt,
     receipt,
     recentChats,
     reset,
     result,
-    confirmGroupSelection,
     revise,
+    setGroupSelectMessage,
+    setPreviewMessage,
     splitRows,
     start,
     startFromFile,
