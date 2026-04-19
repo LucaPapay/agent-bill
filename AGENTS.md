@@ -58,10 +58,10 @@ See [app explanation.md](</Users/jojo/Developer/agent-bill/app explanation.md>) 
 - `server/lib/db/bills.ts` owns bill create/update/delete persistence.
 - `server/lib/db/settlements.ts` owns settlement payment persistence and validation.
 - `server/lib/db/ledger-snapshot.ts` builds the client-facing ledger snapshot.
-- `server/lib/penny-agent/pipeline.ts` owns the end-to-end receipt-analysis flow.
 - `server/lib/openai-receipt.ts` owns receipt extraction.
-- `server/lib/penny-agent/run.ts` owns the Penny tool loop.
-- `server/lib/penny-agent/stream.ts` owns streamed Penny jobs and chat re-attach.
+- `server/lib/penny-agent/chat.ts` owns Penny chat persistence and saved run state.
+- `server/lib/penny-agent/run.ts` owns the Pi session runner and Penny tool loop.
+- `server/lib/penny-agent/stream.ts` owns streamed Penny chat turns.
 
 ## Backend Request Flow
 
@@ -70,7 +70,7 @@ See [app explanation.md](</Users/jojo/Developer/agent-bill/app explanation.md>) 
 3. Route handlers validate input and hand off to a small backend service or pipeline.
 4. Manual-ledger writes go through `server/lib/ledger/service.ts`, which runs ledger math and then calls the DB layer.
 5. Group, bill, and settlement mutations require session-user membership in that group.
-6. Receipt analysis goes through `server/lib/penny-agent/pipeline.ts`, which streams progress, saves chat state, and persists successful runs.
+6. Receipt analysis goes through `server/lib/penny-agent/run.ts`, which streams progress, saves chat state, and persists successful runs.
 
 ## Current Product Flow
 
