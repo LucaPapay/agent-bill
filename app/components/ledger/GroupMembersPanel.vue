@@ -1,8 +1,13 @@
 <script setup>
+import { computed } from 'vue'
 import AvatarBadge from '../app/AvatarBadge.vue'
 
-defineProps({
+const props = defineProps({
   canAddPersonToGroup: Boolean,
+  formatCents: {
+    type: Function,
+    default: (value) => String(value),
+  },
   group: {
     type: Object,
     default: null,
@@ -15,6 +20,44 @@ defineProps({
 })
 
 const emit = defineEmits(['add-person', 'update:personToAddEmail'])
+
+const memberBalanceByPersonId = computed(() => {
+  const balances = {}
+
+  for (const membership of props.group?.memberships || []) {
+    balances[membership.personId] = 0
+  }
+
+  for (const transfer of props.group?.simplifiedTransfers || []) {
+    balances[transfer.fromPersonId] = (balances[transfer.fromPersonId] || 0) - transfer.amountCents
+    balances[transfer.toPersonId] = (balances[transfer.toPersonId] || 0) + transfer.amountCents
+  }
+
+  return balances
+})
+
+function getMemberBalance(personId) {
+  const balanceCents = memberBalanceByPersonId.value[personId] || 0
+
+  if (balanceCents < 0) {
+    return {
+      label: `owes ${props.formatCents(Math.abs(balanceCents))}`,
+      tone: 'var(--tomato)',
+    }
+  }
+
+  if (balanceCents > 0) {
+    return {
+      label: `is owed ${props.formatCents(balanceCents)}`,
+      tone: 'var(--mint)',
+    }
+  }
+
+  return {
+    label: 'settled',
+    tone: 'var(--muted)',
+  }
+}
 </script>
 
 <template>
@@ -27,11 +70,20 @@ const emit = defineEmits(['add-person', 'update:personToAddEmail'])
         <div
           v-for="membership in group.memberships"
           :key="membership.id"
-          style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 16px; background: var(--paper);"
+          style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 16px; background: var(--paper);"
         >
-          <AvatarBadge :name="membership.person.name" size="sm" />
-          <div style="font-size: 14px; font-weight: 600;">
-            {{ membership.person.name }}
+          <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+            <AvatarBadge :name="membership.person.name" size="sm" />
+            <div style="font-size: 14px; font-weight: 600;">
+              {{ membership.person.name }}
+            </div>
+          </div>
+
+          <div
+            class="mono"
+            :style="{ fontSize: '11px', color: getMemberBalance(membership.personId).tone, textAlign: 'right', flexShrink: 0 }"
+          >
+            {{ getMemberBalance(membership.personId).label }}
           </div>
         </div>
       </div>

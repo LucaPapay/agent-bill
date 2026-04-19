@@ -87,6 +87,7 @@ watch(groupId, (value) => {
         <div style="display: grid; gap: 18px; margin-top: 18px;" class="home-main">
           <GroupMembersPanel
             :can-add-person-to-group="canAddPersonToGroup"
+            :format-cents="formatCents"
             :group="group"
             :person-to-add-email="personToAddEmail"
             :saving="saving"
