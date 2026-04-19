@@ -499,6 +499,11 @@ onMounted(async () => {
   if (nextChatId) {
     clearLocalState()
     await chat.loadChat(nextChatId, { force: true })
+    return
+  }
+
+  if (chat.chatId.value || parsedReceipt.value || messages.value.length) {
+    chat.reset()
   }
 })
 
