@@ -1,38 +1,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { buildScanBillComposerDraft } from '../lib/scan-bill-draft'
+import { buildScanTranscriptBlocks, buildVisibleReceiptNotes } from '../lib/scan-transcript'
 import { useBillAnalysisStream } from './useBillAnalysisStream'
 import { useLedgerState } from './useLedgerState'
-
-function formatMoney(amountCents: number, currency = 'EUR') {
-  return new Intl.NumberFormat('en-US', {
-    currency,
-    style: 'currency',
-  }).format((amountCents || 0) / 100)
-}
-
-function normalizeWho(who: string) {
-  if (who === 'user' || who === 'penny' || who === 'assistant') {
-    return who
-  }
-
-  return 'system'
-}
-
-function getToolName(entry: any) {
-  const directToolName = String(entry?.toolName || '').trim()
-
-  if (directToolName) {
-    return directToolName
-  }
-
-  const text = String(entry?.text || '').trim()
-
-  if (!/^Tool:\s*/.test(text)) {
-    return ''
-  }
-
-  return text.replace(/^Tool:\s*/, '').trim()
-}
 
 function blobToBase64(blob: Blob) {
   return new Promise<string>((resolve) => {
@@ -73,11 +43,8 @@ export function useScanScreenState(props: { chatId?: string }) {
   const showCameraCapture = ref(false)
   const composerText = ref('')
   const autoQuestionKey = ref('')
-  const composerSeedKey = ref('')
-  const groupCleared = ref(false)
-  const localGroupId = ref('')
-  const leadMessages = ref<any[]>([])
-  const tailMessages = ref<any[]>([])
+  const selectedGroupOverrideId = ref<any>(undefined)
+  const localMessages = ref<any[]>([])
   const voiceMimeType = ref('')
   const voiceError = ref('')
   const voiceRecorder = ref<any>(null)
@@ -108,53 +75,40 @@ export function useScanScreenState(props: { chatId?: string }) {
     return String(props.chatId || '').trim() || getPathChatId()
   }
 
-  function getQueryGroupId() {
-    return String(route.query.groupId || '').trim()
-  }
-
   const availableGroups = computed(() => ledgerData.value.groups || [])
-  const persistedGroupId = computed(() => String(analysis.result.value?.groupId || '').trim())
-  const selectedGroup = computed(() => {
-    if (groupCleared.value) {
-      return null
+  const queryGroupId = computed(() => {
+    const groupId = String(route.query.groupId || '').trim()
+
+    if (!groupId) {
+      return ''
     }
 
-    const resolvedGroupId = String(localGroupId.value || persistedGroupId.value || '').trim()
-    return availableGroups.value.find((group: any) => group.id === resolvedGroupId) || null
+    return availableGroups.value.some((group: any) => group.id === groupId)
+      ? groupId
+      : ''
+  })
+  const selectedGroupId = computed(() => {
+    if (selectedGroupOverrideId.value === '') {
+      return ''
+    }
+
+    return String(
+      selectedGroupOverrideId.value
+      || analysis.groupId.value
+      || queryGroupId.value
+      || '',
+    ).trim()
+  })
+  const selectedGroup = computed(() => {
+    return availableGroups.value.find((group: any) => group.id === selectedGroupId.value) || null
   })
   const hasSavedChat = computed(() => Boolean(analysis.chatId.value))
   const isRunning = computed(() => ['starting', 'queued', 'extracting', 'agent'].includes(analysis.status.value))
   const isPennyLoading = computed(() => analysis.loadingChat.value || isRunning.value)
   const pennyLoadingStatus = computed(() => (analysis.loadingChat.value ? 'loading-chat' : analysis.status.value))
-  const parsedReceipt = computed(() => {
-    if (analysis.receipt.value) {
-      return analysis.receipt.value
-    }
-
-    if (!analysis.result.value) {
-      return null
-    }
-
-    return {
-      billDate: analysis.result.value.billDate || '',
-      currency: analysis.result.value.currency || 'EUR',
-      items: Array.isArray(analysis.result.value.items) ? analysis.result.value.items : [],
-      merchant: analysis.result.value.merchant || '',
-      notes: Array.isArray(analysis.result.value.notes) ? analysis.result.value.notes : [],
-      taxCents: Number(analysis.result.value.taxCents || 0),
-      tipCents: Number(analysis.result.value.tipCents || 0),
-      totalCents: Number(analysis.result.value.totalCents || 0),
-    }
-  })
-  const noteList = computed(() => parsedReceipt.value?.notes || [])
-  const splitRows = computed(() => analysis.result.value?.split || [])
-  const visibleReceiptNotes = computed(() => (
-    noteList.value.filter((note: string) =>
-      !/^Bill time\b/i.test(note)
-      && !/^Contains\b.*\bVAT\b/i.test(note)
-      && !/^Total matches sum of subtotal and tax\.?$/i.test(note),
-    )
-  ))
+  const parsedReceipt = analysis.parsedReceipt
+  const splitRows = analysis.splitRows
+  const visibleReceiptNotes = computed(() => buildVisibleReceiptNotes(parsedReceipt.value?.notes || []))
   const visibleAnalysisFeed = computed(() =>
     analysis.feed.value.filter((entry: any) => {
       const text = String(entry?.text || '').trim()
@@ -179,10 +133,9 @@ export function useScanScreenState(props: { chatId?: string }) {
 
     return visibleAnalysisFeed.value.slice(0, -1)
   })
-  const analysisSource = computed(() => String(analysis.result.value?.source || '').trim())
   const awaitingPennyReply = computed(() =>
     !splitRows.value.length
-    && (analysisSource.value === 'penny-message' || analysisSource.value === 'penny-question'),
+    && (analysis.source.value === 'penny-message' || analysis.source.value === 'penny-question'),
   )
   const shouldRequestGroupQuestion = computed(() =>
     Boolean(
@@ -230,8 +183,7 @@ export function useScanScreenState(props: { chatId?: string }) {
       || analysis.chatId.value
       || analysis.result.value
       || visibleAnalysisFeed.value.length
-      || leadMessages.value.length
-      || tailMessages.value.length,
+      || localMessages.value.length,
     ),
   )
   const canSend = computed(() => Boolean(composerText.value.trim() && !isRecordingVoice.value && !isTranscribingVoice.value))
@@ -384,146 +336,28 @@ export function useScanScreenState(props: { chatId?: string }) {
     !previewUrl.value
     && !hasSavedChat.value
     && !parsedReceipt.value
-    && !leadMessages.value.some(entry => entry.who === 'user')
-    && !tailMessages.value.some(entry => entry.who === 'user')
+    && !localMessages.value.some(entry => entry.who === 'user')
     && !visibleAnalysisFeed.value.some((entry: any) => entry.who === 'user'),
   )
-  const transcriptBlocks = computed(() => {
-    const blocks: any[] = [{
-      id: 'intro',
-      kind: 'message',
-      text: introMessage.value,
-      who: 'penny',
-    }]
-
-    if (!availableGroups.value.length) {
-      blocks.push({
-        id: 'empty-groups',
-        kind: 'empty-groups',
-      })
-    }
-
-    leadMessages.value.forEach((entry, index) => {
-      blocks.push({
-        id: `lead-${index}`,
-        kind: 'message',
-        text: entry.text,
-        who: normalizeWho(entry.who),
-      })
-    })
-
-    if (previewUrl.value) {
-      blocks.push({
-        id: 'preview',
-        imageSrc: previewUrl.value,
-        kind: 'preview',
-        status: analysis.status.value,
-        title: selectedGroup.value ? `${selectedGroup.value.name} receipt` : 'Receipt preview',
-        totalLabel: parsedReceipt.value
-          ? formatMoney(parsedReceipt.value.totalCents || 0, parsedReceipt.value.currency || 'EUR')
-          : '',
-      })
-    }
-
-    feedAboveReceipt.value.forEach((entry: any, index: number) => {
-      const toolName = getToolName(entry)
-
-      blocks.push(toolName
-        ? {
-            id: `feed-top-tool-${index}`,
-            kind: 'tool',
-            state: String(entry.toolState || 'done'),
-            toolName,
-          }
-        : {
-            id: `feed-top-message-${index}`,
-            kind: 'message',
-            text: entry.text,
-            who: normalizeWho(entry.who),
-          })
-    })
-
-    if (!parsedReceipt.value && showGroupPickerPrompt.value) {
-      blocks.push({
-        groups: availableGroups.value.map((group: any) => ({ id: group.id, name: group.name })),
-        id: 'group-picker-top',
-        kind: 'group-picker',
-      })
-    }
-
-    if (analysis.error.value) {
-      blocks.push({
-        id: 'error',
-        kind: 'error',
-        text: analysis.error.value,
-      })
-    }
-
-    if (parsedReceipt.value) {
-      blocks.push({
-        id: 'receipt',
-        kind: 'receipt',
-        receipt: parsedReceipt.value,
-        splitRows: splitRows.value,
-        summary: analysis.result.value?.summary || '',
-        visibleNotes: visibleReceiptNotes.value,
-      })
-    }
-
-    if (canOpenBillComposer.value) {
-      blocks.push({
-        id: 'composer-cta',
-        kind: 'composer-cta',
-        label: splitRows.value.length ? 'Open bill composer' : 'Open bill composer now',
-      })
-    }
-
-    if (pinnedBottomFeedEntry.value) {
-      const toolName = getToolName(pinnedBottomFeedEntry.value)
-
-      blocks.push(toolName
-        ? {
-            id: 'feed-bottom-tool',
-            kind: 'tool',
-            state: String(pinnedBottomFeedEntry.value.toolState || 'done'),
-            toolName,
-          }
-        : {
-            id: 'feed-bottom-message',
-            kind: 'message',
-            text: pinnedBottomFeedEntry.value.text,
-            who: normalizeWho(pinnedBottomFeedEntry.value.who),
-          })
-    }
-
-    if (pinnedBottomFeedEntry.value && showGroupPickerPrompt.value) {
-      blocks.push({
-        groups: availableGroups.value.map((group: any) => ({ id: group.id, name: group.name })),
-        id: 'group-picker-bottom',
-        kind: 'group-picker',
-      })
-    }
-
-    tailMessages.value.forEach((entry, index) => {
-      blocks.push({
-        id: `tail-${index}`,
-        kind: 'message',
-        text: entry.text,
-        who: normalizeWho(entry.who),
-      })
-    })
-
-    if (isPennyLoading.value) {
-      blocks.push({
-        id: 'loading',
-        kind: 'loading',
-        loadingChat: analysis.loadingChat.value,
-        status: pennyLoadingStatus.value,
-      })
-    }
-
-    return blocks
-  })
+  const transcriptBlocks = computed(() => buildScanTranscriptBlocks({
+    availableGroups: availableGroups.value,
+    canOpenBillComposer: canOpenBillComposer.value,
+    error: analysis.error.value,
+    feedAboveReceipt: feedAboveReceipt.value,
+    introMessage: introMessage.value,
+    isPennyLoading: isPennyLoading.value,
+    loadingChat: analysis.loadingChat.value,
+    localMessages: localMessages.value,
+    parsedReceipt: parsedReceipt.value,
+    pennyLoadingStatus: pennyLoadingStatus.value,
+    pinnedBottomFeedEntry: pinnedBottomFeedEntry.value,
+    previewUrl: previewUrl.value,
+    selectedGroupName: selectedGroup.value?.name || '',
+    showGroupPickerPrompt: showGroupPickerPrompt.value,
+    splitRows: splitRows.value,
+    summary: analysis.result.value?.summary || '',
+    visibleReceiptNotes: visibleReceiptNotes.value,
+  }))
 
   function revokePreview() {
     if (!previewUrl.value) {
@@ -738,36 +572,24 @@ export function useScanScreenState(props: { chatId?: string }) {
       return
     }
 
-    const targetMessages =
-      previewUrl.value || visibleAnalysisFeed.value.length || parsedReceipt.value || hasSavedChat.value
-        ? tailMessages
-        : leadMessages
-
-    targetMessages.value = [...targetMessages.value, {
+    localMessages.value = [...localMessages.value, {
+      placement: previewUrl.value || visibleAnalysisFeed.value.length || parsedReceipt.value || hasSavedChat.value
+        ? 'after'
+        : 'before',
       text: normalizedText,
       who,
     }]
   }
 
-  function resetDraftInputs() {
+  function clearLocalState() {
     cancelVoiceInput()
     autoQuestionKey.value = ''
     composerText.value = ''
-    composerSeedKey.value = ''
-    groupCleared.value = false
-    leadMessages.value = []
-    tailMessages.value = []
+    selectedGroupOverrideId.value = undefined
+    localMessages.value = []
     voiceError.value = ''
     clearInputs()
     revokePreview()
-  }
-
-  function initializeFreshScan() {
-    resetDraftInputs()
-    const queryGroupId = getQueryGroupId()
-    localGroupId.value = availableGroups.value.some((group: any) => group.id === queryGroupId)
-      ? queryGroupId
-      : ''
   }
 
   function resolveGroupFromMessage(message: string) {
@@ -808,8 +630,7 @@ export function useScanScreenState(props: { chatId?: string }) {
   }
 
   function confirmGroup(group: any, userText: string) {
-    groupCleared.value = false
-    localGroupId.value = group.id
+    selectedGroupOverrideId.value = group.id
 
     if (parsedReceipt.value) {
       return
@@ -863,8 +684,7 @@ export function useScanScreenState(props: { chatId?: string }) {
 
   async function onPickGroup(group: any) {
     if (parsedReceipt.value) {
-      groupCleared.value = false
-      localGroupId.value = group.id
+      selectedGroupOverrideId.value = group.id
       await analysis.confirmGroupSelection(group.name, getGroupPeople(group), group.name, group.id)
       return
     }
@@ -894,8 +714,7 @@ export function useScanScreenState(props: { chatId?: string }) {
     const matchingGroup = resolveGroupFromMessage(message)
 
     if (awaitingGroupSelection.value && matchingGroup) {
-      groupCleared.value = false
-      localGroupId.value = matchingGroup.id
+      selectedGroupOverrideId.value = matchingGroup.id
       await analysis.confirmGroupSelection(matchingGroup.name, getGroupPeople(matchingGroup), matchingGroup.name, matchingGroup.id)
       return
     }
@@ -937,24 +756,13 @@ export function useScanScreenState(props: { chatId?: string }) {
       return null
     }
 
-    cancelVoiceInput()
-    voiceError.value = ''
-    composerText.value = ''
-    clearInputs()
-    const loadedChat = await analysis.loadChat(normalizedChatId)
-    const loadedGroupId = String(loadedChat?.groupId || '').trim()
-
-    if (loadedGroupId && availableGroups.value.some((group: any) => group.id === loadedGroupId)) {
-      groupCleared.value = false
-      localGroupId.value = loadedGroupId
-    }
-
-    return loadedChat
+    clearLocalState()
+    return await analysis.loadChat(normalizedChatId)
   }
 
   async function resetScan() {
     analysis.reset()
-    initializeFreshScan()
+    clearLocalState()
 
     if (getResolvedChatId()) {
       await navigateTo('/scan')
@@ -962,8 +770,7 @@ export function useScanScreenState(props: { chatId?: string }) {
   }
 
   function clearGroup() {
-    groupCleared.value = true
-    localGroupId.value = ''
+    selectedGroupOverrideId.value = ''
 
     if (parsedReceipt.value) {
       autoQuestionKey.value = ''
@@ -990,12 +797,7 @@ export function useScanScreenState(props: { chatId?: string }) {
       return false
     }
 
-    if (composerSeedKey.value === nextDraft.seedKey) {
-      return true
-    }
-
     stageBillComposerDraft(nextDraft.draft)
-    composerSeedKey.value = nextDraft.seedKey
     return true
   }
 
@@ -1007,11 +809,10 @@ export function useScanScreenState(props: { chatId?: string }) {
     }
 
     if (!selectedGroup.value) {
-      localGroupId.value = group.id
+      selectedGroupOverrideId.value = group.id
     }
 
     setSelectedGroup(group.id)
-    composerSeedKey.value = ''
     const hasDraft = await continueToSplit()
 
     if (!hasDraft) {
@@ -1043,18 +844,6 @@ export function useScanScreenState(props: { chatId?: string }) {
     },
   )
 
-  watch(() => analysis.result.value?.groupId, (nextGroupId) => {
-    const normalizedGroupId = String(nextGroupId || '').trim()
-
-    if (!normalizedGroupId || groupCleared.value || localGroupId.value === normalizedGroupId) {
-      return
-    }
-
-    if (availableGroups.value.some((group: any) => group.id === normalizedGroupId)) {
-      localGroupId.value = normalizedGroupId
-    }
-  })
-
   watch(() => props.chatId, (nextChatId, previousChatId) => {
     const resolvedChatId = String(nextChatId || '').trim() || getPathChatId()
 
@@ -1063,11 +852,11 @@ export function useScanScreenState(props: { chatId?: string }) {
         analysis.reset()
       }
 
-      initializeFreshScan()
+      clearLocalState()
       return
     }
 
-    if (analysis.chatId.value === resolvedChatId && previewUrl.value) {
+    if (analysis.chatId.value === resolvedChatId && (previewUrl.value || analysis.result.value?.chatId === resolvedChatId)) {
       return
     }
 

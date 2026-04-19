@@ -69,6 +69,10 @@ export function useBillAnalysisStream() {
   const recentChats = useState<any[]>('bill-analysis:recent-chats', () => [])
   const result = useState<any>('bill-analysis:result', () => null)
   const status = useState('bill-analysis:status', () => 'idle')
+  const parsedReceipt = computed(() => resolveReceipt(result.value || receipt.value))
+  const splitRows = computed(() => Array.isArray(result.value?.split) ? result.value.split : [])
+  const groupId = computed(() => String(result.value?.groupId || '').trim())
+  const source = computed(() => String(result.value?.source || '').trim())
 
   function stop() {
     if (currentCancel) {
@@ -364,9 +368,11 @@ export function useBillAnalysisStream() {
     chatId,
     error,
     feed,
+    groupId,
     loadChat,
     loadChats,
     loadingChat,
+    parsedReceipt,
     receipt,
     recentChats,
     reset,
@@ -374,6 +380,8 @@ export function useBillAnalysisStream() {
     confirmGroupSelection,
     revise,
     requestGroupQuestion,
+    source,
+    splitRows,
     start,
     startFromFile,
     status,
