@@ -89,6 +89,8 @@ export async function getBillChatForAgent(personId: string, chatId: string) {
   const [row] = await db()`
     select
       chats.agent_session_file,
+      linked_bills.group_id as linked_bill_group_id,
+      linked_bills.id as linked_bill_id,
       runs.id,
       runs.created_at,
       runs.payload
@@ -100,6 +102,13 @@ export async function getBillChatForAgent(personId: string, chatId: string) {
       order by created_at desc
       limit 1
     ) runs on true
+    left join lateral (
+      select id, group_id
+      from bills
+      where source_chat_id = chats.id
+      order by created_at desc
+      limit 1
+    ) linked_bills on true
     where chats.id = ${chatId}
       and chats.person_id = ${personId}
   `
@@ -119,6 +128,8 @@ export async function getBillChat(personId: string, chatId: string) {
 
   const [row] = await db()`
     select
+      linked_bills.group_id as linked_bill_group_id,
+      linked_bills.id as linked_bill_id,
       runs.id,
       runs.created_at,
       runs.payload
@@ -130,6 +141,13 @@ export async function getBillChat(personId: string, chatId: string) {
       order by created_at desc
       limit 1
     ) runs on true
+    left join lateral (
+      select id, group_id
+      from bills
+      where source_chat_id = chats.id
+      order by created_at desc
+      limit 1
+    ) linked_bills on true
     where chats.id = ${chatId}
       and chats.person_id = ${personId}
   `
@@ -147,6 +165,8 @@ export async function listBillChats(personId: string) {
   const rows = await db()`
     select
       chats.id,
+      linked_bills.group_id as linked_bill_group_id,
+      linked_bills.id as linked_bill_id,
       chats.title,
       chats.people,
       chats.updated_at,
@@ -159,6 +179,13 @@ export async function listBillChats(personId: string) {
       order by created_at desc
       limit 1
     ) runs on true
+    left join lateral (
+      select id, group_id
+      from bills
+      where source_chat_id = chats.id
+      order by created_at desc
+      limit 1
+    ) linked_bills on true
     where chats.person_id = ${personId}
     order by chats.updated_at desc
     limit 24
@@ -169,6 +196,8 @@ export async function listBillChats(personId: string) {
 
     return {
       chatId: row.id,
+      linkedBillGroupId: String(row.linked_bill_group_id || '').trim() || undefined,
+      linkedBillId: String(row.linked_bill_id || '').trim() || undefined,
       people: normalizePeople(row.people),
       summary: String(payload.summary || '').trim(),
       title: String(row.title || payload.title || 'Untitled bill').trim() || 'Untitled bill',

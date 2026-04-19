@@ -17,6 +17,8 @@ defineProps({
     </div>
 
     <ScanReceiptCard
+      :linked-bill-group-id="message.data?.linkedBillGroupId || ''"
+      :linked-bill-id="message.data?.linkedBillId || ''"
       :receipt="message.data?.receipt || {}"
       :split-rows="message.data?.splitRows || []"
       :summary="message.data?.summary || ''"

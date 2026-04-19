@@ -1,3 +1,7 @@
+import {
+  normalizePeople,
+  readSavedRunPayload,
+} from '../bill-run-payload'
 import { buildOpenGroupTransfers } from '../group-simplification'
 import { db, ensureSchema } from './client'
 
@@ -53,15 +57,38 @@ export async function getLedgerSnapshot(personId: string) {
       order by created_at asc
     `,
     db()`
-      select id, group_id, title, bill_date, total_amount_cents, tip_amount_cents, paid_by_person_id, created_at
+      select
+        bills.id,
+        bills.group_id,
+        bills.title,
+        bills.bill_date,
+        bills.source_chat_id,
+        bills.total_amount_cents,
+        bills.tip_amount_cents,
+        bills.paid_by_person_id,
+        bills.created_at,
+        source_chats.people as source_chat_people,
+        source_chats.person_id as source_chat_person_id,
+        source_chats.title as source_chat_title,
+        source_chats.updated_at as source_chat_updated_at,
+        source_chat_runs.payload as source_chat_payload
       from bills
+      left join bill_chats source_chats
+        on source_chats.id = bills.source_chat_id
+      left join lateral (
+        select payload
+        from bill_runs
+        where chat_id = source_chats.id
+        order by created_at desc
+        limit 1
+      ) source_chat_runs on true
       where exists (
         select 1
         from group_memberships viewer
         where viewer.group_id = bills.group_id
           and viewer.person_id = ${personId}
       )
-      order by created_at desc
+      order by bills.created_at desc
     `,
     db()`
       select id, bill_id, person_id, item_amount_cents, tip_amount_cents, total_amount_cents
@@ -157,6 +184,19 @@ export async function getLedgerSnapshot(personId: string) {
   const billsById = new Map<string, any>()
 
   for (const row of billRows) {
+    const sourceChatId = String(row.source_chat_id || '').trim()
+    const sourceChatPayload = readSavedRunPayload(row.source_chat_payload)
+    const sourceChat = sourceChatId
+      ? {
+          canOpen: row.source_chat_person_id === personId,
+          chatId: sourceChatId,
+          people: normalizePeople(row.source_chat_people),
+          summary: String(sourceChatPayload.summary || '').trim(),
+          title: String(row.source_chat_title || sourceChatPayload.title || 'Untitled bill').trim() || 'Untitled bill',
+          totalCents: Number(sourceChatPayload.totalCents || 0),
+          updatedAt: row.source_chat_updated_at,
+        }
+      : null
     const bill = {
       billDate: row.bill_date ? String(row.bill_date).slice(0, 10) : '',
       createdAt: row.created_at,
@@ -165,6 +205,8 @@ export async function getLedgerSnapshot(personId: string) {
       paidByPerson: peopleById.get(row.paid_by_person_id) || null,
       paidByPersonId: row.paid_by_person_id,
       shares: [] as any[],
+      sourceChat,
+      sourceChatId,
       tipAmountCents: row.tip_amount_cents,
       title: row.title,
       totalAmountCents: row.total_amount_cents,

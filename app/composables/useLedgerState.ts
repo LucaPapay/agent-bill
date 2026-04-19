@@ -1,4 +1,5 @@
 import { computed } from 'vue'
+import { buildScanBillComposerDraft } from '../lib/scan-bill-draft'
 import {
   buildPreviewShares,
   centsToMoneyInput,
@@ -37,6 +38,7 @@ export function useLedgerState() {
   const billTotal = useState('ledger-state:bill-total', () => '0,00')
   const billTip = useState('ledger-state:bill-tip', () => '0,00')
   const billPaidByPersonId = useState('ledger-state:bill-paid-by-person-id', () => '')
+  const billSourceChatId = useState('ledger-state:bill-source-chat-id', () => '')
   const billItems = useState<Array<{
     amount: string
     assignedPersonIds: string[]
@@ -310,8 +312,33 @@ export function useLedgerState() {
     billDate.value = todayBillDate()
     billTotal.value = '0,00'
     billTip.value = '0,00'
+    billSourceChatId.value = ''
     billItems.value = []
     syncBillForm(selectedGroup.value)
+  }
+
+  function applyBillComposerDraft(groupId: string, draft: any) {
+    if (!draft || draft.groupId !== groupId) {
+      return false
+    }
+
+    setSelectedGroup(groupId)
+    billTitle.value = draft.billTitle || 'Friday dinner'
+    billDate.value = draft.billDate || todayBillDate()
+    billTotal.value = draft.billTotal || '0,00'
+    billTip.value = draft.billTip || '0,00'
+    billSourceChatId.value = String(draft.sourceChatId || '').trim()
+    billItems.value = Array.isArray(draft.billItems) && draft.billItems.length
+      ? draft.billItems.map((item: any) => ({
+          amount: item.amount || '',
+          assignedPersonIds: [...(item.assignedPersonIds || [])],
+          id: item.id || nextBillItemId(),
+          name: item.name || '',
+        }))
+      : [createEmptyBillItem(selectedGroup.value, nextBillItemId)]
+    billPaidByPersonId.value = draft.billPaidByPersonId || selectedGroup.value?.memberships?.[0]?.personId || ''
+    syncBillForm(selectedGroup.value)
+    return true
   }
 
   function loadBillFormFromBill(groupId: string, billId: string, options?: { duplicate?: boolean }) {
@@ -328,6 +355,7 @@ export function useLedgerState() {
     billTotal.value = centsToMoneyInput(bill.totalAmountCents || 0)
     billTip.value = centsToMoneyInput(bill.tipAmountCents || 0)
     billPaidByPersonId.value = bill.paidByPersonId
+    billSourceChatId.value = options?.duplicate ? '' : String(bill.sourceChatId || '').trim()
     billItems.value = bill.items.length
       ? bill.items.map((item: any) => ({
           amount: centsToMoneyInput(item.amountCents || 0),
@@ -352,22 +380,33 @@ export function useLedgerState() {
     }
 
     pendingBillComposerDraft.value = null
-    setSelectedGroup(groupId)
-    billTitle.value = draft.billTitle || 'Friday dinner'
-    billDate.value = draft.billDate || todayBillDate()
-    billTotal.value = draft.billTotal || '0,00'
-    billTip.value = draft.billTip || '0,00'
-    billItems.value = Array.isArray(draft.billItems) && draft.billItems.length
-      ? draft.billItems.map((item: any) => ({
-          amount: item.amount || '',
-          assignedPersonIds: [...(item.assignedPersonIds || [])],
-          id: item.id || nextBillItemId(),
-          name: item.name || '',
-        }))
-      : [createEmptyBillItem(selectedGroup.value, nextBillItemId)]
-    billPaidByPersonId.value = draft.billPaidByPersonId || selectedGroup.value?.memberships?.[0]?.personId || ''
-    syncBillForm(selectedGroup.value)
-    return true
+    return applyBillComposerDraft(groupId, draft)
+  }
+
+  async function loadBillFormFromChat(groupId: string, chatId: string) {
+    const group = getGroupById(groupId)
+    const normalizedChatId = String(chatId || '').trim()
+
+    if (!group || !normalizedChatId) {
+      return false
+    }
+
+    return await api.getBillChat({
+      chatId: normalizedChatId,
+    }).then((result: any) => {
+      const draftBundle = buildScanBillComposerDraft({
+        chatId: normalizedChatId,
+        group,
+        receipt: result?.receipt,
+        result,
+      })
+
+      if (!draftBundle) {
+        return false
+      }
+
+      return applyBillComposerDraft(groupId, draftBundle.draft)
+    }, () => false)
   }
 
   function addBillItem() {
@@ -582,6 +621,7 @@ export function useLedgerState() {
       billItems: preparedBillItems.value.payloadItems,
       groupId: selectedGroupId.value,
       paidByPersonId: billPaidByPersonId.value,
+      sourceChatId: billSourceChatId.value || undefined,
       tipAmountCents: billTipCents.value,
       title: billTitle.value,
       totalAmountCents: billTotalCents.value,
@@ -718,6 +758,7 @@ export function useLedgerState() {
     billPaidByPersonId,
     billPreviewShares,
     billRemainingCents,
+    billSourceChatId,
     billTip,
     billTipCents,
     billTitle,
@@ -741,6 +782,7 @@ export function useLedgerState() {
     ledger,
     ledgerLoaded,
     loadBillFormFromBill,
+    loadBillFormFromChat,
     personName,
     personToAddEmail,
     recentBillActivities,

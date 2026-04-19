@@ -7,6 +7,7 @@ import {
   createGroup,
   createPerson,
   findPersonByEmail,
+  getBillChat,
   createSettlementPayment,
   deleteBillRecord,
   getBillGroupId,
@@ -68,6 +69,7 @@ export async function createLedgerBill(authPersonId: string, input: {
   }>
   groupId: string
   paidByPersonId: string
+  sourceChatId?: string
   tipAmountCents: number
   title: string
   totalAmountCents: number
@@ -77,6 +79,10 @@ export async function createLedgerBill(authPersonId: string, input: {
 
   if (input.billDate && !billDate) {
     throw new Error('Bill date must be a real calendar date.')
+  }
+
+  if (input.sourceChatId) {
+    await getBillChat(authPersonId, input.sourceChatId)
   }
 
   const groupMemberIds = await getGroupMemberIds(input.groupId)
@@ -94,6 +100,7 @@ export async function createLedgerBill(authPersonId: string, input: {
     groupId: input.groupId,
     memberShares,
     paidByPersonId: input.paidByPersonId,
+    sourceChatId: input.sourceChatId,
     tipAmountCents: input.tipAmountCents,
     title: input.title,
     totalAmountCents: input.totalAmountCents,

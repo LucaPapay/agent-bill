@@ -12,7 +12,9 @@ const props = defineProps({
 
 const {
   cameraInput,
-  canOpenBillComposer,
+  billActionCopy,
+  billActionLabel,
+  canContinueToBill,
   canPickReceipt,
   canRecordVoice,
   canReset,
@@ -27,7 +29,7 @@ const {
   onFileChange,
   onPickGroupId,
   onSend,
-  openBillComposerFromScan,
+  openBillDestinationFromScan,
   openReceiptPicker,
   resetScan,
   selectedGroup,
@@ -86,18 +88,18 @@ const {
         </div>
 
         <div
-          v-else-if="canOpenBillComposer"
+          v-else-if="canContinueToBill"
           class="flex items-center justify-between gap-3 px-5 pb-4"
         >
           <div class="text-sm leading-6 text-[rgba(246,240,228,0.78)]">
-            The receipt is parsed. Continue into the bill composer when you are ready.
+            {{ billActionCopy }}
           </div>
           <button
             type="button"
             class="inline-flex items-center justify-center rounded-full border border-[var(--marigold)] bg-[var(--marigold)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)]"
-            @click="openBillComposerFromScan"
+            @click="openBillDestinationFromScan"
           >
-            Open bill composer
+            {{ billActionLabel }}
           </button>
         </div>
 

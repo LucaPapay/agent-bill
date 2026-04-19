@@ -132,6 +132,8 @@ export const analysisResultSchema = z.object({
   currency: z.string(),
   groupId: z.string().optional(),
   items: extractedReceiptSchema.shape.items,
+  linkedBillGroupId: z.string().optional(),
+  linkedBillId: z.string().optional(),
   merchant: z.string(),
   messages: z.array(billChatMessageSchema),
   notes: z.array(z.string()),
@@ -153,6 +155,8 @@ export const analysisResultSchema = z.object({
 
 export const analysisChatSummarySchema = z.object({
   chatId: z.string(),
+  linkedBillGroupId: z.string().optional(),
+  linkedBillId: z.string().optional(),
   people: z.array(z.string()),
   summary: z.string(),
   title: z.string(),

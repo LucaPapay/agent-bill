@@ -85,6 +85,7 @@ export async function createSchema(sql: any) {
       group_id text not null references groups(id) on delete cascade,
       title text not null,
       bill_date date,
+      source_chat_id text references bill_chats(id) on delete set null,
       total_amount_cents integer not null,
       tip_amount_cents integer not null default 0,
       paid_by_person_id text not null references people(id),
@@ -98,9 +99,19 @@ export async function createSchema(sql: any) {
   `
 
   await sql`
+    alter table bills
+    add column if not exists source_chat_id text references bill_chats(id) on delete set null
+  `
+
+  await sql`
     update bills
     set bill_date = created_at::date
     where bill_date is null
+  `
+
+  await sql`
+    create index if not exists bills_source_chat_id_idx
+    on bills (source_chat_id)
   `
 
   await sql`

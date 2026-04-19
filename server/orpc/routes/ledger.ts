@@ -59,6 +59,7 @@ export const createLedgerBillProcedure = protectedRpc
     billItems: z.array(billItemInputSchema),
     groupId: z.string().trim().min(1),
     paidByPersonId: z.string().trim().min(1),
+    sourceChatId: z.string().trim().optional(),
     tipAmountCents: z.number().int().min(0),
     title: z.string().trim().min(1),
     totalAmountCents: z.number().int().min(0),

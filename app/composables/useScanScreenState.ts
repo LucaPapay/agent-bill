@@ -96,8 +96,16 @@ export function useScanScreenState(props: { chatId?: string }) {
       .map((membership: any) => String(membership?.person?.name || '').trim())
       .filter(Boolean)
   })
+  const linkedBillGroupId = computed(() => String(analysis.result.value?.linkedBillGroupId || '').trim())
+  const linkedBillId = computed(() => String(analysis.result.value?.linkedBillId || '').trim())
+  const canOpenSavedBill = computed(() =>
+    Boolean(linkedBillGroupId.value && linkedBillId.value),
+  )
   const canOpenBillComposer = computed(() =>
     Boolean(parsedReceipt.value && selectedGroup.value),
+  )
+  const canContinueToBill = computed(() =>
+    Boolean(canOpenSavedBill.value || canOpenBillComposer.value),
   )
   const canPickReceipt = computed(() =>
     Boolean(
@@ -221,6 +229,16 @@ export function useScanScreenState(props: { chatId?: string }) {
 
     return 'Upload'
   })
+  const billActionCopy = computed(() => {
+    if (canOpenSavedBill.value) {
+      return 'This chat already has a saved bill. Open it to review or edit the ledger entry.'
+    }
+
+    return 'The receipt is parsed. Continue into the bill composer when you are ready.'
+  })
+  const billActionLabel = computed(() =>
+    canOpenSavedBill.value ? 'Open saved bill' : 'Open bill composer',
+  )
   const showShellTitle = computed(() =>
     !preview.previewUrl.value
     && !hasSavedChat.value
@@ -444,7 +462,12 @@ export function useScanScreenState(props: { chatId?: string }) {
     return true
   }
 
-  async function openBillComposerFromScan() {
+  async function openBillDestinationFromScan() {
+    if (canOpenSavedBill.value) {
+      await navigateTo(`/groups/${linkedBillGroupId.value}/bills/${linkedBillId.value}`)
+      return
+    }
+
     const group = selectedGroup.value || ledgerSelectedGroup.value
 
     if (!group) {
@@ -462,7 +485,11 @@ export function useScanScreenState(props: { chatId?: string }) {
       return
     }
 
-    await navigateTo(`/groups/${group.id}/bills/new`)
+    const chatQuery = analysis.chatId.value
+      ? `?chatId=${encodeURIComponent(analysis.chatId.value)}`
+      : ''
+
+    await navigateTo(`/groups/${group.id}/bills/new${chatQuery}`)
   }
 
   watch(() => props.chatId, (nextChatId, previousChatId) => {
@@ -526,7 +553,9 @@ export function useScanScreenState(props: { chatId?: string }) {
 
   return {
     cameraInput: preview.cameraInput,
-    canOpenBillComposer,
+    billActionCopy,
+    billActionLabel,
+    canContinueToBill,
     canPickReceipt,
     canRecordVoice: voice.canRecordVoice,
     canReset,
@@ -540,7 +569,7 @@ export function useScanScreenState(props: { chatId?: string }) {
     onFileChange,
     onPickGroupId,
     onSend,
-    openBillComposerFromScan,
+    openBillDestinationFromScan,
     openReceiptPicker,
     fileInput: preview.fileInput,
     resetScan,

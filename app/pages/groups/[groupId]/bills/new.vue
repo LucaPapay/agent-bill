@@ -5,6 +5,7 @@ import BillComposer from '../../../../components/ledger/BillComposer.vue'
 
 const route = useRoute()
 const groupId = computed(() => String(route.params.groupId || ''))
+const sourceChatId = computed(() => String(route.query.chatId || '').trim())
 const duplicateBillId = computed(() => String(route.query.duplicate || ''))
 
 const {
@@ -24,6 +25,7 @@ const {
   getGroupById,
   ledgerLoaded,
   loadBillFormFromBill,
+  loadBillFormFromChat,
   removeBillItem,
   resetBillForm,
   saving,
@@ -38,14 +40,18 @@ const {
 
 const group = computed(() => getGroupById(groupId.value))
 
-watch([groupId, duplicateBillId], ([nextGroupId, nextDuplicateBillId]) => {
-  if (!nextGroupId) {
+watch([ledgerLoaded, groupId, sourceChatId, duplicateBillId], async ([loaded, nextGroupId, nextSourceChatId, nextDuplicateBillId]) => {
+  if (!loaded || !nextGroupId) {
     return
   }
 
   setSelectedGroup(nextGroupId)
 
   if (consumeBillComposerDraft(nextGroupId)) {
+    return
+  }
+
+  if (nextSourceChatId && await loadBillFormFromChat(nextGroupId, nextSourceChatId)) {
     return
   }
 

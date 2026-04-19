@@ -105,6 +105,8 @@ export function readSavedRunPayload(value: unknown) {
 export function withRunMetadata(row: any) {
   return {
     ...readSavedRunPayload(row.payload),
+    linkedBillGroupId: normalizeText(row.linked_bill_group_id) || undefined,
+    linkedBillId: normalizeText(row.linked_bill_id) || undefined,
     runId: row.id,
     savedAt: row.created_at,
   }

@@ -104,6 +104,7 @@ export function buildScanBillComposerDraft({
         ? splitDraftItems
         : buildParsedDraftItems(receipt, seedBase),
       billPaidByPersonId: group.memberships?.[0]?.personId || '',
+      sourceChatId: seedChatId,
       billTip: splitDraftItems.length ? '0.00' : centsToMoneyInput(receipt.tipCents || 0),
       billTitle: receipt.merchant || `${group.name} receipt`,
       billTotal: centsToMoneyInput(receipt.totalCents || 0),

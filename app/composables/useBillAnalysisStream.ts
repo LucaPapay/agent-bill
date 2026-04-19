@@ -137,10 +137,14 @@ function normalizeStoredMessages(result: any) {
 }
 
 function buildReceiptMessage({
+  linkedBillGroupId,
+  linkedBillId,
   receipt,
   splitRows,
   summary,
 }: {
+  linkedBillGroupId?: string
+  linkedBillId?: string
   receipt?: any
   splitRows?: any[]
   summary?: string
@@ -151,6 +155,8 @@ function buildReceiptMessage({
 
   return {
     data: {
+      linkedBillGroupId: normalizeText(linkedBillGroupId) || '',
+      linkedBillId: normalizeText(linkedBillId) || '',
       receipt,
       splitRows: Array.isArray(splitRows) ? splitRows : [],
       summary: normalizeText(summary),
@@ -218,6 +224,8 @@ export function useBillAnalysisStream() {
 
   function syncReceiptMessage() {
     receiptMessage.value = buildReceiptMessage({
+      linkedBillGroupId: result.value?.linkedBillGroupId,
+      linkedBillId: result.value?.linkedBillId,
       receipt: parsedReceipt.value,
       splitRows: splitRows.value,
       summary: result.value?.summary,

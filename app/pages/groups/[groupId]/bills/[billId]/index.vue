@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
+import SavedChatCard from '../../../../../components/app/SavedChatCard.vue'
 import PageShell from '../../../../../components/layout/PageShell.vue'
 import BillItemsPanel from '../../../../../components/ledger/BillItemsPanel.vue'
 import BillListPanel from '../../../../../components/ledger/BillListPanel.vue'
@@ -72,6 +73,27 @@ function removeBill() {
           >
             Delete bill
           </button>
+        </div>
+
+        <div v-if="bill.sourceChat" class="mx-auto mb-3 w-full max-w-[960px]">
+          <div class="section-label mb-2">
+            Source chat
+          </div>
+
+          <SavedChatCard
+            v-if="bill.sourceChat.canOpen"
+            :chat="bill.sourceChat"
+            :to="`/scan/${bill.sourceChat.chatId}`"
+          />
+
+          <div v-else class="surface-panel p-5">
+            <div class="section-label">
+              Private chat
+            </div>
+            <div class="mt-2 text-[15px] leading-[1.5]">
+              This bill was created from a scan chat that belongs to another member.
+            </div>
+          </div>
         </div>
 
         <BillReceiptCard :bill="bill" :format-cents="formatCents" :group="group" />

@@ -2,6 +2,14 @@
 import { computed } from 'vue'
 
 const props = defineProps({
+  linkedBillGroupId: {
+    type: String,
+    default: '',
+  },
+  linkedBillId: {
+    type: String,
+    default: '',
+  },
   receipt: {
     type: Object,
     required: true,
@@ -39,6 +47,13 @@ const visibleNotes = computed(() => noteList.value.filter((note) =>
   && !/^Contains\b.*\bVAT\b/i.test(note)
   && !/^Total matches sum of subtotal and tax\.?$/i.test(note),
 ))
+const linkedBillTo = computed(() => {
+  if (!props.linkedBillGroupId || !props.linkedBillId) {
+    return ''
+  }
+
+  return `/groups/${props.linkedBillGroupId}/bills/${props.linkedBillId}`
+})
 const summaryText = computed(() => (
   String(props.summary || '').trim() || `Parsed ${parsedItemCount.value} bill items.`
 ))
@@ -67,6 +82,13 @@ function formatMoney(amountCents, currency = 'EUR') {
         <div class="font-[var(--mono)] text-xs text-[var(--muted)]">
           {{ formatMoney(receipt.totalCents || 0, resolvedCurrency) }}
         </div>
+        <NuxtLink
+          v-if="linkedBillTo"
+          :to="linkedBillTo"
+          class="chip chip-muted chip-action no-underline"
+        >
+          Open saved bill
+        </NuxtLink>
         <div
           v-if="billTimeLabel"
           class="font-[var(--mono)] text-[11px] uppercase tracking-[0.08em] text-[rgba(20,18,16,0.58)]"
@@ -76,9 +98,6 @@ function formatMoney(amountCents, currency = 'EUR') {
       </div>
     </div>
 
-    <div class="mt-3.5 text-sm leading-6 text-[rgba(20,18,16,0.72)]">
-      {{ summaryText }}
-    </div>
 
     <div v-if="splitRows.length" class="mt-4 grid gap-2.5 rounded-[18px] bg-[rgba(20,18,16,0.05)] p-3">
       <div
@@ -140,14 +159,5 @@ function formatMoney(amountCents, currency = 'EUR') {
       </div>
     </div>
 
-    <div v-if="visibleNotes.length" class="mt-4 grid gap-2">
-      <div
-        v-for="note in visibleNotes"
-        :key="note"
-        class="rounded-2xl bg-[rgba(20,18,16,0.05)] px-3 py-2 text-[13px] leading-5 text-[rgba(20,18,16,0.68)]"
-      >
-        {{ note }}
-      </div>
-    </div>
   </div>
 </template>

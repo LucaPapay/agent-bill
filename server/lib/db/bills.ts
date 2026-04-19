@@ -57,6 +57,7 @@ export async function createBillRecord({
   groupId,
   memberShares,
   paidByPersonId,
+  sourceChatId,
   tipAmountCents,
   title,
   totalAmountCents,
@@ -67,6 +68,7 @@ export async function createBillRecord({
   groupId: string
   memberShares: BillMemberShareRecord[]
   paidByPersonId: string
+  sourceChatId?: string
   tipAmountCents: number
   title: string
   totalAmountCents: number
@@ -77,8 +79,8 @@ export async function createBillRecord({
   const id = randomUUID()
   const billRow = await db().begin(async (sql: any) => {
     const insertedBills = await sql`
-      insert into bills (id, group_id, title, bill_date, total_amount_cents, tip_amount_cents, paid_by_person_id)
-      values (${id}, ${groupId}, ${title}, ${billDate || null}, ${totalAmountCents}, ${tipAmountCents}, ${paidByPersonId})
+      insert into bills (id, group_id, title, bill_date, source_chat_id, total_amount_cents, tip_amount_cents, paid_by_person_id)
+      values (${id}, ${groupId}, ${title}, ${billDate || null}, ${sourceChatId || null}, ${totalAmountCents}, ${tipAmountCents}, ${paidByPersonId})
       returning id, created_at
     `
     const insertedBill = insertedBills[0]!
