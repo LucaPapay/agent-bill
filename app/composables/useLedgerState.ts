@@ -30,7 +30,7 @@ export function useLedgerState() {
 
   const personName = useState('ledger-state:person-name', () => '')
   const groupName = useState('ledger-state:group-name', () => '')
-  const personToAddId = useState('ledger-state:person-to-add-id', () => '')
+  const personToAddEmail = useState('ledger-state:person-to-add-email', () => '')
 
   const billTitle = useState('ledger-state:bill-title', () => 'Friday dinner')
   const billDate = useState('ledger-state:bill-date', () => todayBillDate())
@@ -72,15 +72,6 @@ export function useLedgerState() {
   const selectedGroupSimplifiedTotalCents = computed(() =>
     selectedGroupSimplifiedTransfers.value.reduce((sum: number, transfer: any) => sum + transfer.amountCents, 0),
   )
-
-  const selectedGroupMemberIds = computed(() =>
-    (selectedGroup.value?.memberships || []).map((membership: any) => membership.personId),
-  )
-
-  const peopleNotInSelectedGroup = computed(() => {
-    const memberIds = new Set(selectedGroupMemberIds.value)
-    return ledger.value.people.filter((person: any) => !memberIds.has(person.id))
-  })
 
   const billTipCents = computed(() => toCents(billTip.value))
   const billTotalCents = computed(() => toCents(billTotal.value))
@@ -225,7 +216,7 @@ export function useLedgerState() {
   }))
 
   const canAddPersonToGroup = computed(() =>
-    Boolean(selectedGroupId.value && personToAddId.value),
+    Boolean(selectedGroupId.value && personToAddEmail.value.trim()),
   )
 
   const canCreateBill = computed(() =>
@@ -297,10 +288,6 @@ export function useLedgerState() {
 
     if (!members.some((membership: any) => membership.personId === billPaidByPersonId.value)) {
       billPaidByPersonId.value = members[0]?.personId || ''
-    }
-
-    if (!members.some((membership: any) => membership.personId === personToAddId.value)) {
-      personToAddId.value = peopleNotInSelectedGroup.value[0]?.id || ''
     }
 
     if (!group?.bills.find((bill: any) => bill.id === selectedBillId.value)) {
@@ -473,7 +460,7 @@ export function useLedgerState() {
     pendingBillComposerDraft.value = null
     personName.value = ''
     groupName.value = ''
-    personToAddId.value = ''
+    personToAddEmail.value = ''
     billItemId.value = 0
     resetBillForm()
   }
@@ -539,7 +526,7 @@ export function useLedgerState() {
   }
 
   function addPersonToGroup() {
-    if (!selectedGroupId.value || !personToAddId.value) {
+    if (!selectedGroupId.value || !personToAddEmail.value.trim()) {
       return Promise.resolve(null)
     }
 
@@ -547,10 +534,11 @@ export function useLedgerState() {
     saving.value = true
 
     return api.addLedgerPersonToGroup({
+      email: personToAddEmail.value,
       groupId: selectedGroupId.value,
-      personId: personToAddId.value,
     }).then(
       (value: any) => {
+        personToAddEmail.value = ''
         applyLedger(value)
         return value
       },
@@ -753,9 +741,8 @@ export function useLedgerState() {
     ledger,
     ledgerLoaded,
     loadBillFormFromBill,
-    peopleNotInSelectedGroup,
     personName,
-    personToAddId,
+    personToAddEmail,
     recentBillActivities,
     removeBillItem,
     recordSettlementPayment,

@@ -156,15 +156,15 @@ server.registerTool(
 server.registerTool(
   'add_person_to_group',
   {
-    description: 'Add an existing person to a group the acting local person can access.',
+    description: 'Add an existing user to a group by email when the acting local person can access that group.',
     inputSchema: {
+      email: z.string().trim().email(),
       groupId: z.string().trim().min(1),
       personId: z.string().trim().optional(),
-      targetPersonId: z.string().trim().min(1),
     },
   },
-  ({ groupId, personId, targetPersonId }) => run(async () => {
-    return await addLedgerPersonToGroup(requirePersonId(personId), groupId, targetPersonId)
+  ({ email, groupId, personId }) => run(async () => {
+    return await addLedgerPersonToGroup(requirePersonId(personId), groupId, email)
   }),
 )
 

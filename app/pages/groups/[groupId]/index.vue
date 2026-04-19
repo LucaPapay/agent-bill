@@ -16,8 +16,7 @@ const {
   formatCents,
   getGroupById,
   ledgerLoaded,
-  peopleNotInSelectedGroup,
-  personToAddId,
+  personToAddEmail,
   recordSettlementPayment,
   saving,
   selectedGroupBillTransfers,
@@ -88,12 +87,12 @@ watch(groupId, (value) => {
         <div style="display: grid; gap: 18px; margin-top: 18px;" class="home-main">
           <GroupMembersPanel
             :can-add-person-to-group="canAddPersonToGroup"
+            :format-cents="formatCents"
             :group="group"
-            :people-not-in-selected-group="peopleNotInSelectedGroup"
-            :person-to-add-id="personToAddId"
+            :person-to-add-email="personToAddEmail"
             :saving="saving"
             @add-person="addPersonToGroup"
-            @update:person-to-add-id="personToAddId = $event"
+            @update:person-to-add-email="personToAddEmail = $event"
           />
 
           <div style="display: grid; gap: 18px;">

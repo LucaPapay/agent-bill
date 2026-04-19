@@ -41,11 +41,11 @@ export const createLedgerGroupProcedure = protectedRpc
 
 export const addLedgerPersonToGroupProcedure = protectedRpc
   .input(z.object({
+    email: z.string().trim().email(),
     groupId: z.string().trim().min(1),
-    personId: z.string().trim().min(1),
   }))
   .handler(async ({ context, input }) => {
-    return await addLedgerPersonToGroup(context.personId, input.groupId, input.personId)
+    return await addLedgerPersonToGroup(context.personId, input.groupId, input.email)
   })
 
 export const addLedgerPersonToAllGroupsProcedure = protectedRpc
