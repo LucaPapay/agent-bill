@@ -14,6 +14,7 @@ let loadingPromise: Promise<void> | null = null
 
 export function useLedgerState() {
   const api = useOrpc()
+  const analysis = useBillAnalysisStream()
   const { clear, user } = useUserSession()
 
   const ledger = useState<any>('ledger-state:ledger', () => ({
@@ -613,6 +614,9 @@ export function useLedgerState() {
       return Promise.resolve(null)
     }
 
+    const sourceChatId = billSourceChatId.value
+    const sourceGroupId = selectedGroupId.value
+
     errorMessage.value = ''
     saving.value = true
 
@@ -629,6 +633,7 @@ export function useLedgerState() {
       (value: any) => {
         selectedBillId.value = value.billId
         applyLedger(value.ledger)
+        analysis.linkBillToChat(sourceChatId, value.billId, sourceGroupId)
         resetBillForm()
         return value
       },

@@ -236,6 +236,37 @@ export function useBillAnalysisStream() {
     loadingMessage.value = buildLoadingMessage(status.value, loadingChat.value)
   }
 
+  function linkBillToChat(chatIdToLink: string, billId: string, groupId: string) {
+    const normalizedChatId = normalizeText(chatIdToLink)
+    const normalizedBillId = normalizeText(billId)
+    const normalizedGroupId = normalizeText(groupId)
+
+    if (!normalizedChatId || !normalizedBillId || !normalizedGroupId) {
+      return
+    }
+
+    if (normalizeText(result.value?.chatId) === normalizedChatId) {
+      result.value = {
+        ...result.value,
+        linkedBillGroupId: normalizedGroupId,
+        linkedBillId: normalizedBillId,
+      }
+      syncReceiptMessage()
+    }
+
+    recentChats.value = recentChats.value.map((chat: any) => {
+      if (normalizeText(chat?.chatId) !== normalizedChatId) {
+        return chat
+      }
+
+      return {
+        ...chat,
+        linkedBillGroupId: normalizedGroupId,
+        linkedBillId: normalizedBillId,
+      }
+    })
+  }
+
   function stop() {
     if (!currentCancel) {
       return
@@ -580,6 +611,7 @@ export function useBillAnalysisStream() {
     confirmGroupSelection,
     error,
     groupId,
+    linkBillToChat,
     loadChat,
     loadChats,
     loadingChat,
