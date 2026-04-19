@@ -4,6 +4,7 @@ import PageShell from '../../../../components/layout/PageShell.vue'
 import BillComposer from '../../../../components/ledger/BillComposer.vue'
 
 const route = useRoute()
+const pennyChat = usePennyChat()
 const groupId = computed(() => String(route.params.groupId || ''))
 const sourceChatId = computed(() => String(route.query.chatId || '').trim())
 const duplicateBillId = computed(() => String(route.query.duplicate || ''))
@@ -62,12 +63,18 @@ watch([ledgerLoaded, groupId, sourceChatId, duplicateBillId], async ([loaded, ne
   resetBillForm()
 }, { immediate: true })
 
-function saveBill() {
-  createBill().then((value: any) => {
-    if (value?.billId) {
-      navigateTo(`/groups/${groupId.value}/bills/${value.billId}`)
-    }
-  })
+async function saveBill() {
+  const value = await createBill()
+
+  if (!value?.billId) {
+    return
+  }
+
+  if (sourceChatId.value) {
+    await pennyChat.loadChat(sourceChatId.value, { force: true })
+  }
+
+  await navigateTo(`/groups/${groupId.value}/bills/${value.billId}`)
 }
 </script>
 

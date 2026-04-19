@@ -15,10 +15,6 @@ let loadingPromise: Promise<void> | null = null
 export function useLedgerState() {
   const api = useOrpc()
   const { clear, user } = useUserSession()
-  const pennyChatContext = useState<any>('penny-chat:context', () => ({
-    messages: [],
-    status: 'idle',
-  }))
 
   const ledger = useState<any>('ledger-state:ledger', () => ({
     groups: [],
@@ -617,9 +613,6 @@ export function useLedgerState() {
       return Promise.resolve(null)
     }
 
-    const sourceChatId = billSourceChatId.value
-    const sourceGroupId = selectedGroupId.value
-
     errorMessage.value = ''
     saving.value = true
 
@@ -636,14 +629,6 @@ export function useLedgerState() {
       (value: any) => {
         selectedBillId.value = value.billId
         applyLedger(value.ledger)
-
-        if (sourceChatId && pennyChatContext.value?.chatId === sourceChatId) {
-          pennyChatContext.value = {
-            ...pennyChatContext.value,
-            linkedBillGroupId: sourceGroupId,
-            linkedBillId: value.billId,
-          }
-        }
 
         resetBillForm()
         return value

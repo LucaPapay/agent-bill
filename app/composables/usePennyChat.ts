@@ -222,7 +222,7 @@ export function usePennyChat() {
     })
   }
 
-  async function loadChat(nextChatId: any) {
+  async function loadChat(nextChatId: any, options: any = {}) {
     const normalizedChatId = normalizeText(nextChatId)
 
     if (!normalizedChatId) {
@@ -230,7 +230,7 @@ export function usePennyChat() {
       return null
     }
 
-    if (chatId.value === normalizedChatId) {
+    if (chatId.value === normalizedChatId && !options.force) {
       return context.value
     }
 
