@@ -191,7 +191,7 @@ export function useBillAnalysisStream() {
       return
     }
 
-    if (payload.type === 'agent_progress' || payload.type === 'agent_text_delta') {
+    if (payload.type === 'agent_text_delta') {
       return
     }
 

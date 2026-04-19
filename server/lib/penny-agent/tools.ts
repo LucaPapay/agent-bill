@@ -112,53 +112,29 @@ function getSplitPlanError({
 export function createPennyTools({
   chatId,
   groupId,
-  imageBase64,
-  mimeType,
+  latestMessageData,
   onEvent = () => {},
   people,
   personId,
   rawReceipt,
-  rawText,
   receipt,
   title,
 }: {
   chatId?: string
   groupId?: string
-  imageBase64?: string
-  mimeType?: string
+  latestMessageData?: any
   onEvent?: (payload: any) => void
   people: string[]
   personId?: string
   rawReceipt?: any
-  rawText?: string
   receipt?: any
   title: string
 }) {
+  const imageBase64 = normalizeText(latestMessageData?.imageBase64)
+  const mimeType = normalizeText(latestMessageData?.mimeType)
   const currentRawReceipt = { value: (rawReceipt || receipt || null) as any }
   const currentReceipt = { value: (receipt ? normalizeExtractedReceipt(receipt) : null) as any }
   const finalPlan = { value: null as any }
-
-  const logProgress = defineTool({
-    name: 'log_progress',
-    label: 'Log Progress',
-    description: 'Send a short progress update to the frontend UI.',
-    parameters: Type.Object({
-      message: Type.String({ description: 'A short UI-safe progress message.' }),
-      stage: Type.String({ description: 'Current stage label.' }),
-    }),
-    execute: async (_toolCallId, params) => {
-      await onEvent({
-        type: 'agent_progress',
-        message: params.message,
-        stage: params.stage,
-      })
-
-      return {
-        content: [{ type: 'text', text: 'Progress logged.' }],
-        details: {},
-      }
-    },
-  })
 
   const extractReceipt = defineTool({
     name: 'extract_receipt',
@@ -170,18 +146,12 @@ export function createPennyTools({
         return toolResponse(currentReceipt.value)
       }
 
-      if (!imageBase64 && !rawText) {
+      if (!imageBase64 && !normalizeText(latestMessageData?.rawText)) {
         return toolResponse({
           receipt: null,
           summary: 'No receipt input is available to parse.',
         })
       }
-
-      await onEvent({
-        type: 'agent_progress',
-        message: 'Penny is reading the receipt.',
-        stage: 'extract',
-      })
 
       currentRawReceipt.value = await extractReceiptWithOpenAI({
         imageBase64,
@@ -192,7 +162,7 @@ export function createPennyTools({
           }
         },
         people,
-        rawText,
+        rawText: normalizeText(latestMessageData?.rawText) || undefined,
         title,
       })
       currentReceipt.value = normalizeExtractedReceipt(currentRawReceipt.value)
@@ -217,12 +187,6 @@ export function createPennyTools({
 
       const result = reconcileExtractedReceipt(currentReceipt.value)
       currentReceipt.value = result.receipt
-
-      await onEvent({
-        type: 'agent_progress',
-        message: result.summary,
-        stage: 'receipt',
-      })
 
       return toolResponse(result)
     },
@@ -278,12 +242,6 @@ export function createPennyTools({
       }, reason)
       currentReceipt.value = result.receipt
 
-      await onEvent({
-        type: 'agent_progress',
-        message: result.summary,
-        stage: 'receipt',
-      })
-
       return toolResponse(result)
     },
   })
@@ -317,12 +275,6 @@ export function createPennyTools({
           summary: 'Select the group before searching previous splits.',
         })
       }
-
-      await onEvent({
-        type: 'agent_progress',
-        message: 'Penny is checking what this group ate before.',
-        stage: 'memory',
-      })
 
       return toolResponse(await searchPreviousSplits({
         chatId,
@@ -388,7 +340,6 @@ export function createPennyTools({
     currentReceipt,
     finalPlan,
     tools: [
-      logProgress,
       extractReceipt,
       reconcileReceipt,
       editReceipt,

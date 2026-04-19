@@ -209,11 +209,6 @@ export const analysisEventSchema = z.discriminatedUnion('type', [
     receipt: extractedReceiptSchema,
   }),
   z.object({
-    type: z.literal('agent_progress'),
-    message: z.string(),
-    stage: z.string().optional(),
-  }),
-  z.object({
     type: z.literal('agent_text_delta'),
     delta: z.string(),
   }),

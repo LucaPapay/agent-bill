@@ -1,4 +1,4 @@
-import { runPennyChat } from './run'
+import { runPennyChat } from './chat'
 
 export async function* streamPennyChat(input: any, personId: string) {
   const queue = [{
