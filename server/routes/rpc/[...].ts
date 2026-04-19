@@ -1,5 +1,5 @@
 import { RPCHandler } from '@orpc/server/fetch'
-import { onError } from '@orpc/server'
+import { ORPCError, onError } from '@orpc/server'
 import { setResponseStatus, toWebRequest } from 'h3'
 import { hasPerson } from '../../lib/db'
 import { router } from '../../orpc/router'
@@ -7,6 +7,20 @@ import { router } from '../../orpc/router'
 const handler = new RPCHandler(router, {
   interceptors: [
     onError((error) => {
+      if (error instanceof ORPCError) {
+        return
+      }
+
+      if (
+        typeof error === 'object'
+        && error
+        && 'status' in error
+        && typeof error.status === 'number'
+        && error.status < 500
+      ) {
+        return
+      }
+
       console.error(error)
     }),
   ],

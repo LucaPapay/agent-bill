@@ -1,11 +1,12 @@
+import { ORPCError } from '@orpc/server'
 import {
   addPersonToAllGroups,
   addPersonToGroup,
   assertPersonCanAccessGroup,
-  assertPersonCanAccessVisiblePerson,
   createBillRecord,
   createGroup,
   createPerson,
+  findPersonByEmail,
   createSettlementPayment,
   deleteBillRecord,
   getBillGroupId,
@@ -39,10 +40,17 @@ export async function createLedgerGroup(name: string, personId: string) {
   }
 }
 
-export async function addLedgerPersonToGroup(authPersonId: string, groupId: string, personId: string) {
+export async function addLedgerPersonToGroup(authPersonId: string, groupId: string, email: string) {
   await assertPersonCanAccessGroup(authPersonId, groupId)
-  await assertPersonCanAccessVisiblePerson(authPersonId, personId)
-  await addPersonToGroup(groupId, personId)
+  const person = await findPersonByEmail(email)
+
+  if (!person) {
+    throw new ORPCError('BAD_REQUEST', {
+      message: 'There is no user with that email.',
+    })
+  }
+
+  await addPersonToGroup(groupId, person.id)
   return await getLedgerSnapshot(authPersonId)
 }
 

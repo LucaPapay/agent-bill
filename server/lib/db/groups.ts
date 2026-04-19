@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { db, ensureSchema } from './client'
 
+function normalizeEmail(email: string) {
+  return String(email || '').trim().toLowerCase()
+}
+
 function mapPerson(row: any) {
   return {
     avatarUrl: row.avatar_url || '',
@@ -37,6 +41,8 @@ export async function findOrCreateGooglePerson({
 }) {
   await ensureSchema()
 
+  const normalizedEmail = normalizeEmail(email)
+
   if (!googleSub) {
     throw new Error('Google login did not return a stable account id.')
   }
@@ -54,7 +60,7 @@ export async function findOrCreateGooglePerson({
       update people
       set
         name = ${name},
-        email = ${email || null},
+        email = ${normalizedEmail || null},
         avatar_url = ${avatarUrl || null},
         last_login_at = now()
       where id = ${existing.id}
@@ -67,11 +73,30 @@ export async function findOrCreateGooglePerson({
   const id = randomUUID()
   const rows = await db()`
     insert into people (id, name, email, google_sub, avatar_url, last_login_at)
-    values (${id}, ${name}, ${email || null}, ${googleSub}, ${avatarUrl || null}, now())
+    values (${id}, ${name}, ${normalizedEmail || null}, ${googleSub}, ${avatarUrl || null}, now())
     returning id, name, email, google_sub, avatar_url, created_at
   `
 
   return mapPerson(rows[0]!)
+}
+
+export async function findPersonByEmail(email: string) {
+  await ensureSchema()
+
+  const normalizedEmail = normalizeEmail(email)
+
+  if (!normalizedEmail) {
+    return null
+  }
+
+  const rows = await db()`
+    select id, name, email, google_sub, avatar_url, created_at
+    from people
+    where lower(coalesce(email, '')) = ${normalizedEmail}
+    limit 1
+  `
+
+  return rows[0] ? mapPerson(rows[0]) : null
 }
 
 export async function createGroup(name: string, presentation: {

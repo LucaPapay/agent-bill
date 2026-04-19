@@ -18,6 +18,7 @@ export {
   assertPersonCanAccessVisiblePerson,
   createGroup,
   createPerson,
+  findPersonByEmail,
   findOrCreateGooglePerson,
   getGroupMemberIds,
   getGroupMemberNames,
