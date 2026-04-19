@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createLocalAnalysis,
   editExtractedReceipt,
   normalizeExtractedReceipt,
   normalizePeople,
@@ -15,57 +14,6 @@ describe('normalizePeople', () => {
       'Bob',
       'Cara',
     ])
-  })
-})
-
-describe('createLocalAnalysis', () => {
-  it('parses receipt-like text and returns the extracted bill items', () => {
-    expect(createLocalAnalysis({
-      imageProvided: false,
-      people: ['Alice', 'Bob'],
-      rawText: [
-        'Pasta 12.50',
-        'Dessert 5.50',
-        'Tax 1.20',
-        'Tip 2.80',
-        'Total 22.00',
-      ].join('\n'),
-      title: 'Dinner',
-    })).toMatchObject({
-      currency: 'EUR',
-      merchant: 'Dinner',
-      source: 'local-text',
-      taxCents: 120,
-      tipCents: 280,
-      totalCents: 2200,
-      split: [],
-    })
-  })
-
-  it('adds helpful image-only fallback notes when no OCR text is available', () => {
-    const analysis = createLocalAnalysis({
-      imageProvided: true,
-      people: ['Alice', 'Bob'],
-      title: 'Receipt',
-    })
-
-    expect(analysis.notes).toContain('An image was uploaded, but no AI key was available, so image-only analysis was skipped.')
-    expect(analysis.notes).toContain('Paste OCR text or add OPENAI_API_KEY if you want the app to read receipt images.')
-    expect(analysis.source).toBe('local-empty')
-  })
-
-  it('pulls a visible receipt date out of OCR text', () => {
-    expect(createLocalAnalysis({
-      imageProvided: false,
-      people: ['Alice', 'Bob'],
-      rawText: [
-        'Cafe Sample',
-        '18/04/2026',
-        'Pasta 12.50',
-        'Total 12.50',
-      ].join('\n'),
-      title: 'Dinner',
-    }).billDate).toBe('2026-04-18')
   })
 })
 

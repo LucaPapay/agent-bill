@@ -2,56 +2,22 @@ import { eventIterator } from '@orpc/server'
 import { z } from 'zod'
 import { getBillChat, listBillChats } from '../../lib/db'
 import { transcribeVoiceNote } from '../../lib/openai-transcription'
-import {
-  runPennyAnalysis,
-  runPennyRevision,
-  streamExistingPennyChat,
-  streamPennyAnalysis,
-  streamPennyRevision,
-} from '../../lib/penny-agent'
+import { streamPennyChat } from '../../lib/penny-agent/stream'
 import {
   analysisChatSummarySchema,
   analysisEventSchema,
-  analysisInputSchema,
   analysisResultSchema,
-  revisionInputSchema,
+  billChatStreamInputSchema,
   voiceTranscriptionInputSchema,
   voiceTranscriptionResultSchema,
 } from '../../lib/receipt-contract'
 import { protectedRpc } from '../base'
 
-export const analyzeBill = protectedRpc
-  .input(analysisInputSchema)
-  .output(analysisResultSchema)
-  .handler(async ({ context, input }) => runPennyAnalysis(input, context.personId))
-
-export const analyzeBillStream = protectedRpc
-  .input(analysisInputSchema)
+export const chatStream = protectedRpc
+  .input(billChatStreamInputSchema)
   .output(eventIterator(analysisEventSchema))
   .handler(async function* ({ context, input }) {
-    yield* streamPennyAnalysis(input, context.personId)
-  })
-
-export const reviseBillSplit = protectedRpc
-  .input(revisionInputSchema)
-  .output(analysisResultSchema)
-  .handler(async ({ context, input }) => runPennyRevision(input, context.personId))
-
-export const reviseBillSplitStream = protectedRpc
-  .input(revisionInputSchema)
-  .output(eventIterator(analysisEventSchema))
-  .handler(async function* ({ context, input }) {
-    yield* streamPennyRevision(input, context.personId)
-  })
-
-export const attachBillChatStream = protectedRpc
-  .input(z.object({
-    chatId: z.string().trim().min(1),
-  }))
-  .output(eventIterator(analysisEventSchema))
-  .handler(async function* ({ context, input }) {
-    await getBillChat(context.personId, input.chatId)
-    yield* streamExistingPennyChat(input.chatId)
+    yield* streamPennyChat(input, context.personId)
   })
 
 export const getBillChatProcedure = protectedRpc
@@ -77,12 +43,8 @@ export const transcribeVoiceProcedure = protectedRpc
   })
 
 export const analysisRouter = {
-  analyzeBill,
-  analyzeBillStream,
-  attachBillChatStream,
+  chatStream,
   getBillChat: getBillChatProcedure,
   listBillChats: listBillChatsProcedure,
-  reviseBillSplit,
-  reviseBillSplitStream,
   transcribeVoice: transcribeVoiceProcedure,
 }

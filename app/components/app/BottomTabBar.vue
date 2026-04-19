@@ -17,7 +17,7 @@ const activeTab = computed(() => {
     return 'profile'
   }
 
-  if (route.path === '/scan' || route.path.startsWith('/scan/') || route.path === '/chat-split') {
+  if (route.path === '/scan' || route.path.startsWith('/scan/')) {
     return 'scan'
   }
 

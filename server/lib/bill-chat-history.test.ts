@@ -1,55 +1,55 @@
 import { describe, expect, it } from 'vitest'
 import {
-  appendBillChatEvent,
-  appendBillChatReply,
-  createBillChatSeed,
+  appendBillChatAssistantMessage,
+  appendBillChatMessages,
+  buildBillChatHistory,
 } from './bill-chat-history'
 
-describe('createBillChatSeed', () => {
-  it('does not create a synthetic seed message for receipt uploads', () => {
-    expect(createBillChatSeed({
-      imageBase64: 'abc',
-      title: 'Friday dinner',
-    })).toEqual([])
-  })
-})
-
-describe('appendBillChatReply', () => {
-  it('appends the next user follow-up message', () => {
-    expect(appendBillChatReply([], 'Sarah had the dessert')).toEqual([
+describe('appendBillChatMessages', () => {
+  it('normalizes and appends user messages', () => {
+    expect(appendBillChatMessages([], [{
+      role: 'user',
+      text: ' Sarah had the dessert ',
+    }])).toEqual([
       {
+        data: {},
+        role: 'user',
         text: 'Sarah had the dessert',
-        who: 'user',
       },
     ])
   })
 })
 
-describe('appendBillChatEvent', () => {
-  it('persists only visible chat entries from the stream', () => {
-    const history: Array<{ text: string; who: string }> = []
+describe('appendBillChatAssistantMessage', () => {
+  it('does not duplicate the same trailing assistant message', () => {
+    const messages = [{
+      data: {},
+      role: 'assistant',
+      text: 'Split ready.',
+    }]
 
-    expect(
-        appendBillChatEvent(
-          appendBillChatEvent(
-            appendBillChatEvent(history, {
-            message: 'Penny is warming up her little receipt engine.',
-            phase: 'queued',
-            type: 'status',
-          }),
-          {
-            message: 'Penny is reading the receipt.',
-            type: 'agent_progress',
-          },
-        ),
-        {
-          result: {
-            summary: 'Split ready.',
-          },
-          type: 'complete',
-        },
-      ),
-    ).toEqual([
+    expect(appendBillChatAssistantMessage(messages, 'Split ready.')).toEqual(messages)
+  })
+})
+
+describe('buildBillChatHistory', () => {
+  it('derives visible chat history from messages', () => {
+    expect(buildBillChatHistory([
+      {
+        data: {},
+        role: 'user',
+        text: 'Sarah had the dessert',
+      },
+      {
+        data: {},
+        role: 'assistant',
+        text: 'Split ready.',
+      },
+    ])).toEqual([
+      {
+        text: 'Sarah had the dessert',
+        who: 'user',
+      },
       {
         text: 'Split ready.',
         who: 'penny',
@@ -57,35 +57,10 @@ describe('appendBillChatEvent', () => {
     ])
   })
 
-  it('persists a plain Penny reply without duplicating the final summary', () => {
-    expect(
-      appendBillChatEvent(
-        appendBillChatEvent([], {
-          type: 'assistant_message',
-          message: 'Sarah covered the spritz, so the dessert stays shared.',
-        }),
-        {
-          result: {
-            summary: 'Sarah covered the spritz, so the dessert stays shared.',
-          },
-          type: 'complete',
-        },
-      ),
-    ).toEqual([
+  it('appends persisted errors as log entries', () => {
+    expect(buildBillChatHistory([], 'Penny could not continue the chat.')).toEqual([
       {
-        text: 'Sarah covered the spritz, so the dessert stays shared.',
-        who: 'penny',
-      },
-    ])
-  })
-
-  it('persists backend errors as log entries', () => {
-    expect(appendBillChatEvent([], {
-      type: 'error',
-      message: 'The Pi agent loop failed before the split finished.',
-    })).toEqual([
-      {
-        text: 'The Pi agent loop failed before the split finished.',
+        text: 'Penny could not continue the chat.',
         who: 'log',
       },
     ])

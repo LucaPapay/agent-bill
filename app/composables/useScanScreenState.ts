@@ -42,7 +42,6 @@ export function useScanScreenState(props: { chatId?: string }) {
   const previewUrl = ref('')
   const showCameraCapture = ref(false)
   const composerText = ref('')
-  const autoQuestionKey = ref('')
   const selectedGroupOverrideId = ref<any>(undefined)
   const localMessages = ref<any[]>([])
   const voiceMimeType = ref('')
@@ -137,21 +136,11 @@ export function useScanScreenState(props: { chatId?: string }) {
     !splitRows.value.length
     && (analysis.source.value === 'penny-message' || analysis.source.value === 'penny-question'),
   )
-  const shouldRequestGroupQuestion = computed(() =>
-    Boolean(
-      analysis.chatId.value
-      && parsedReceipt.value
-      && !selectedGroup.value
-      && !splitRows.value.length
-      && !awaitingPennyReply.value
-      && !isRunning.value
-      && availableGroups.value.length
-    ),
-  )
   const showGroupPickerPrompt = computed(() =>
     Boolean(
-      awaitingPennyReply.value
+      parsedReceipt.value
       && !selectedGroup.value
+      && !isRunning.value
       && availableGroups.value.length,
     ),
   )
@@ -252,7 +241,7 @@ export function useScanScreenState(props: { chatId?: string }) {
 
     if (!selectedGroup.value) {
       return parsedReceipt.value
-        ? 'Receipt parsed.'
+        ? 'Receipt parsed. Pick the group so Penny can finish the split.'
         : 'Ready for a receipt.'
     }
 
@@ -284,7 +273,7 @@ export function useScanScreenState(props: { chatId?: string }) {
     }
 
     if (!selectedGroup.value) {
-      return 'Reply in chat'
+      return parsedReceipt.value ? 'Type the group name' : 'Reply in chat'
     }
 
     if (isRunning.value) {
@@ -300,11 +289,9 @@ export function useScanScreenState(props: { chatId?: string }) {
     }
 
     if (parsedReceipt.value) {
-      return awaitingPennyReply.value
-        ? 'Reply to Penny'
-        : splitRows.value.length
+      return splitRows.value.length
         ? 'Tell Penny what to change about the split'
-        : 'Wait for Penny to draft the split'
+        : 'Pick the group or keep chatting'
     }
 
     if (hasSavedChat.value) {
@@ -583,7 +570,6 @@ export function useScanScreenState(props: { chatId?: string }) {
 
   function clearLocalState() {
     cancelVoiceInput()
-    autoQuestionKey.value = ''
     composerText.value = ''
     selectedGroupOverrideId.value = undefined
     localMessages.value = []
@@ -772,12 +758,6 @@ export function useScanScreenState(props: { chatId?: string }) {
   function clearGroup() {
     selectedGroupOverrideId.value = ''
 
-    if (parsedReceipt.value) {
-      autoQuestionKey.value = ''
-      void analysis.requestGroupQuestion()
-      return
-    }
-
     pushLocalMessage('assistant', 'Pick the group for this receipt.')
   }
 
@@ -821,28 +801,6 @@ export function useScanScreenState(props: { chatId?: string }) {
 
     await navigateTo(`/groups/${group.id}/bills/new`)
   }
-
-  watch(
-    [
-      () => analysis.chatId.value,
-      () => analysis.result.value?.runId,
-      () => shouldRequestGroupQuestion.value,
-    ],
-    () => {
-      if (!shouldRequestGroupQuestion.value) {
-        return
-      }
-
-      const questionKey = `${analysis.chatId.value}:${analysis.result.value?.runId || 'pending'}:group`
-
-      if (autoQuestionKey.value === questionKey) {
-        return
-      }
-
-      autoQuestionKey.value = questionKey
-      void analysis.requestGroupQuestion()
-    },
-  )
 
   watch(() => props.chatId, (nextChatId, previousChatId) => {
     const resolvedChatId = String(nextChatId || '').trim() || getPathChatId()

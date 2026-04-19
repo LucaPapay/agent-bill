@@ -16,14 +16,16 @@ describe('normalizePeople', () => {
 
 describe('normalizeSavedRunPayload', () => {
   it('drops null receipts from pending checkpoint rows', () => {
-    expect(normalizeSavedRunPayload({
+    const result = normalizeSavedRunPayload({
       chatId: 'chat-1',
       people: ['Jojo', 'Sarah'],
       receipt: null,
       split: [],
       summary: 'Penny is working on the receipt.',
       title: 'Dinner receipt',
-    })).toEqual({
+    })
+
+    expect(result).toMatchObject({
       billItems: [],
       chatId: 'chat-1',
       people: ['Jojo', 'Sarah'],
@@ -31,6 +33,9 @@ describe('normalizeSavedRunPayload', () => {
       summary: 'Penny is working on the receipt.',
       title: 'Dinner receipt',
     })
+    expect(result.receipt).toBeUndefined()
+    expect(result.messages).toEqual([])
+    expect(result.context.status).toBe('ready')
   })
 
   it('drops null raw receipts but keeps non-null ones', () => {
@@ -41,7 +46,7 @@ describe('normalizeSavedRunPayload', () => {
         totalCents: 1200,
       },
       title: 'Dinner receipt',
-    })).toEqual({
+    })).toMatchObject({
       billItems: [],
       chatId: 'chat-1',
       receipt: {
@@ -59,7 +64,7 @@ describe('normalizeSavedRunPayload', () => {
         totalCents: 1200,
       },
       title: 'Dinner receipt',
-    })).toEqual({
+    })).toMatchObject({
       billItems: [],
       chatId: 'chat-1',
       rawReceipt: {
@@ -70,6 +75,32 @@ describe('normalizeSavedRunPayload', () => {
       },
       title: 'Dinner receipt',
     })
+  })
+
+  it('keeps explicit log entries when history is rebuilt from messages', () => {
+    const result = normalizeSavedRunPayload({
+      history: [{
+        text: 'Penny could not continue the chat.',
+        who: 'log',
+      }],
+      messages: [{
+        data: {},
+        role: 'user',
+        text: 'Please try again',
+      }],
+      title: 'Dinner receipt',
+    })
+
+    expect(result.history).toEqual([
+      {
+        text: 'Please try again',
+        who: 'user',
+      },
+      {
+        text: 'Penny could not continue the chat.',
+        who: 'log',
+      },
+    ])
   })
 })
 

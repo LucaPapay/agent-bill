@@ -34,10 +34,6 @@ function tokenize(value: unknown) {
   )
 }
 
-function formatMoney(amountCents: number, currency = 'EUR') {
-  return `${currency} ${(amountCents / 100).toFixed(2)}`
-}
-
 function countOverlap(left: string[], right: string[]) {
   const rightSet = new Set(right)
 
@@ -274,34 +270,6 @@ function scoreCandidate(context: any, candidate: any) {
   }
 }
 
-function buildPreviousSplitHintText(matches: any[]) {
-  return matches
-    .slice(0, 3)
-    .map((match: any, index: number) => {
-      const itemNames = (match.billItems || [])
-        .slice(0, 6)
-        .map((item: any) => String(item?.name || '').trim())
-        .filter(Boolean)
-        .join(', ')
-      const splitSummary = (match.split || [])
-        .slice(0, 6)
-        .map((entry: any) => `${entry.person}: ${formatMoney(entry.amountCents || 0)}`)
-        .join(', ')
-      const reasons = Array.isArray(match.why) ? match.why.join(', ') : ''
-      const sourceLabel = match.source === 'ledger_bill' ? 'Saved bill' : 'Saved split chat'
-
-      return [
-        `${index + 1}. ${match.title || match.merchant || 'Untitled bill'}`,
-        `${sourceLabel}${match.groupName ? ` in ${match.groupName}` : ''}${match.billDate ? ` on ${match.billDate}` : ''}`,
-        match.people?.length ? `People: ${match.people.join(', ')}` : '',
-        itemNames ? `Items: ${itemNames}` : '',
-        splitSummary ? `Split: ${splitSummary}` : '',
-        reasons ? `Why it matches: ${reasons}` : '',
-      ].filter(Boolean).join('\n')
-    })
-    .join('\n\n')
-}
-
 export function rankPreviousSplitCandidates(candidates: any[], input: any) {
   const context = buildSearchContext(input)
 
@@ -393,51 +361,4 @@ export async function searchPreviousSplits({
       ? `Found ${matches.length} previous split${matches.length === 1 ? '' : 's'} that may help with this receipt.`
       : 'No relevant previous splits found.',
   }
-}
-
-export async function loadPreviousSplitHints({
-  chatId,
-  groupId,
-  onEvent,
-  people,
-  personId,
-  receipt,
-}: {
-  chatId?: string
-  groupId?: string
-  onEvent: (payload: any) => void
-  people: string[]
-  personId?: string
-  receipt: any
-}) {
-  if (!personId || !receipt || !String(groupId || '').trim()) {
-    return ''
-  }
-
-  await onEvent({
-    type: 'agent_progress',
-    message: 'Penny is checking what this group ate before.',
-    stage: 'memory',
-  })
-
-  const result = await searchPreviousSplits({
-    chatId,
-    groupId,
-    maxResults: 3,
-    people,
-    personId,
-    receipt,
-  })
-
-  if (!result.matches.length) {
-    return ''
-  }
-
-  await onEvent({
-    type: 'agent_progress',
-    message: result.summary,
-    stage: 'memory',
-  })
-
-  return buildPreviousSplitHintText(result.matches)
 }

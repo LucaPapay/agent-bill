@@ -33,10 +33,12 @@ export async function createBillChat({
 }
 
 export async function saveBillRun({
+  agentSessionFile,
   chatId,
   payload,
   personId,
 }: {
+  agentSessionFile?: string
   chatId: string
   payload: any
   personId: string
@@ -50,6 +52,7 @@ export async function saveBillRun({
     const updatedChats = await sql`
       update bill_chats
       set
+        agent_session_file = coalesce(${agentSessionFile || null}, agent_session_file),
         title = ${normalizedPayload.title},
         people = ${sql.json(normalizedPeople)},
         updated_at = now()
@@ -74,6 +77,37 @@ export async function saveBillRun({
   return {
     createdAt: insertedRow.created_at,
     id: insertedRow.id,
+  }
+}
+
+export async function getBillChatForAgent(personId: string, chatId: string) {
+  await ensureSchema()
+
+  const [row] = await db()`
+    select
+      chats.agent_session_file,
+      runs.id,
+      runs.created_at,
+      runs.payload
+    from bill_chats chats
+    join lateral (
+      select id, created_at, payload
+      from bill_runs
+      where chat_id = chats.id
+      order by created_at desc
+      limit 1
+    ) runs on true
+    where chats.id = ${chatId}
+      and chats.person_id = ${personId}
+  `
+
+  if (!row) {
+    throw new Error('Scan chat not found.')
+  }
+
+  return {
+    agentSessionFile: String(row.agent_session_file || '').trim(),
+    chat: withRunMetadata(row),
   }
 }
 

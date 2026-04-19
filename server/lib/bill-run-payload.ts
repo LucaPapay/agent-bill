@@ -1,3 +1,8 @@
+import {
+  buildBillChatHistory,
+  normalizeBillChatMessages,
+} from './bill-chat-history'
+
 function parseJsonValue(value: unknown) {
   if (typeof value !== 'string') {
     return value
@@ -10,6 +15,10 @@ function parseJsonValue(value: unknown) {
   return JSON.parse(value)
 }
 
+function normalizeText(value: unknown) {
+  return String(value || '').trim()
+}
+
 export function normalizePeople(value: unknown) {
   const parsedValue = parseJsonValue(value)
 
@@ -20,6 +29,106 @@ export function normalizePeople(value: unknown) {
   return parsedValue
     .map(entry => String(entry || '').trim())
     .filter(Boolean)
+}
+
+function normalizeMessages(value: unknown) {
+  const parsedValue = parseJsonValue(value)
+
+  return normalizeBillChatMessages(Array.isArray(parsedValue) ? parsedValue : [])
+}
+
+function buildMessagesFromHistory(history: any[]) {
+  if (!Array.isArray(history)) {
+    return []
+  }
+
+  return history
+    .map((entry: any) => {
+      const who = String(entry?.who || '').trim()
+      const text = normalizeText(entry?.text)
+
+      if (!text || (who !== 'penny' && who !== 'user')) {
+        return null
+      }
+
+      return {
+        data: {},
+        role: who === 'penny' ? 'assistant' : 'user',
+        text,
+      }
+    })
+    .filter(Boolean)
+}
+
+function normalizeHistory(value: unknown) {
+  const parsedValue = parseJsonValue(value)
+
+  if (!Array.isArray(parsedValue)) {
+    return []
+  }
+
+  return parsedValue
+    .map((entry: any) => {
+      const who = String(entry?.who || '').trim()
+      const text = normalizeText(entry?.text)
+
+      if (!text || (who !== 'log' && who !== 'penny' && who !== 'user')) {
+        return null
+      }
+
+      return {
+        text,
+        who,
+      }
+    })
+    .filter(Boolean)
+}
+
+function resolveContextStatus(source: unknown) {
+  const normalizedSource = normalizeText(source)
+
+  if (normalizedSource === 'penny-pending') {
+    return 'running'
+  }
+
+  if (
+    normalizedSource === 'penny-message'
+    || normalizedSource === 'penny-question'
+  ) {
+    return 'needs_input'
+  }
+
+  if (normalizedSource.endsWith('-error')) {
+    return 'error'
+  }
+
+  return 'ready'
+}
+
+function buildContext(payload: any) {
+  const receipt = payload.receipt && typeof payload.receipt === 'object'
+    ? payload.receipt
+    : undefined
+
+  return {
+    billDate: normalizeText(payload.billDate),
+    billItems: Array.isArray(payload.billItems) ? payload.billItems : [],
+    currency: normalizeText(payload.currency) || 'EUR',
+    groupId: normalizeText(payload.groupId) || undefined,
+    items: Array.isArray(payload.items) ? payload.items : Array.isArray(receipt?.items) ? receipt.items : [],
+    merchant: normalizeText(payload.merchant) || normalizeText(receipt?.merchant) || normalizeText(payload.title) || 'Untitled bill',
+    notes: Array.isArray(payload.notes) ? payload.notes : [],
+    people: normalizePeople(payload.people),
+    receipt,
+    source: normalizeText(payload.source),
+    split: Array.isArray(payload.split) ? payload.split : [],
+    status: resolveContextStatus(payload.source),
+    summary: normalizeText(payload.summary),
+    taxCents: Number(payload.taxCents || receipt?.taxCents || 0),
+    tipCents: Number(payload.tipCents || receipt?.tipCents || 0),
+    title: normalizeText(payload.title) || 'Untitled bill',
+    totalCents: Number(payload.totalCents || receipt?.totalCents || 0),
+  }
 }
 
 export function normalizeSavedRunPayload(value: unknown) {
@@ -73,11 +182,29 @@ export function normalizeSavedRunPayload(value: unknown) {
     delete normalizedPayload.rawReceipt
   }
 
-  if ((payload as any).receipt !== null) {
-    return normalizedPayload
+  if ((payload as any).receipt === null) {
+    delete normalizedPayload.receipt
   }
 
-  delete normalizedPayload.receipt
+  normalizedPayload.messages = normalizeMessages(normalizedPayload.messages)
+  const history = normalizeHistory(normalizedPayload.history)
+
+  if (!normalizedPayload.messages.length) {
+    normalizedPayload.messages = buildMessagesFromHistory(history)
+  }
+
+  normalizedPayload.history = [
+    ...buildBillChatHistory(normalizedPayload.messages),
+    ...history.filter((entry: any) => entry.who === 'log'),
+  ].slice(-120)
+
+  normalizedPayload.context = buildContext(normalizedPayload.context && typeof normalizedPayload.context === 'object'
+    ? {
+      ...normalizedPayload,
+      ...normalizedPayload.context,
+    }
+    : normalizedPayload)
+
   return normalizedPayload
 }
 

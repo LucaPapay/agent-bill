@@ -26,10 +26,16 @@ export async function createSchema(sql: any) {
       id text primary key,
       person_id text not null references people(id) on delete cascade,
       title text not null,
+      agent_session_file text,
       people jsonb not null default '[]'::jsonb,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     )
+  `
+
+  await sql`
+    alter table bill_chats
+    add column if not exists agent_session_file text
   `
 
   await sql`

@@ -152,6 +152,14 @@ export function buildScanTranscriptBlocks({
     })
   }
 
+  if (parsedReceipt && showGroupPickerPrompt && !pinnedBottomFeedEntry) {
+    blocks.push({
+      groups: buildGroupChoices(availableGroups),
+      id: 'group-picker-after-receipt',
+      kind: 'group-picker',
+    })
+  }
+
   if (canOpenBillComposer) {
     blocks.push({
       id: 'composer-cta',

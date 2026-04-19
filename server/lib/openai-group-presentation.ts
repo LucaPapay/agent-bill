@@ -2,7 +2,6 @@ import OpenAI from 'openai'
 import { z } from 'zod'
 import {
   pickSuggestedGroupBackgroundColor,
-  pickSuggestedGroupIcon,
 } from '../../shared/group-icons'
 
 let client: OpenAI | null = null
@@ -37,15 +36,6 @@ function openai() {
   }
 
   return client
-}
-
-function fallbackGroupPresentation(name: string) {
-  const icon = pickSuggestedGroupIcon(name)
-
-  return {
-    backgroundColor: pickSuggestedGroupBackgroundColor(name, icon),
-    icon,
-  }
 }
 
 function buildPrompt(name: string) {
@@ -89,8 +79,8 @@ async function requestGroupPresentation(name: string) {
 
 export async function generateGroupPresentation(name: string) {
   if (!process.env.OPENAI_API_KEY) {
-    return fallbackGroupPresentation(name)
+    throw new Error('OPENAI_API_KEY is required for group presentation generation.')
   }
 
-  return requestGroupPresentation(name).catch(() => fallbackGroupPresentation(name))
+  return await requestGroupPresentation(name)
 }

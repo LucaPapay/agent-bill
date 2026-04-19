@@ -3,8 +3,8 @@ import { consumeEventIterator } from '@orpc/client'
 let currentCancel: null | (() => Promise<void>) = null
 
 function isPendingResult(value: any) {
-  const source = String(value?.source || '').trim()
-  return source === 'penny-pending'
+  return String(value?.context?.status || '').trim() === 'running'
+    || String(value?.source || '').trim() === 'penny-pending'
 }
 
 function normalizeFeedEntry(entry: any) {
@@ -26,6 +26,10 @@ function trimFeed(feed: any[], entry: any) {
 }
 
 function resolveReceipt(value: any) {
+  if (value?.context?.receipt) {
+    return value.context.receipt
+  }
+
   if (value?.receipt) {
     return value.receipt
   }
@@ -35,14 +39,14 @@ function resolveReceipt(value: any) {
   }
 
   return {
-    billDate: String(value.billDate || ''),
-    currency: String(value.currency || 'EUR'),
-    items: Array.isArray(value.items) ? value.items : [],
-    merchant: String(value.merchant || ''),
-    notes: Array.isArray(value.notes) ? value.notes : [],
-    taxCents: Number(value.taxCents || 0),
-    tipCents: Number(value.tipCents || 0),
-    totalCents: Number(value.totalCents || 0),
+    billDate: String(value.context?.billDate || value.billDate || ''),
+    currency: String(value.context?.currency || value.currency || 'EUR'),
+    items: Array.isArray(value.context?.items) ? value.context.items : Array.isArray(value.items) ? value.items : [],
+    merchant: String(value.context?.merchant || value.merchant || ''),
+    notes: Array.isArray(value.context?.notes) ? value.context.notes : Array.isArray(value.notes) ? value.notes : [],
+    taxCents: Number(value.context?.taxCents || value.taxCents || 0),
+    tipCents: Number(value.context?.tipCents || value.tipCents || 0),
+    totalCents: Number(value.context?.totalCents || value.totalCents || 0),
   }
 }
 
@@ -60,6 +64,21 @@ function fileToBase64(file: File) {
   })
 }
 
+function buildSavedFeed(nextResult: any) {
+  if (Array.isArray(nextResult?.history) && nextResult.history.length) {
+    return nextResult.history.map((entry: any) => normalizeFeedEntry(entry))
+  }
+
+  if (!Array.isArray(nextResult?.messages)) {
+    return []
+  }
+
+  return nextResult.messages.map((entry: any) => normalizeFeedEntry({
+    text: entry.text,
+    who: entry.role === 'assistant' ? 'penny' : 'user',
+  }))
+}
+
 export function useBillAnalysisStream() {
   const chatId = useState('bill-analysis:chat-id', () => '')
   const error = useState('bill-analysis:error', () => '')
@@ -70,9 +89,11 @@ export function useBillAnalysisStream() {
   const result = useState<any>('bill-analysis:result', () => null)
   const status = useState('bill-analysis:status', () => 'idle')
   const parsedReceipt = computed(() => resolveReceipt(result.value || receipt.value))
-  const splitRows = computed(() => Array.isArray(result.value?.split) ? result.value.split : [])
-  const groupId = computed(() => String(result.value?.groupId || '').trim())
-  const source = computed(() => String(result.value?.source || '').trim())
+  const splitRows = computed(() =>
+    Array.isArray(result.value?.context?.split) ? result.value.context.split : Array.isArray(result.value?.split) ? result.value.split : [],
+  )
+  const groupId = computed(() => String(result.value?.context?.groupId || result.value?.groupId || '').trim())
+  const source = computed(() => String(result.value?.context?.source || result.value?.source || '').trim())
 
   function stop() {
     if (currentCancel) {
@@ -126,9 +147,7 @@ export function useBillAnalysisStream() {
   function applyResult(nextResult: any) {
     chatId.value = nextResult?.chatId || ''
     error.value = ''
-    feed.value = Array.isArray(nextResult?.history)
-      ? nextResult.history.map((entry: any) => normalizeFeedEntry(entry))
-      : []
+    feed.value = buildSavedFeed(nextResult)
     receipt.value = resolveReceipt(nextResult)
     result.value = nextResult
     status.value = isPendingResult(nextResult) ? 'agent' : 'complete'
@@ -172,11 +191,7 @@ export function useBillAnalysisStream() {
       return
     }
 
-    if (payload.type === 'agent_progress') {
-      return
-    }
-
-    if (payload.type === 'agent_text_delta') {
+    if (payload.type === 'agent_progress' || payload.type === 'agent_text_delta') {
       return
     }
 
@@ -210,6 +225,14 @@ export function useBillAnalysisStream() {
     }
   }
 
+  function buildChatContext(groupId = '', people: string[] = [], title = '') {
+    return {
+      groupId: String(groupId || '').trim() || undefined,
+      people,
+      title: String(title || '').trim() || undefined,
+    }
+  }
+
   async function loadChats() {
     recentChats.value = await useOrpc().listBillChats()
     return recentChats.value
@@ -235,13 +258,6 @@ export function useBillAnalysisStream() {
     return await useOrpc().getBillChat({ chatId: normalizedChatId }).then(
       (value: any) => {
         applyResult(value)
-
-        if (isPendingResult(value)) {
-          openStream(useOrpc().attachBillChatStream({
-            chatId: normalizedChatId,
-          }))
-        }
-
         return value
       },
       (loadError: any) => {
@@ -255,13 +271,46 @@ export function useBillAnalysisStream() {
     })
   }
 
-  async function start(input: any) {
-    reset()
-    status.value = 'starting'
+  async function sendMessages(messages: any[], context: any = {}, options: { resetChat?: boolean } = {}) {
+    if (!Array.isArray(messages) || !messages.length) {
+      return null
+    }
 
-    openStream(useOrpc().analyzeBillStream(input))
+    if (options.resetChat) {
+      reset()
+    }
+    else {
+      stop()
+      error.value = ''
+    }
+
+    status.value = 'starting'
+    openStream(useOrpc().chatStream({
+      chatId: options.resetChat ? undefined : chatId.value || undefined,
+      context,
+      messages,
+    }))
 
     return null
+  }
+
+  async function start(input: any) {
+    const data = {
+      groupId: String(input?.groupId || '').trim() || undefined,
+      imageBase64: String(input?.imageBase64 || '').trim() || undefined,
+      mimeType: String(input?.mimeType || '').trim() || undefined,
+      people: Array.isArray(input?.people) ? input.people : [],
+      rawText: String(input?.rawText || '').trim() || undefined,
+      title: String(input?.title || '').trim() || undefined,
+    }
+
+    return await sendMessages([{
+      data,
+      role: 'user',
+      text: String(input?.text || '').trim(),
+    }], buildChatContext(data.groupId, data.people, data.title), {
+      resetChat: true,
+    })
   }
 
   async function startFromFile({
@@ -276,40 +325,12 @@ export function useBillAnalysisStream() {
     people?: string[]
   }) {
     return await start({
-      groupId: String(groupId || '').trim() || undefined,
+      groupId,
       imageBase64: await fileToBase64(file),
       mimeType: file.type || 'image/jpeg',
       people,
       title,
     })
-  }
-
-  function openRevisionStream(
-    message: string,
-    people: string[] = [],
-    options: {
-      displayUserMessage?: string
-      groupId?: string
-      pushUserMessage?: boolean
-    } = {},
-  ) {
-    stop()
-    error.value = ''
-    status.value = 'starting'
-
-    if (options.pushUserMessage !== false) {
-      pushFeed('user', options.displayUserMessage || message)
-    }
-
-    openStream(useOrpc().reviseBillSplitStream({
-      chatId: chatId.value,
-      groupId: String(options.groupId || '').trim() || undefined,
-      message,
-      people,
-      userMessage: options.pushUserMessage === false
-        ? undefined
-        : String(options.displayUserMessage || message).trim() || undefined,
-    }))
   }
 
   async function revise(message: string, people: string[] = [], groupId = '') {
@@ -319,47 +340,39 @@ export function useBillAnalysisStream() {
       return null
     }
 
-    openRevisionStream(nextMessage, people, {
-      groupId,
-    })
+    pushFeed('user', nextMessage)
 
-    return null
-  }
-
-  async function requestGroupQuestion() {
-    if (!chatId.value || !resolveReceipt(result.value || receipt.value)) {
-      return null
-    }
-
-    openRevisionStream(
-      'Ask me which group this receipt belongs to before you create any split. Do not guess the group and do not create the split yet.',
-      [],
-      {
-        pushUserMessage: false,
+    await sendMessages([{
+      data: {
+        groupId: String(groupId || '').trim() || undefined,
+        people,
       },
-    )
+      role: 'user',
+      text: nextMessage,
+    }], buildChatContext(groupId, people))
 
     return null
   }
 
   async function confirmGroupSelection(groupName: string, people: string[] = [], displayUserMessage = '', groupId = '') {
     const normalizedGroupName = String(groupName || '').trim()
-    const participantSummary = people.length
-      ? `The participants are ${people.join(', ')}.`
-      : 'Use the participants from that group.'
 
     if (!normalizedGroupName || !chatId.value || !resolveReceipt(result.value || receipt.value)) {
       return null
     }
 
-    openRevisionStream(
-      `The selected group is "${normalizedGroupName}". ${participantSummary} Do not ask me to select the group again. Build the first split now using the parsed receipt and any relevant previous split hints. If the receipt is still too ambiguous after considering those hints, ask me one short concrete question in plain text.`,
-      people,
-      {
-        displayUserMessage: String(displayUserMessage || normalizedGroupName).trim() || normalizedGroupName,
-        groupId,
+    const nextMessage = String(displayUserMessage || normalizedGroupName).trim() || normalizedGroupName
+
+    pushFeed('user', nextMessage)
+
+    await sendMessages([{
+      data: {
+        groupId: String(groupId || '').trim() || undefined,
+        people,
       },
-    )
+      role: 'user',
+      text: nextMessage,
+    }], buildChatContext(groupId, people))
 
     return null
   }
@@ -379,7 +392,6 @@ export function useBillAnalysisStream() {
     result,
     confirmGroupSelection,
     revise,
-    requestGroupQuestion,
     source,
     splitRows,
     start,
