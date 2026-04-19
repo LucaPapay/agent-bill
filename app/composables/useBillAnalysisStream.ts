@@ -2,54 +2,6 @@ import { consumeEventIterator } from '@orpc/client'
 
 let currentCancel: null | (() => Promise<void>) = null
 
-function isPendingResult(value: any) {
-  return String(value?.context?.status || '').trim() === 'running'
-    || String(value?.source || '').trim() === 'penny-pending'
-}
-
-function normalizeFeedEntry(entry: any) {
-  const text = String(entry?.text || '').trim()
-  const toolName = String(entry?.toolName || '').trim()
-    || (/^Tool:\s*/.test(text) ? text.replace(/^Tool:\s*/, '').trim() : '')
-
-  return {
-    kind: toolName ? 'tool' : 'message',
-    text,
-    toolName,
-    toolState: toolName ? String(entry?.toolState || 'done') : '',
-    who: String(entry?.who || 'log'),
-  }
-}
-
-function trimFeed(feed: any[], entry: any) {
-  return [...feed, normalizeFeedEntry(entry)].slice(-120)
-}
-
-function resolveReceipt(value: any) {
-  if (value?.context?.receipt) {
-    return value.context.receipt
-  }
-
-  if (value?.receipt) {
-    return value.receipt
-  }
-
-  if (!value) {
-    return null
-  }
-
-  return {
-    billDate: String(value.context?.billDate || value.billDate || ''),
-    currency: String(value.context?.currency || value.currency || 'EUR'),
-    items: Array.isArray(value.context?.items) ? value.context.items : Array.isArray(value.items) ? value.items : [],
-    merchant: String(value.context?.merchant || value.merchant || ''),
-    notes: Array.isArray(value.context?.notes) ? value.context.notes : Array.isArray(value.notes) ? value.notes : [],
-    taxCents: Number(value.context?.taxCents || value.taxCents || 0),
-    tipCents: Number(value.context?.tipCents || value.tipCents || 0),
-    totalCents: Number(value.context?.totalCents || value.totalCents || 0),
-  }
-}
-
 function fileToBase64(file: File) {
   return new Promise<string>((resolve) => {
     const reader = new FileReader()
@@ -64,19 +16,33 @@ function fileToBase64(file: File) {
   })
 }
 
-function buildSavedFeed(nextResult: any) {
-  if (Array.isArray(nextResult?.history) && nextResult.history.length) {
-    return nextResult.history.map((entry: any) => normalizeFeedEntry(entry))
+function buildMessageEntry(message: any) {
+  const text = String(message?.text || '').trim()
+
+  if (!text) {
+    return null
   }
 
-  if (!Array.isArray(nextResult?.messages)) {
+  return {
+    kind: 'message',
+    text,
+    who: message?.role === 'assistant' ? 'penny' : 'user',
+  }
+}
+
+function buildFeed(result: any) {
+  if (!Array.isArray(result?.messages)) {
     return []
   }
 
-  return nextResult.messages.map((entry: any) => normalizeFeedEntry({
-    text: entry.text,
-    who: entry.role === 'assistant' ? 'penny' : 'user',
-  }))
+  return result.messages
+    .map(buildMessageEntry)
+    .filter(Boolean)
+    .slice(-120)
+}
+
+function isPendingResult(result: any) {
+  return String(result?.status || '').trim() === 'running'
 }
 
 export function useBillAnalysisStream() {
@@ -88,18 +54,17 @@ export function useBillAnalysisStream() {
   const recentChats = useState<any[]>('bill-analysis:recent-chats', () => [])
   const result = useState<any>('bill-analysis:result', () => null)
   const status = useState('bill-analysis:status', () => 'idle')
-  const parsedReceipt = computed(() => resolveReceipt(result.value || receipt.value))
-  const splitRows = computed(() =>
-    Array.isArray(result.value?.context?.split) ? result.value.context.split : Array.isArray(result.value?.split) ? result.value.split : [],
-  )
-  const groupId = computed(() => String(result.value?.context?.groupId || result.value?.groupId || '').trim())
-  const source = computed(() => String(result.value?.context?.source || result.value?.source || '').trim())
+  const parsedReceipt = computed(() => result.value?.receipt || receipt.value)
+  const splitRows = computed(() => Array.isArray(result.value?.split) ? result.value.split : [])
+  const groupId = computed(() => String(result.value?.groupId || '').trim())
 
   function stop() {
-    if (currentCancel) {
-      void currentCancel()
-      currentCancel = null
+    if (!currentCancel) {
+      return
     }
+
+    void currentCancel()
+    currentCancel = null
   }
 
   function clearCurrent() {
@@ -116,12 +81,22 @@ export function useBillAnalysisStream() {
     clearCurrent()
   }
 
-  function pushFeed(entryOrWho: any, text = '') {
-    const entry = typeof entryOrWho === 'string'
-      ? { text, who: entryOrWho }
-      : entryOrWho
+  function pushFeed(entry: any) {
+    feed.value = [...feed.value, entry].slice(-120)
+  }
 
-    feed.value = trimFeed(feed.value, entry)
+  function pushUserMessage(text: string) {
+    const normalizedText = String(text || '').trim()
+
+    if (!normalizedText) {
+      return
+    }
+
+    pushFeed({
+      kind: 'message',
+      text: normalizedText,
+      who: 'user',
+    })
   }
 
   function markToolFeed(toolName: string, isError: boolean) {
@@ -146,33 +121,17 @@ export function useBillAnalysisStream() {
 
   function applyResult(nextResult: any) {
     chatId.value = nextResult?.chatId || ''
-    error.value = ''
-    feed.value = buildSavedFeed(nextResult)
-    receipt.value = resolveReceipt(nextResult)
+    error.value = nextResult?.status === 'error'
+      ? String(nextResult?.summary || '').trim()
+      : ''
+    feed.value = buildFeed(nextResult)
+    receipt.value = nextResult?.receipt || null
     result.value = nextResult
-    status.value = isPendingResult(nextResult) ? 'agent' : 'complete'
-  }
-
-  function openStream(stream: any) {
-    stop()
-
-    currentCancel = consumeEventIterator(stream, {
-      onEvent: (event) => {
-        applyPayload(event)
-      },
-      onError: (streamError: any) => {
-        if (status.value === 'complete' || status.value === 'error') {
-          return
-        }
-
-        error.value = streamError?.message || 'The live analysis stream disconnected.'
-        status.value = 'error'
-        pushFeed('log', error.value)
-      },
-      onFinish: () => {
-        currentCancel = null
-      },
-    })
+    status.value = nextResult?.status === 'error'
+      ? 'error'
+      : isPendingResult(nextResult)
+        ? 'agent'
+        : 'complete'
   }
 
   function applyPayload(payload: any) {
@@ -191,16 +150,11 @@ export function useBillAnalysisStream() {
       return
     }
 
-    if (payload.type === 'agent_text_delta') {
-      return
-    }
-
     if (payload.type === 'agent_tool_start') {
       pushFeed({
-        text: `Tool: ${payload.toolName}`,
+        kind: 'tool',
         toolName: payload.toolName,
         toolState: 'running',
-        who: 'log',
       })
       return
     }
@@ -220,17 +174,37 @@ export function useBillAnalysisStream() {
     if (payload.type === 'error') {
       error.value = payload.message
       status.value = 'error'
-      pushFeed('log', payload.message)
+      pushFeed({
+        kind: 'message',
+        text: payload.message,
+        who: 'system',
+      })
       stop()
     }
   }
 
-  function buildChatContext(groupId = '', people: string[] = [], title = '') {
-    return {
-      groupId: String(groupId || '').trim() || undefined,
-      people,
-      title: String(title || '').trim() || undefined,
-    }
+  function openStream(stream: any) {
+    stop()
+
+    currentCancel = consumeEventIterator(stream, {
+      onEvent: applyPayload,
+      onError: (streamError: any) => {
+        if (status.value === 'complete' || status.value === 'error') {
+          return
+        }
+
+        error.value = streamError?.message || 'The live analysis stream disconnected.'
+        status.value = 'error'
+        pushFeed({
+          kind: 'message',
+          text: error.value,
+          who: 'system',
+        })
+      },
+      onFinish: () => {
+        currentCancel = null
+      },
+    })
   }
 
   async function loadChats() {
@@ -271,15 +245,14 @@ export function useBillAnalysisStream() {
     })
   }
 
-  async function sendMessages(messages: any[], context: any = {}, options: { resetChat?: boolean } = {}) {
-    if (!Array.isArray(messages) || !messages.length) {
+  async function sendMessages(nextMessages: any[], options: { resetChat?: boolean } = {}) {
+    if (!Array.isArray(nextMessages) || !nextMessages.length) {
       return null
     }
 
     if (options.resetChat) {
       reset()
-    }
-    else {
+    } else {
       stop()
       error.value = ''
     }
@@ -287,28 +260,27 @@ export function useBillAnalysisStream() {
     status.value = 'starting'
     openStream(useOrpc().chatStream({
       chatId: options.resetChat ? undefined : chatId.value || undefined,
-      context,
-      messages,
+      messages: nextMessages,
     }))
 
     return null
   }
 
   async function start(input: any) {
-    const data = {
-      groupId: String(input?.groupId || '').trim() || undefined,
-      imageBase64: String(input?.imageBase64 || '').trim() || undefined,
-      mimeType: String(input?.mimeType || '').trim() || undefined,
-      people: Array.isArray(input?.people) ? input.people : [],
-      rawText: String(input?.rawText || '').trim() || undefined,
-      title: String(input?.title || '').trim() || undefined,
-    }
-
-    return await sendMessages([{
-      data,
+    const message = {
+      data: {
+        groupId: String(input?.groupId || '').trim() || undefined,
+        imageBase64: String(input?.imageBase64 || '').trim() || undefined,
+        mimeType: String(input?.mimeType || '').trim() || undefined,
+        people: Array.isArray(input?.people) ? input.people : [],
+        rawText: String(input?.rawText || '').trim() || undefined,
+        title: String(input?.title || '').trim() || undefined,
+      },
       role: 'user',
       text: String(input?.text || '').trim(),
-    }], buildChatContext(data.groupId, data.people, data.title), {
+    }
+
+    return await sendMessages([message], {
       resetChat: true,
     })
   }
@@ -336,11 +308,11 @@ export function useBillAnalysisStream() {
   async function revise(message: string, people: string[] = [], groupId = '') {
     const nextMessage = String(message || '').trim()
 
-    if (!nextMessage || !chatId.value || !resolveReceipt(result.value || receipt.value)) {
+    if (!nextMessage || !chatId.value || !parsedReceipt.value) {
       return null
     }
 
-    pushFeed('user', nextMessage)
+    pushUserMessage(nextMessage)
 
     await sendMessages([{
       data: {
@@ -349,7 +321,7 @@ export function useBillAnalysisStream() {
       },
       role: 'user',
       text: nextMessage,
-    }], buildChatContext(groupId, people))
+    }])
 
     return null
   }
@@ -357,13 +329,12 @@ export function useBillAnalysisStream() {
   async function confirmGroupSelection(groupName: string, people: string[] = [], displayUserMessage = '', groupId = '') {
     const normalizedGroupName = String(groupName || '').trim()
 
-    if (!normalizedGroupName || !chatId.value || !resolveReceipt(result.value || receipt.value)) {
+    if (!normalizedGroupName || !chatId.value || !parsedReceipt.value) {
       return null
     }
 
     const nextMessage = String(displayUserMessage || normalizedGroupName).trim() || normalizedGroupName
-
-    pushFeed('user', nextMessage)
+    pushUserMessage(nextMessage)
 
     await sendMessages([{
       data: {
@@ -372,7 +343,7 @@ export function useBillAnalysisStream() {
       },
       role: 'user',
       text: nextMessage,
-    }], buildChatContext(groupId, people))
+    }])
 
     return null
   }
@@ -392,7 +363,6 @@ export function useBillAnalysisStream() {
     result,
     confirmGroupSelection,
     revise,
-    source,
     splitRows,
     start,
     startFromFile,

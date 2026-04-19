@@ -13,24 +13,10 @@ function normalizeWho(who: string) {
   return 'system'
 }
 
-function getToolName(entry: any) {
-  const directToolName = String(entry?.toolName || '').trim()
-
-  if (directToolName) {
-    return directToolName
-  }
-
-  const text = String(entry?.text || '').trim()
-
-  if (!/^Tool:\s*/.test(text)) {
-    return ''
-  }
-
-  return text.replace(/^Tool:\s*/, '').trim()
-}
-
 function buildMessageBlock(id: string, entry: any) {
-  const toolName = getToolName(entry)
+  const toolName = entry?.kind === 'tool'
+    ? String(entry?.toolName || '').trim()
+    : ''
 
   if (toolName) {
     return {

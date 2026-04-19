@@ -15,11 +15,17 @@ describe('normalizePeople', () => {
 })
 
 describe('normalizeSavedRunPayload', () => {
-  it('drops null receipts from pending checkpoint rows', () => {
+  it('returns the canonical top-level chat state', () => {
     const result = normalizeSavedRunPayload({
       chatId: 'chat-1',
+      messages: [{
+        data: {},
+        role: 'user',
+        text: 'Please retry the split',
+      }],
       people: ['Jojo', 'Sarah'],
       receipt: null,
+      source: 'penny-pending',
       split: [],
       summary: 'Penny is working on the receipt.',
       title: 'Dinner receipt',
@@ -28,84 +34,50 @@ describe('normalizeSavedRunPayload', () => {
     expect(result).toMatchObject({
       billItems: [],
       chatId: 'chat-1',
+      messages: [{
+        data: {},
+        role: 'user',
+        text: 'Please retry the split',
+      }],
       people: ['Jojo', 'Sarah'],
+      source: 'penny-pending',
       split: [],
+      status: 'running',
       summary: 'Penny is working on the receipt.',
       title: 'Dinner receipt',
     })
     expect(result.receipt).toBeUndefined()
-    expect(result.messages).toEqual([])
-    expect(result.context.status).toBe('ready')
   })
 
-  it('drops null raw receipts but keeps non-null ones', () => {
-    expect(normalizeSavedRunPayload({
-      chatId: 'chat-1',
-      rawReceipt: null,
-      receipt: {
-        totalCents: 1200,
-      },
-      title: 'Dinner receipt',
-    })).toMatchObject({
-      billItems: [],
-      chatId: 'chat-1',
-      receipt: {
-        totalCents: 1200,
-      },
-      title: 'Dinner receipt',
-    })
-
-    expect(normalizeSavedRunPayload({
-      chatId: 'chat-1',
-      rawReceipt: {
-        totalCents: 1300,
-      },
-      receipt: {
-        totalCents: 1200,
-      },
-      title: 'Dinner receipt',
-    })).toMatchObject({
-      billItems: [],
-      chatId: 'chat-1',
-      rawReceipt: {
-        totalCents: 1300,
-      },
-      receipt: {
-        totalCents: 1200,
-      },
-      title: 'Dinner receipt',
-    })
-  })
-
-  it('keeps explicit log entries when history is rebuilt from messages', () => {
+  it('still reads old context/history payloads without storing them back out', () => {
     const result = normalizeSavedRunPayload({
+      context: {
+        currency: 'USD',
+        groupId: 'group-1',
+        status: 'needs_input',
+      },
       history: [{
-        text: 'Penny could not continue the chat.',
-        who: 'log',
-      }],
-      messages: [{
-        data: {},
-        role: 'user',
-        text: 'Please try again',
+        text: 'Use the dinner group',
+        who: 'user',
       }],
       title: 'Dinner receipt',
     })
 
-    expect(result.history).toEqual([
-      {
-        text: 'Please try again',
-        who: 'user',
-      },
-      {
-        text: 'Penny could not continue the chat.',
-        who: 'log',
-      },
-    ])
+    expect(result.currency).toBe('USD')
+    expect(result.groupId).toBe('group-1')
+    expect(result.status).toBe('needs_input')
+    expect(result.messages).toEqual([{
+      data: {},
+      role: 'user',
+      text: 'Use the dinner group',
+    }])
+    expect('context' in result).toBe(false)
+    expect('history' in result).toBe(false)
   })
 })
 
 describe('withRunMetadata', () => {
-  it('returns schema-safe analysis results for persisted pending chats', () => {
+  it('returns schema-safe analysis results for persisted chats', () => {
     const result = withRunMetadata({
       created_at: '2026-04-18T12:14:32.000Z',
       id: 'run-1',
@@ -113,9 +85,9 @@ describe('withRunMetadata', () => {
         billDate: '',
         chatId: 'chat-1',
         currency: 'EUR',
-        history: [],
         items: [],
         merchant: 'Dinner receipt',
+        messages: [],
         notes: [],
         openai: {
           model: null,
@@ -129,6 +101,7 @@ describe('withRunMetadata', () => {
         receipt: null,
         source: 'penny-pending',
         split: [],
+        status: 'running',
         summary: 'Penny is working on the receipt.',
         taxCents: 0,
         tipCents: 0,
@@ -142,5 +115,6 @@ describe('withRunMetadata', () => {
     expect(result.runId).toBe('run-1')
     expect(result.savedAt).toBe('2026-04-18T12:14:32.000Z')
     expect(result.chatId).toBe('chat-1')
+    expect(result.status).toBe('running')
   })
 })

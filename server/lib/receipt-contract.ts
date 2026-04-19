@@ -78,15 +78,8 @@ export const billChatMessageInputSchema = z.object({
   text: z.string().default(''),
 })
 
-export const billChatInputContextSchema = z.object({
-  groupId: z.string().trim().optional(),
-  people: z.array(z.string().trim().min(1)).default([]),
-  title: z.string().trim().min(1).optional(),
-})
-
 export const billChatStreamInputSchema = z.object({
   chatId: z.string().trim().optional(),
-  context: billChatInputContextSchema.default({ people: [] }),
   messages: z.array(billChatMessageInputSchema).min(1).default([]),
 })
 
@@ -121,11 +114,6 @@ export const splitPlanSchema = z.object({
   summary: z.string(),
 })
 
-export const analysisHistoryEntrySchema = z.object({
-  text: z.string(),
-  who: z.enum(['log', 'penny', 'user']),
-})
-
 export const billChatMessageSchema = z.object({
   data: billChatMessageDataSchema.default({ people: [] }),
   role: z.enum(['assistant', 'user']),
@@ -137,34 +125,12 @@ const analysisEngineSchema = z.object({
   used: z.boolean(),
 })
 
-export const billChatContextSchema = z.object({
-  billDate: z.string(),
-  billItems: z.array(agentBillItemSchema),
-  currency: z.string(),
-  groupId: z.string().optional(),
-  items: extractedReceiptSchema.shape.items,
-  merchant: z.string(),
-  notes: z.array(z.string()),
-  people: z.array(z.string()),
-  receipt: extractedReceiptSchema.optional(),
-  source: z.string(),
-  split: z.array(splitEntrySchema),
-  status: z.enum(['error', 'needs_input', 'ready', 'running']),
-  summary: z.string(),
-  taxCents: z.number().int().nonnegative(),
-  tipCents: z.number().int().nonnegative(),
-  title: z.string(),
-  totalCents: z.number().int().nonnegative(),
-})
-
 export const analysisResultSchema = z.object({
   billDate: z.string(),
   billItems: z.array(agentBillItemSchema),
   chatId: z.string(),
-  context: billChatContextSchema,
   currency: z.string(),
   groupId: z.string().optional(),
-  history: z.array(analysisHistoryEntrySchema),
   items: extractedReceiptSchema.shape.items,
   merchant: z.string(),
   messages: z.array(billChatMessageSchema),
@@ -177,6 +143,7 @@ export const analysisResultSchema = z.object({
   savedAt: z.union([z.string(), z.date()]),
   source: z.string(),
   split: z.array(splitEntrySchema),
+  status: z.enum(['error', 'needs_input', 'ready', 'running']),
   summary: z.string(),
   taxCents: z.number().int().nonnegative(),
   tipCents: z.number().int().nonnegative(),
