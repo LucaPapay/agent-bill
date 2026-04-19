@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import {
   normalizePeople,
-  normalizeSavedRunPayload,
+  readSavedRunPayload,
   withRunMetadata,
 } from '../bill-run-payload'
 import { db, ensureSchema } from './client'
@@ -46,14 +46,17 @@ export async function saveBillRun({
   await ensureSchema()
 
   const id = randomUUID()
-  const normalizedPayload = normalizeSavedRunPayload(payload)
-  const normalizedPeople = normalizePeople(normalizedPayload.people)
+  const savedPayload = payload && typeof payload === 'object' && !Array.isArray(payload)
+    ? payload
+    : {}
+  const title = String(savedPayload.title || 'Untitled bill').trim() || 'Untitled bill'
+  const normalizedPeople = normalizePeople(savedPayload.people)
   const insertedRow = await db().begin(async (sql: any) => {
     const updatedChats = await sql`
       update bill_chats
       set
         agent_session_file = coalesce(${agentSessionFile || null}, agent_session_file),
-        title = ${normalizedPayload.title},
+        title = ${title},
         people = ${sql.json(normalizedPeople)},
         updated_at = now()
       where id = ${chatId}
@@ -67,7 +70,7 @@ export async function saveBillRun({
 
     const insertedRuns = await sql`
       insert into bill_runs (id, chat_id, person_id, title, payload)
-      values (${id}, ${chatId}, ${personId}, ${normalizedPayload.title}, ${sql.json(normalizedPayload)})
+      values (${id}, ${chatId}, ${personId}, ${title}, ${sql.json(savedPayload)})
       returning id, created_at
     `
 
@@ -162,7 +165,7 @@ export async function listBillChats(personId: string) {
   `
 
   return rows.map((row: any) => {
-    const payload = normalizeSavedRunPayload(row.payload)
+    const payload = readSavedRunPayload(row.payload)
 
     return {
       chatId: row.id,

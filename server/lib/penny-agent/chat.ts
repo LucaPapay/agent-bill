@@ -82,7 +82,7 @@ function buildRunPayload({
       used: false,
     },
     people,
-    penny: base?.penny || base?.pi || {
+    penny: base?.penny || {
       model: null,
       used: false,
     },

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   normalizePeople,
-  normalizeSavedRunPayload,
+  readSavedRunPayload,
   withRunMetadata,
 } from './bill-run-payload'
 
@@ -14,9 +14,9 @@ describe('normalizePeople', () => {
   })
 })
 
-describe('normalizeSavedRunPayload', () => {
+describe('readSavedRunPayload', () => {
   it('returns the canonical top-level chat state', () => {
-    const result = normalizeSavedRunPayload({
+    const result = readSavedRunPayload({
       chatId: 'chat-1',
       messages: [{
         data: {},
@@ -27,6 +27,7 @@ describe('normalizeSavedRunPayload', () => {
       receipt: null,
       source: 'penny-pending',
       split: [],
+      status: 'running',
       summary: 'Penny is working on the receipt.',
       title: 'Dinner receipt',
     })
@@ -49,8 +50,8 @@ describe('normalizeSavedRunPayload', () => {
     expect(result.receipt).toBeUndefined()
   })
 
-  it('does not rebuild messages from history', () => {
-    const result = normalizeSavedRunPayload({
+  it('ignores dropped legacy fallback fields', () => {
+    const result = readSavedRunPayload({
       context: {
         currency: 'USD',
         groupId: 'group-1',
@@ -63,11 +64,10 @@ describe('normalizeSavedRunPayload', () => {
       title: 'Dinner receipt',
     })
 
-    expect(result.currency).toBe('USD')
-    expect(result.groupId).toBe('group-1')
-    expect(result.status).toBe('needs_input')
+    expect(result.currency).toBe('EUR')
+    expect(result.groupId).toBeUndefined()
+    expect(result.status).toBe('ready')
     expect(result.messages).toEqual([])
-    expect('context' in result).toBe(false)
   })
 })
 

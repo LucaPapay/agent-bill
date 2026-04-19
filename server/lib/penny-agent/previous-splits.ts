@@ -1,5 +1,5 @@
 import { normalizeExtractedReceipt, normalizePeople } from '../bill-analysis'
-import { normalizeSavedRunPayload } from '../bill-run-payload'
+import { readSavedRunPayload } from '../bill-run-payload'
 import { getLedgerSnapshot } from '../db'
 import { db, ensureSchema } from '../db/client'
 
@@ -146,7 +146,7 @@ async function loadSavedChatCandidates(personId: string, excludeChatId = '') {
 
   return rows
     .map((row: any) => {
-      const payload = normalizeSavedRunPayload(row.payload)
+      const payload = readSavedRunPayload(row.payload)
       const split = Array.isArray(payload?.split)
         ? payload.split.map((entry: any) => ({
           amountCents: Number(entry?.amountCents || 0),

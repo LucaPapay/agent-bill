@@ -4,6 +4,10 @@ function normalizeText(value: unknown) {
   return String(value || '').trim()
 }
 
+function normalizeNumber(value: unknown) {
+  return Number(value || 0)
+}
+
 function asObject(value: any) {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value
@@ -20,167 +24,79 @@ export function normalizePeople(value: unknown) {
     .filter(Boolean)
 }
 
-function normalizeSource(value: unknown) {
-  const source = normalizeText(value)
+function normalizeEngine(value: any) {
+  const engine = asObject(value)
 
-  if (source === 'pi-agent-pending' || source === 'receipt-pending') {
-    return 'penny-pending'
+  if (!engine) {
+    return {
+      model: null,
+      used: false,
+    }
   }
 
-  if (source === 'pi-agent-question') {
-    return 'penny-question'
+  return {
+    model: normalizeText(engine.model) || null,
+    used: Boolean(engine.used),
   }
-
-  if (source === 'pi-agent-split') {
-    return 'penny-split'
-  }
-
-  if (source === 'pi-agent-revision') {
-    return 'penny-revision'
-  }
-
-  if (source === 'pi-agent-revision-error') {
-    return 'penny-revision-error'
-  }
-
-  if (source === 'openai-image+pi-agent') {
-    return 'openai-image+penny'
-  }
-
-  if (source === 'openai-text+pi-agent') {
-    return 'openai-text+penny'
-  }
-
-  return source
 }
 
-function normalizeStatus(status: unknown, source: string) {
-  const normalizedStatus = normalizeText(status)
+function normalizeStatus(value: unknown) {
+  const status = normalizeText(value)
 
   if (
-    normalizedStatus === 'error'
-    || normalizedStatus === 'needs_input'
-    || normalizedStatus === 'ready'
-    || normalizedStatus === 'running'
+    status === 'error'
+    || status === 'needs_input'
+    || status === 'ready'
+    || status === 'running'
   ) {
-    return normalizedStatus
-  }
-
-  if (source === 'penny-pending') {
-    return 'running'
-  }
-
-  if (source === 'penny-message' || source === 'penny-question') {
-    return 'needs_input'
-  }
-
-  if (source.endsWith('-error')) {
-    return 'error'
+    return status
   }
 
   return 'ready'
 }
 
-function buildMessages(payload: any) {
-  return normalizeBillChatMessages(payload?.messages)
-}
-
-export function normalizeSavedRunPayload(value: unknown) {
-  const payload: any = asObject(value)
-
-  if (!payload) {
-    return {
-      billDate: '',
-      billItems: [],
-      currency: 'EUR',
-      items: [],
-      merchant: '',
-      messages: [],
-      notes: [],
-      openai: { model: null, used: false },
-      people: [],
-      penny: { model: null, used: false },
-      source: '',
-      split: [],
-      status: 'ready',
-      summary: '',
-      taxCents: 0,
-      tipCents: 0,
-      title: 'Untitled bill',
-      totalCents: 0,
-    }
-  }
-
-  const context = asObject(payload.context) || {}
-  const receipt = asObject(payload.receipt) || asObject(context.receipt) || undefined
-  const source = normalizeSource(payload.source || context.source)
+export function readSavedRunPayload(value: unknown) {
+  const payload: any = asObject(value) || {}
+  const receipt = asObject(payload.receipt) || undefined
+  const title = normalizeText(payload.title || receipt?.merchant) || 'Untitled bill'
+  const merchant = normalizeText(payload.merchant || receipt?.merchant || title) || title
   const normalizedPayload: any = {
-    billDate: normalizeText(payload.billDate || context.billDate || receipt?.billDate),
-    billItems: Array.isArray(payload.billItems)
-      ? payload.billItems
-      : Array.isArray(context.billItems)
-        ? context.billItems
-        : [],
+    billDate: normalizeText(payload.billDate || receipt?.billDate),
+    billItems: Array.isArray(payload.billItems) ? payload.billItems : [],
     chatId: normalizeText(payload.chatId),
-    currency: normalizeText(payload.currency || context.currency || receipt?.currency) || 'EUR',
-    groupId: normalizeText(payload.groupId || context.groupId) || undefined,
+    currency: normalizeText(payload.currency || receipt?.currency) || 'EUR',
+    groupId: normalizeText(payload.groupId) || undefined,
     items: Array.isArray(payload.items)
       ? payload.items
-      : Array.isArray(context.items)
-        ? context.items
-        : Array.isArray(receipt?.items)
-          ? receipt.items
-          : [],
-    merchant: normalizeText(payload.merchant || context.merchant || receipt?.merchant || payload.title || context.title),
-    messages: buildMessages(payload),
+      : Array.isArray(receipt?.items)
+        ? receipt.items
+        : [],
+    merchant,
+    messages: normalizeBillChatMessages(payload.messages),
     notes: Array.isArray(payload.notes)
       ? payload.notes
-      : Array.isArray(context.notes)
-        ? context.notes
-        : Array.isArray(receipt?.notes)
-          ? receipt.notes
-          : [],
-    openai: payload.openai && typeof payload.openai === 'object' && !Array.isArray(payload.openai)
-      ? payload.openai
-      : {
-      model: null,
-      used: false,
-    },
-    people: normalizePeople(Array.isArray(payload.people) && payload.people.length ? payload.people : context.people),
-    penny: payload.penny && typeof payload.penny === 'object' && !Array.isArray(payload.penny)
-      ? payload.penny
-      : payload.pi && typeof payload.pi === 'object' && !Array.isArray(payload.pi)
-        ? payload.pi
-        : {
-      model: null,
-      used: false,
-    },
-    source,
-    split: Array.isArray(payload.split)
-      ? payload.split
-      : Array.isArray(context.split)
-        ? context.split
+      : Array.isArray(receipt?.notes)
+        ? receipt.notes
         : [],
-    status: normalizeStatus(payload.status || context.status, source),
-    summary: normalizeText(payload.summary || context.summary),
-    taxCents: Number(payload.taxCents || context.taxCents || receipt?.taxCents || 0),
-    tipCents: Number(payload.tipCents || context.tipCents || receipt?.tipCents || 0),
-    title: normalizeText(payload.title || context.title || receipt?.merchant) || 'Untitled bill',
-    totalCents: Number(payload.totalCents || context.totalCents || receipt?.totalCents || 0),
+    openai: normalizeEngine(payload.openai),
+    people: normalizePeople(payload.people),
+    penny: normalizeEngine(payload.penny),
+    source: normalizeText(payload.source),
+    split: Array.isArray(payload.split) ? payload.split : [],
+    status: normalizeStatus(payload.status),
+    summary: normalizeText(payload.summary),
+    taxCents: normalizeNumber(payload.taxCents || receipt?.taxCents),
+    tipCents: normalizeNumber(payload.tipCents || receipt?.tipCents),
+    title,
+    totalCents: normalizeNumber(payload.totalCents || receipt?.totalCents),
   }
 
-  if ((payload as any).rawReceipt === null) {
-    delete normalizedPayload.rawReceipt
-  } else if ((payload as any).rawReceipt || (context as any).rawReceipt) {
-    normalizedPayload.rawReceipt = (payload as any).rawReceipt || (context as any).rawReceipt
+  if (payload.rawReceipt !== null && payload.rawReceipt !== undefined) {
+    normalizedPayload.rawReceipt = payload.rawReceipt
   }
 
   if (receipt) {
     normalizedPayload.receipt = receipt
-  }
-
-  if (!normalizedPayload.merchant) {
-    normalizedPayload.merchant = normalizedPayload.title
   }
 
   return normalizedPayload
@@ -188,7 +104,7 @@ export function normalizeSavedRunPayload(value: unknown) {
 
 export function withRunMetadata(row: any) {
   return {
-    ...normalizeSavedRunPayload(row.payload),
+    ...readSavedRunPayload(row.payload),
     runId: row.id,
     savedAt: row.created_at,
   }
