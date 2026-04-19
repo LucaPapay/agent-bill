@@ -12,17 +12,6 @@ function buildGroupChoices(groups: any[]) {
   }))
 }
 
-function formatPreviewTotalLabel(receipt: any) {
-  if (!receipt) {
-    return ''
-  }
-
-  return new Intl.NumberFormat('en-US', {
-    currency: receipt.currency || 'EUR',
-    style: 'currency',
-  }).format((receipt.totalCents || 0) / 100)
-}
-
 export function useScanScreenState(props: { chatId?: string }) {
   const route = useRoute()
   const analysis = useBillAnalysisStream()
@@ -268,7 +257,6 @@ export function useScanScreenState(props: { chatId?: string }) {
     preview.clearInputs()
     preview.revokePreview()
     analysis.setGroupSelectMessage(null)
-    analysis.setPreviewMessage(null)
   }
 
   function resolveGroupFromMessage(message: string) {
@@ -503,31 +491,6 @@ export function useScanScreenState(props: { chatId?: string }) {
 
     void navigateTo(`/scan/${nextChatId}`, { replace: true })
   })
-
-  watch(() => [
-    preview.previewUrl.value,
-    parsedReceipt.value?.currency || '',
-    parsedReceipt.value?.totalCents || 0,
-    selectedGroup.value?.name || '',
-    analysis.status.value,
-  ], () => {
-    if (!preview.previewUrl.value) {
-      analysis.setPreviewMessage(null)
-      return
-    }
-
-    analysis.setPreviewMessage({
-      data: {
-        imageSrc: preview.previewUrl.value,
-        status: analysis.status.value,
-        title: selectedGroup.value?.name ? `${selectedGroup.value.name} receipt` : 'Receipt preview',
-        totalLabel: formatPreviewTotalLabel(parsedReceipt.value),
-      },
-      id: 'preview',
-      role: 'user',
-      text: '',
-    })
-  }, { immediate: true })
 
   watch(() => [
     showGroupPickerPrompt.value,

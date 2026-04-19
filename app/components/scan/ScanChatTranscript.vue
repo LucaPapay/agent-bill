@@ -33,7 +33,7 @@ watch(() => props.messages, scrollToBottom, { deep: true })
 <template>
   <div
     ref="scrollRef"
-    class="chat-stream scan-chat-stream"
+    class="chat-stream flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-5"
   >
     <template v-for="message in messages" :key="message.id || `${message.kind}-${message.text}`">
       <ScanChatMessageText

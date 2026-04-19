@@ -26,6 +26,17 @@ function normalizeMessageData(value: any) {
     : {}
 }
 
+function buildImageSrc(data: any) {
+  const imageBase64 = normalizeText(data?.imageBase64)
+
+  if (!imageBase64) {
+    return ''
+  }
+
+  const mimeType = normalizeText(data?.mimeType) || 'image/jpeg'
+  return `data:${mimeType};base64,${imageBase64}`
+}
+
 function createMessageId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -57,22 +68,39 @@ function normalizeKind(value: unknown) {
   return 'text'
 }
 
-function normalizeStoredMessage(message: any, index: number) {
+function normalizeStoredMessage(message: any, index: number, result?: any) {
   if (!message || typeof message !== 'object' || Array.isArray(message)) {
     return null
   }
 
   const role = normalizeRole(message.role)
-  const kind = normalizeKind(message.kind)
   const text = normalizeText(message.text)
   const data = normalizeMessageData(message.data)
+  const imageSrc = buildImageSrc(data)
+  const kind = imageSrc
+    ? 'preview'
+    : normalizeKind(message.kind)
 
   if (!text && !Object.keys(data).length) {
     return null
   }
 
   return {
-    data,
+    data: imageSrc
+      ? {
+        imageBase64: data.imageBase64,
+        imageSrc,
+        mimeType: data.mimeType,
+        status: normalizeText(result?.status),
+        title: normalizeText(data.title) || 'Receipt preview',
+        totalLabel: result?.receipt
+          ? new Intl.NumberFormat('en-US', {
+            currency: result.receipt.currency || 'EUR',
+            style: 'currency',
+          }).format((result.receipt.totalCents || 0) / 100)
+          : '',
+      }
+      : data,
     id: normalizeText(message.id) || `saved-${index}`,
     kind,
     role,
@@ -83,7 +111,7 @@ function normalizeStoredMessage(message: any, index: number) {
 function normalizeStoredMessages(result: any) {
   const messages = Array.isArray(result?.messages)
     ? result.messages
-      .map(normalizeStoredMessage)
+      .map((message: any, index: number) => normalizeStoredMessage(message, index, result))
       .filter(Boolean)
       .slice(-120)
     : []
@@ -162,7 +190,6 @@ export function useBillAnalysisStream() {
   const groupSelectMessage = useState<any>('bill-analysis:group-select-message', () => null)
   const loadingChat = useState('bill-analysis:loading-chat', () => false)
   const loadingMessage = useState<any>('bill-analysis:loading-message', () => null)
-  const previewMessage = useState<any>('bill-analysis:preview-message', () => null)
   const recentChats = useState<any[]>('bill-analysis:recent-chats', () => [])
   const receipt = useState<any>('bill-analysis:receipt', () => null)
   const receiptMessage = useState<any>('bill-analysis:receipt-message', () => null)
@@ -173,10 +200,6 @@ export function useBillAnalysisStream() {
   const groupId = computed(() => normalizeText(result.value?.groupId))
   const messages = computed(() => {
     const nextMessages = [...baseMessages.value]
-
-    if (previewMessage.value) {
-      nextMessages.push(previewMessage.value)
-    }
 
     if (receiptMessage.value) {
       nextMessages.push(receiptMessage.value)
@@ -220,7 +243,6 @@ export function useBillAnalysisStream() {
     error.value = ''
     groupSelectMessage.value = null
     loadingMessage.value = null
-    previewMessage.value = null
     receipt.value = null
     receiptMessage.value = null
     result.value = null
@@ -250,18 +272,6 @@ export function useBillAnalysisStream() {
       role: normalizeRole(role),
       text: normalizedText,
     })
-  }
-
-  function setPreviewMessage(entry: any) {
-    previewMessage.value = entry
-      ? {
-        data: normalizeMessageData(entry.data),
-        id: normalizeText(entry.id) || 'preview',
-        kind: 'preview',
-        role: normalizeRole(entry.role || 'user'),
-        text: normalizeText(entry.text),
-      }
-      : null
   }
 
   function setGroupSelectMessage(entry: any) {
@@ -449,11 +459,22 @@ export function useBillAnalysisStream() {
       return null
     }
 
+    const outgoingMessages = nextMessages
+      .map((message: any, index: number) => normalizeStoredMessage({
+        ...message,
+        id: message?.id || createMessageId(`outgoing-${index}`),
+      }, index))
+      .filter(Boolean)
+
     if (options.resetChat) {
       reset()
     } else {
       stop()
       error.value = ''
+    }
+
+    if (outgoingMessages.length) {
+      baseMessages.value = [...baseMessages.value, ...outgoingMessages].slice(-120)
     }
 
     status.value = 'starting'
@@ -512,8 +533,6 @@ export function useBillAnalysisStream() {
       return null
     }
 
-    appendLocalMessage('user', nextMessage)
-
     await sendMessages([{
       data: {
         groupId: normalizeText(groupId) || undefined,
@@ -534,7 +553,6 @@ export function useBillAnalysisStream() {
     }
 
     const nextMessage = normalizeText(displayUserMessage || normalizedGroupName) || normalizedGroupName
-    appendLocalMessage('user', nextMessage)
 
     await sendMessages([{
       data: {
@@ -565,7 +583,6 @@ export function useBillAnalysisStream() {
     result,
     revise,
     setGroupSelectMessage,
-    setPreviewMessage,
     splitRows,
     start,
     startFromFile,

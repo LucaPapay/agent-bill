@@ -94,85 +94,20 @@ const loadingText = computed(() => phraseList.value[phraseIndex.value] || phrase
 </script>
 
 <template>
-  <div class="penny-loader-row" role="status" aria-live="polite">
-    <div class="penny-loader-spinner" aria-hidden="true" />
+  <div class="flex items-center gap-2.5 px-1.5 py-1" role="status" aria-live="polite">
+    <div
+      class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[rgba(246,181,51,0.2)] border-t-[rgba(246,181,51,0.9)]"
+      aria-hidden="true"
+    />
 
-    <div class="penny-loader-text">
+    <div class="min-w-0 flex-1 text-sm leading-6 text-[rgba(246,240,228,0.82)]">
       {{ loadingText }}
     </div>
 
-    <div class="penny-loader-dots" aria-hidden="true">
-      <span />
-      <span />
-      <span />
+    <div class="flex items-center gap-1.5" aria-hidden="true">
+      <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-[rgba(246,181,51,0.45)]" />
+      <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-[rgba(246,181,51,0.45)] [animation-delay:150ms]" />
+      <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-[rgba(246,181,51,0.45)] [animation-delay:300ms]" />
     </div>
   </div>
 </template>
-
-<style scoped>
-.penny-loader-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  padding: 4px 2px 4px 6px;
-}
-
-.penny-loader-spinner {
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  flex-shrink: 0;
-  border: 2px solid rgba(246, 181, 51, 0.2);
-  border-top-color: rgba(246, 181, 51, 0.9);
-  animation: penny-loader-spin 0.8s linear infinite;
-}
-
-.penny-loader-text {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  line-height: 1.5;
-  color: rgba(246, 240, 228, 0.82);
-}
-
-.penny-loader-dots {
-  display: flex;
-  gap: 5px;
-  align-items: center;
-}
-
-.penny-loader-dots span {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(246, 181, 51, 0.45);
-  animation: penny-loader-pulse 0.9s ease-in-out infinite;
-}
-
-.penny-loader-dots span:nth-child(2) {
-  animation-delay: 0.15s;
-}
-
-.penny-loader-dots span:nth-child(3) {
-  animation-delay: 0.3s;
-}
-
-@keyframes penny-loader-pulse {
-  0%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.45;
-  }
-
-  50% {
-    transform: translateY(-2px);
-    opacity: 1;
-  }
-}
-
-@keyframes penny-loader-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>
