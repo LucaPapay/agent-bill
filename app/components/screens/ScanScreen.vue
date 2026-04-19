@@ -11,13 +11,6 @@ import { usePennyChat } from '../../composables/usePennyChat'
 import { useScanPreview } from '../../composables/useScanPreview'
 import { useScanVoiceInput } from '../../composables/useScanVoiceInput'
 
-const props = defineProps({
-  chatId: {
-    type: String,
-    default: '',
-  },
-})
-
 const route = useRoute()
 const ledger = useLedgerState()
 const chat = usePennyChat()
@@ -28,6 +21,7 @@ const selectedGroupOverrideId = ref('')
 const bodyRef = ref(null)
 const context = chat.context
 const messages = chat.messages
+const routeChatId = computed(() => normalizeText(route.params.chatId))
 const availableGroups = computed(() => ledger.ledger.value.groups || [])
 const parsedReceipt = computed(() => context.value?.receipt || null)
 const splitRows = computed(() => Array.isArray(context.value?.split) ? context.value.split : [])
@@ -117,6 +111,9 @@ const canOpenBillComposer = computed(() =>
 )
 const canContinueToBill = computed(() =>
   Boolean(canOpenSavedBill.value || canOpenBillComposer.value),
+)
+const showChatError = computed(() =>
+  context.value?.status === 'error' && context.value?.summary,
 )
 const showShellTitle = computed(() =>
   !context.value?.chatId
@@ -404,7 +401,7 @@ async function resetScan() {
   chat.reset()
   clearLocalState()
 
-  if (normalizeText(props.chatId)) {
+  if (routeChatId.value) {
     await navigateTo('/scan')
   }
 }
@@ -470,7 +467,7 @@ watch(() => [
   showCreateGroupsHint.value,
 ], scrollBodyToBottom)
 
-watch(() => normalizeText(props.chatId), async (nextChatId) => {
+watch(routeChatId, async (nextChatId) => {
   clearLocalState()
 
   if (!nextChatId) {
@@ -481,25 +478,28 @@ watch(() => normalizeText(props.chatId), async (nextChatId) => {
     return
   }
 
-  if (chat.chatId.value === nextChatId && normalizeText(context.value?.chatId) === nextChatId) {
-    return
-  }
-
-  await chat.loadChat(nextChatId)
-}, { immediate: true })
+  await chat.loadChat(nextChatId, { force: true })
+})
 
 watch(() => chat.chatId.value, (nextChatId) => {
-  if (!nextChatId || nextChatId === props.chatId) {
+  if (!nextChatId || nextChatId === routeChatId.value) {
     return
   }
 
   void navigateTo(`/scan/${nextChatId}`, { replace: true })
 })
 
-onMounted(() => {
+onMounted(async () => {
   void ledger.ensureLoaded()
   preview.setup()
   voice.setup()
+
+  const nextChatId = routeChatId.value
+
+  if (nextChatId) {
+    clearLocalState()
+    await chat.loadChat(nextChatId, { force: true })
+  }
 })
 
 onBeforeUnmount(() => {
@@ -542,6 +542,15 @@ onBeforeUnmount(() => {
             :preview-status="context.status || ''"
             :preview-total-label="receiptTotalLabel"
           />
+
+          <div
+            v-if="showChatError"
+            class="px-5 pb-4"
+          >
+            <div class="w-[min(100%,720px)] rounded-[22px] bg-[rgba(255,84,54,0.12)] px-4 py-3 text-sm leading-6 text-[#ffd2ca]">
+              {{ context.summary }}
+            </div>
+          </div>
 
           <div
             v-if="parsedReceipt"
