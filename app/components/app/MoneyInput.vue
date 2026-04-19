@@ -1,13 +1,8 @@
 <script setup lang="ts">
-import type { PropType, StyleValue } from 'vue'
 import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
   disabled: Boolean,
-  inputStyle: {
-    type: [String, Array, Object] as PropType<StyleValue>,
-    default: '',
-  },
   modelValue: {
     type: String,
     default: '',
@@ -106,7 +101,6 @@ function onBlur() {
     inputmode="decimal"
     :placeholder="placeholder"
     :disabled="disabled"
-    :style="inputStyle"
     @focus="onFocus"
     @input="onInput"
     @blur="onBlur"

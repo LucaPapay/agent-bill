@@ -42,58 +42,58 @@ function getMemberBalance(personId) {
   if (balanceCents < 0) {
     return {
       label: `owes ${props.formatCents(Math.abs(balanceCents))}`,
-      tone: 'var(--tomato)',
+      toneClass: 'text-tomato',
     }
   }
 
   if (balanceCents > 0) {
     return {
       label: `is owed ${props.formatCents(balanceCents)}`,
-      tone: 'var(--mint)',
+      toneClass: 'text-mint',
     }
   }
 
   return {
     label: 'settled',
-    tone: 'var(--muted)',
+    toneClass: 'text-muted',
   }
 }
 </script>
 
 <template>
-  <div style="display: grid; gap: 16px;">
-    <div class="surface-panel" style="padding: 18px;">
-      <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">
+  <div class="grid gap-4">
+    <div class="surface-panel p-[18px]">
+      <div class="section-label mb-2.5">
         Members
       </div>
-      <div v-if="group?.memberships?.length" style="display: grid; gap: 8px;">
+      <div v-if="group?.memberships?.length" class="grid gap-2">
         <div
           v-for="membership in group.memberships"
           :key="membership.id"
-          style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 16px; background: var(--paper);"
+          class="flex items-center justify-between gap-3 rounded-2xl bg-paper px-3 py-2.5"
         >
-          <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+          <div class="flex min-w-0 items-center gap-2.5">
             <AvatarBadge :name="membership.person.name" size="sm" />
-            <div style="font-size: 14px; font-weight: 600;">
+            <div class="text-sm font-semibold">
               {{ membership.person.name }}
             </div>
           </div>
 
           <div
-            class="mono"
-            :style="{ fontSize: '11px', color: getMemberBalance(membership.personId).tone, textAlign: 'right', flexShrink: 0 }"
+            class="mono shrink-0 text-right text-[11px]"
+            :class="getMemberBalance(membership.personId).toneClass"
           >
             {{ getMemberBalance(membership.personId).label }}
           </div>
         </div>
       </div>
-      <div v-else style="padding: 12px 14px; border-radius: 16px; background: var(--paper); font-size: 13px;">
+      <div v-else class="rounded-2xl bg-paper px-[14px] py-3 text-[13px]">
         Add people before creating itemized bills in this group.
       </div>
     </div>
 
-    <div class="surface-panel" style="padding: 18px;">
-      <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 10px;">
+    <div class="surface-panel p-[18px]">
+      <div class="section-label mb-2.5">
         Invite by email
       </div>
       <form @submit.prevent="emit('add-person')">
@@ -101,15 +101,15 @@ function getMemberBalance(personId) {
           :value="personToAddEmail"
           type="email"
           placeholder="name@example.com"
-          style="width: 100%; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
+          class="form-input"
           @input="emit('update:personToAddEmail', $event.target.value)"
         />
 
-        <div style="margin-top: 8px; font-size: 12px; color: var(--muted); line-height: 1.5;">
+        <div class="mt-2 text-xs leading-[1.5] text-muted">
           Enter the email address of an existing user. If no account matches that email, nothing gets added.
         </div>
 
-        <button class="btn btn-primary btn-block" style="margin-top: 12px;" :disabled="saving || !canAddPersonToGroup">
+        <button class="btn btn-primary btn-block mt-3" :disabled="saving || !canAddPersonToGroup">
           Add to group
         </button>
       </form>

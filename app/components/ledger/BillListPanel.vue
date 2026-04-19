@@ -34,40 +34,34 @@ defineProps({
 </script>
 
 <template>
-  <div class="surface-panel" style="padding: 18px;">
-    <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;">
-      <h3 class="h-ui" style="font-size: 18px; margin: 0;">
+  <div class="surface-panel p-[18px]">
+    <div class="flex flex-wrap items-baseline justify-between gap-3">
+      <h3 class="h-ui m-0 text-lg">
         Saved bills
       </h3>
-      <span class="mono" style="font-size: 11px; color: var(--muted);">
+      <span class="mono text-[11px] text-muted">
         {{ bills.length }} total
       </span>
     </div>
 
-    <div v-if="bills.length" style="display: grid; gap: 10px; margin-top: 14px;">
+    <div v-if="bills.length" class="mt-[14px] grid gap-2.5">
       <NuxtLink
         v-for="bill in bills"
         :key="bill.id"
         :to="`/groups/${groupId}/bills/${bill.id}`"
-        :style="{
-          padding: '12px 14px',
-          borderRadius: '18px',
-          background: bill.id === selectedBillId ? 'var(--ink)' : 'var(--paper)',
-          color: bill.id === selectedBillId ? 'var(--cream)' : 'var(--ink)',
-          textAlign: 'left',
-          textDecoration: 'none',
-        }"
+        class="rounded-[18px] px-[14px] py-3 text-left no-underline"
+        :class="bill.id === selectedBillId ? 'bg-ink text-cream' : 'bg-paper text-ink'"
       >
-        <div style="font-weight: 700; font-size: 14px;">
+        <div class="text-sm font-bold">
           {{ bill.title }}
         </div>
-        <div class="mono" style="font-size: 12px; margin-top: 4px; opacity: 0.7;">
+        <div class="mono mt-1 text-xs opacity-70">
           {{ formatBillDate(bill.billDate) || 'No date' }} · {{ formatCents(bill.totalAmountCents) }} · {{ bill.transfers.length }} bill transfers
         </div>
       </NuxtLink>
     </div>
 
-    <div v-else style="margin-top: 14px; padding: 12px 14px; border-radius: 16px; background: var(--paper); font-size: 13px;">
+    <div v-else class="mt-[14px] rounded-2xl bg-paper px-[14px] py-3 text-[13px]">
       No bills saved for this group yet.
     </div>
   </div>

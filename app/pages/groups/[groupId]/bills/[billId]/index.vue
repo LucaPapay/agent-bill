@@ -48,18 +48,18 @@ function removeBill() {
 
 <template>
   <PageShell>
-    <div class="screen" style="align-items: center; justify-content: flex-start; padding-top: 24px;">
-      <div v-if="group && bill" class="section-pad" style="width: 100%; padding-bottom: 92px;">
-        <div style="text-align: center; margin-bottom: 20px;">
+    <div class="screen items-center justify-start pt-6">
+      <div v-if="group && bill" class="section-pad w-full pb-[92px]">
+        <div class="mb-5 text-center">
           <span class="tape" style="background: var(--mint);">
             Bill detail
           </span>
         </div>
 
-        <div style="max-width: 960px; width: 100%; margin: 0 auto 12px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+        <div class="mx-auto mb-3 flex w-full max-w-[960px] flex-wrap justify-end gap-2">
           <NuxtLink
             class="chip chip-muted chip-action"
-            :style="{ textDecoration: 'none', opacity: canMutateBill ? 1 : 0.45, pointerEvents: canMutateBill ? 'auto' : 'none' }"
+            :class="canMutateBill ? 'pointer-events-auto opacity-100 no-underline' : 'pointer-events-none opacity-[0.45] no-underline'"
             :to="`/groups/${group.id}/bills/${bill.id}/edit`"
           >
             Edit bill
@@ -78,17 +78,17 @@ function removeBill() {
 
         <div
           v-if="!canMutateBill"
-          style="max-width: 960px; margin: 12px auto 0; padding: 12px 14px; border-radius: 16px; background: var(--paper); font-size: 13px; line-height: 1.45;"
+          class="mx-auto mt-3 max-w-[960px] rounded-2xl bg-paper px-[14px] py-3 text-[13px] leading-[1.45]"
         >
           Active settlement payments exist in this group, so editing and deleting this bill stay locked until those payments are undone.
         </div>
 
-        <div style="max-width: 1120px; width: 100%; margin: 18px auto 0; display: grid; gap: 14px;" class="profile-grid">
+        <div class="profile-grid mx-auto mt-[18px] grid w-full max-w-[1120px] gap-[14px]">
           <BillItemsPanel :bill="bill" :format-cents="formatCents" />
           <BillTransfersPanel :bill="bill" :format-cents="formatCents" />
         </div>
 
-        <div style="max-width: 960px; width: 100%; margin: 18px auto 0;">
+        <div class="mx-auto mt-[18px] w-full max-w-[960px]">
           <BillListPanel
             :bills="group.bills"
             :format-cents="formatCents"
@@ -98,12 +98,12 @@ function removeBill() {
         </div>
       </div>
 
-      <div v-else-if="ledgerLoaded" class="section-pad" style="width: 100%; padding-top: 24px;">
-        <div class="surface-panel" style="padding: 20px;">
-          <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
+      <div v-else-if="ledgerLoaded" class="section-pad w-full pt-6">
+        <div class="surface-panel p-5">
+          <div class="section-label">
             Bill not found
           </div>
-          <div style="font-size: 15px; line-height: 1.5; margin-top: 8px;">
+          <div class="mt-2 text-[15px] leading-[1.5]">
             This route does not match a saved bill in the selected group.
           </div>
         </div>

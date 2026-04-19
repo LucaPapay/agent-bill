@@ -28,35 +28,28 @@ const emit = defineEmits(['select'])
 
 <template>
   <button
-    style="background: var(--paper); border-radius: 18px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; border: 1px solid rgba(20,18,16,0.08); text-align: left; width: 100%;"
+    class="flex w-full items-center gap-3 rounded-[18px] border border-black/8 bg-paper px-[14px] py-3 text-left"
     @click="emit('select')"
   >
     <div
+      class="flex h-11 w-11 shrink-0 items-center justify-center rounded-[14px] text-[22px]"
       :style="{
-        width: '44px',
-        height: '44px',
-        borderRadius: '14px',
         background: accent,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '22px',
-        flexShrink: 0,
       }"
     >
       {{ emoji }}
     </div>
 
-    <div style="flex: 1; min-width: 0;">
-      <div style="font-weight: 700; font-size: 15px;">
+    <div class="min-w-0 flex-1">
+      <div class="text-[15px] font-bold">
         {{ title }}
       </div>
-      <div style="font-size: 12px; color: var(--muted); margin-top: 2px;">
+      <div class="mt-0.5 text-xs text-muted">
         {{ sub }}
       </div>
     </div>
 
-    <div class="mono" :style="{ fontWeight: 700, fontSize: '14px', color: owed ? 'var(--ink)' : 'var(--muted)' }">
+    <div class="mono text-[14px] font-bold" :class="owed ? 'text-ink' : 'text-muted'">
       {{ amount }}
     </div>
   </button>

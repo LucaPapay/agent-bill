@@ -99,12 +99,12 @@ function saveBill() {
     />
 
     <div v-else-if="ledgerLoaded" class="screen">
-      <div class="section-pad" style="padding-top: 24px;">
-        <div class="surface-panel" style="padding: 20px;">
-          <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
+      <div class="section-pad pt-6">
+        <div class="surface-panel p-5">
+          <div class="section-label">
             Group not found
           </div>
-          <div style="font-size: 15px; line-height: 1.5; margin-top: 8px;">
+          <div class="mt-2 text-[15px] leading-[1.5]">
             Pick a real group before opening the bill composer.
           </div>
         </div>

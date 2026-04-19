@@ -44,13 +44,13 @@ onMounted(() => {
 
 <template>
   <div class="screen">
-    <div class="section-pad" style="padding-top: 8px; padding-bottom: 16px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+    <div class="section-pad pb-4 pt-2">
+      <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 class="h-display" style="font-size: 42px; line-height: 1; margin: 0;">
+          <h1 class="h-display m-0 text-[42px] leading-none">
             Splits
           </h1>
-          <div class="mono" style="font-size: 11px; color: var(--muted); margin-top: 6px;">
+          <div class="mono mt-1.5 text-[11px] text-muted">
             {{ chats.length ? `${chats.length} saved split chats` : 'No saved split chats yet' }}
           </div>
         </div>
@@ -61,55 +61,54 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="section-pad" style="padding-bottom: 96px;">
-      <div v-if="loading" class="surface-panel" style="padding: 18px 20px;">
-        <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
+    <div class="section-pad pb-24">
+      <div v-if="loading" class="surface-panel px-5 py-[18px]">
+        <div class="section-label">
           Loading
         </div>
-        <div style="font-size: 15px; line-height: 1.5; margin-top: 8px;">
+        <div class="mt-2 text-[15px] leading-[1.5]">
           Fetching your saved split chats.
         </div>
       </div>
 
-      <div v-else-if="!chats.length" class="surface-panel" style="padding: 20px;">
-        <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
+      <div v-else-if="!chats.length" class="surface-panel p-5">
+        <div class="section-label">
           Empty
         </div>
-        <div style="font-size: 15px; line-height: 1.5; margin-top: 8px;">
+        <div class="mt-2 text-[15px] leading-[1.5]">
           Start a split from Scan. Once Penny finishes, that split chat will live here and reopening it will send you back to the scan screen.
         </div>
       </div>
 
-      <div v-else style="display: grid; gap: 12px;">
+      <div v-else class="grid gap-3">
         <button
           v-for="chat in chats"
           :key="chat.chatId"
-          class="surface-panel"
-          style="padding: 16px 18px; text-align: left; display: grid; gap: 10px;"
+          class="surface-panel grid gap-2.5 px-[18px] py-4 text-left"
           @click="openChat(chat.chatId)"
         >
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;">
-            <div style="min-width: 0;">
-              <div style="font-size: 17px; font-weight: 700; line-height: 1.2;">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="text-[17px] font-bold leading-[1.2]">
                 {{ chat.title }}
               </div>
-              <div style="font-size: 13px; color: var(--muted); line-height: 1.45; margin-top: 4px;">
+              <div class="mt-1 text-[13px] leading-[1.45] text-muted">
                 {{ chat.people.join(', ') || 'No people saved' }}
               </div>
             </div>
 
-            <div class="mono" style="font-size: 12px; color: var(--muted); white-space: nowrap;">
+            <div class="mono whitespace-nowrap text-xs text-muted">
               {{ formatUpdatedAt(chat.updatedAt) }}
             </div>
           </div>
 
-          <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
-            <div style="font-size: 13px; color: var(--muted); line-height: 1.45;">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="text-[13px] leading-[1.45] text-muted">
               {{ chat.summary || 'Open this saved split in Scan.' }}
             </div>
 
-            <div style="display: inline-flex; align-items: center; gap: 8px;">
-              <div class="mono" style="font-size: 13px; font-weight: 700;">
+            <div class="inline-flex items-center gap-2">
+              <div class="mono text-[13px] font-bold">
                 {{ formatMoney(chat.totalCents || 0) }}
               </div>
               <IconGlyph name="chevron" width="16" height="16" />

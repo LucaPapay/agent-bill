@@ -107,43 +107,33 @@ function formatItemSummary(item, formatCents) {
 
 <template>
   <div :class="embedded ? 'bill-composer' : 'screen bill-composer'">
-    <div v-if="selectedGroup" class="section-pad" style="padding-top: 24px; padding-bottom: 18px;">
+    <div v-if="selectedGroup" class="section-pad pb-[18px] pt-6">
       <div>
         <span class="tape">Manual ledger</span>
-        <h1 class="h-display" style="font-size: 36px; line-height: 1; margin: 8px 0 0;">
+        <h1 class="h-display mt-2 text-[36px] leading-none">
           {{ selectedGroup.name }}
         </h1>
-        <div class="mono" style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+        <div class="mono mt-1 text-[11px] text-muted">
           {{ selectedGroup.memberships.length }} PEOPLE · {{ selectedGroup.bills.length }} SAVED BILLS
         </div>
       </div>
     </div>
 
-    <div v-if="selectedGroup" class="section-pad assign-layout" style="padding-bottom: 96px;">
+    <div v-if="selectedGroup" class="section-pad assign-layout pb-24">
       <div class="bill-composer-summary-rail">
         <div class="assign-summary-stack">
-          <div class="surface-panel" style="padding: 12px;">
-            <div style="display: flex; gap: 8px; justify-content: space-between;">
+          <div class="surface-panel p-3">
+            <div class="flex justify-between gap-2">
               <div
                 v-for="share in billPreviewShares"
                 :key="share.personId"
-                :style="{
-                  flex: 1,
-                  background: 'var(--paper)',
-                  borderRadius: '16px',
-                  padding: '10px 6px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '4px',
-                  border: '1px solid rgba(20,18,16,0.1)',
-                }"
+                class="flex flex-1 flex-col items-center gap-1 rounded-2xl border border-black/10 bg-paper px-1.5 py-2.5"
               >
                 <AvatarBadge :name="share.person.name" />
-                <div style="font-size: 11px; font-weight: 600; text-align: center;">
+                <div class="text-center text-[11px] font-semibold">
                   {{ share.person.name }}
                 </div>
-                <div class="mono" style="font-size: 12px; font-weight: 700;">
+                <div class="mono text-xs font-bold">
                   {{ formatCents(share.totalAmountCents) }}
                 </div>
               </div>
@@ -168,41 +158,41 @@ function formatItemSummary(item, formatCents) {
       </div>
 
       <div v-if="errorMessage || selectedBill" class="assign-sidebar">
-        <div v-if="errorMessage" style="padding: 12px 14px; border-radius: 16px; background: #fff0ec; color: #7d2f21; border: 1px solid rgba(255,84,54,0.2); font-size: 13px;">
+        <div v-if="errorMessage" class="callout-error">
           {{ errorMessage }}
         </div>
 
       </div>
 
       <div class="assign-items-card">
-        <div class="surface-panel" style="padding: 16px 16px 18px;">
-          <div style="display: grid; gap: 12px; margin-bottom: 16px;" class="profile-grid">
-            <label style="display: grid; gap: 6px;">
-              <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Bill title</span>
+        <div class="surface-panel px-4 pb-[18px] pt-4">
+          <div class="profile-grid mb-4 grid gap-3">
+            <label class="grid gap-1.5">
+              <span class="field-label">Bill title</span>
               <input
                 :value="billTitle"
                 type="text"
                 placeholder="Friday dinner"
-                style="width: 100%; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
+                class="form-input"
                 @input="emit('update:bill-title', $event.target.value)"
               >
             </label>
 
-            <label style="display: grid; gap: 6px;">
-              <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Date</span>
+            <label class="grid gap-1.5">
+              <span class="field-label">Date</span>
               <input
                 :value="billDate"
                 type="date"
-                style="width: 100%; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
+                class="form-input"
                 @input="emit('update:bill-date', $event.target.value)"
               >
             </label>
 
-            <label style="display: grid; gap: 6px;">
-              <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Paid by</span>
+            <label class="grid gap-1.5">
+              <span class="field-label">Paid by</span>
               <select
                 :value="billPaidByPersonId"
-                style="width: 100%; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
+                class="form-input"
                 @change="emit('update:bill-paid-by-person-id', $event.target.value)"
               >
                 <option value="">
@@ -218,22 +208,22 @@ function formatItemSummary(item, formatCents) {
               </select>
             </label>
 
-            <label style="display: grid; gap: 6px;">
-              <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Total</span>
+            <label class="grid gap-1.5">
+              <span class="field-label">Total</span>
               <MoneyInput
+                class="form-input"
                 :model-value="billTotal"
                 placeholder="43,00€"
-                :input-style="{ width: '100%', border: '1.5px solid rgba(20,18,16,0.12)', borderRadius: '16px', background: 'var(--paper)', padding: '12px 14px', outline: 'none' }"
                 @update:model-value="emit('update:bill-total', $event)"
               />
             </label>
 
-            <label style="display: grid; gap: 6px;">
-              <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Tip</span>
+            <label class="grid gap-1.5">
+              <span class="field-label">Tip</span>
               <MoneyInput
+                class="form-input"
                 :model-value="billTip"
                 placeholder="4,00€"
-                :input-style="{ width: '100%', border: '1.5px solid rgba(20,18,16,0.12)', borderRadius: '16px', background: 'var(--paper)', padding: '12px 14px', outline: 'none' }"
                 @update:model-value="emit('update:bill-tip', $event)"
               />
             </label>
@@ -241,10 +231,10 @@ function formatItemSummary(item, formatCents) {
 
           <div class="receipt-items-header">
             <div class="receipt-items-copy">
-              <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
+              <div class="section-label">
                 Receipt items
               </div>
-              <div v-if="editingItems" style="font-size: 14px; line-height: 1.45; margin-top: 4px;">
+              <div v-if="editingItems" class="mt-1 text-sm leading-[1.45]">
                 Fix the parsed item names or amounts here. Assignments stay in walkthrough mode so the list still fits on mobile.
               </div>
             </div>
@@ -252,16 +242,14 @@ function formatItemSummary(item, formatCents) {
             <div class="receipt-items-actions">
               <button
                 v-if="editingItems"
-                class="btn btn-primary"
-                style="padding: 10px 16px;"
+                class="btn btn-primary btn-sm"
                 @click="emit('add-item')"
               >
                 Add item
               </button>
               <button
                 class="btn"
-                :class="editingItems ? 'btn-accent' : 'btn-ghost'"
-                style="padding: 10px 16px;"
+                :class="['btn-sm', editingItems ? 'btn-accent' : 'btn-ghost']"
                 @click="editingItems = !editingItems"
               >
                 {{ editingItems ? 'Done editing items' : 'Edit items' }}
@@ -269,41 +257,39 @@ function formatItemSummary(item, formatCents) {
             </div>
           </div>
 
-          <div v-if="editingItems" style="display: grid; gap: 10px;">
+          <div v-if="editingItems" class="grid gap-2.5">
             <div
               v-for="item in billItems"
               :key="`${item.id}:edit`"
-              class="surface-panel"
-              style="padding: 14px;"
+              class="surface-panel p-[14px]"
             >
               <div class="composer-edit-row">
-                <label style="display: grid; gap: 6px;">
-                  <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Item</span>
+                <label class="grid gap-1.5">
+                  <span class="field-label">Item</span>
                   <input
                     :value="item.name"
                     type="text"
                     placeholder="Margherita pizza"
-                    style="width: 100%; border: 1.5px solid rgba(20,18,16,0.12); border-radius: 16px; background: var(--paper); padding: 12px 14px; outline: none;"
+                    class="form-input"
                     @input="emit('update:item-name', item.id, $event.target.value)"
                   >
                 </label>
 
-                <label style="display: grid; gap: 6px;">
-                  <span class="mono" style="font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">Price</span>
+                <label class="grid gap-1.5">
+                  <span class="field-label">Price</span>
                   <MoneyInput
+                    class="form-input"
                     :model-value="item.amount"
                     allow-empty
                     placeholder="12,50€"
-                    :input-style="{ width: '100%', border: '1.5px solid rgba(20,18,16,0.12)', borderRadius: '16px', background: 'var(--paper)', padding: '12px 14px', outline: 'none' }"
                     @update:model-value="emit('update:item-amount', item.id, $event)"
                   />
                 </label>
               </div>
 
-              <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
+              <div class="mt-3 flex justify-end">
                 <button
-                  class="btn btn-ghost"
-                  style="padding: 10px 14px;"
+                  class="btn btn-ghost px-[14px] py-2.5 text-[13px]"
                   @click="emit('remove-item', item.id)"
                 >
                   Remove item
@@ -312,19 +298,19 @@ function formatItemSummary(item, formatCents) {
             </div>
           </div>
 
-          <div v-else style="display: grid; gap: 12px;">
+          <div v-else class="grid gap-3">
             <div
               v-for="item in billItems"
               :key="`${item.id}:walkthrough`"
-              style="padding: 10px 14px 14px; border-radius: 18px; background: var(--paper);"
+              class="rounded-[18px] bg-paper px-[14px] pb-[14px] pt-2.5"
             >
-              <div style="font-size: 16px; font-weight: 700;">
+              <div class="text-base font-bold">
                 {{ item.name || 'Untitled item' }}
               </div>
-              <div style="font-size: 13px; color: var(--muted); margin-top: 2px;">
+              <div class="mt-0.5 text-[13px] text-muted">
                 {{ formatItemSummary(item, formatCents) }}
               </div>
-              <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px;">
+              <div class="mt-2.5 flex flex-wrap gap-1.5">
                 <button
                   v-for="membership in selectedGroup.memberships"
                   :key="`${item.id}:walkthrough:${membership.personId}`"
@@ -344,12 +330,12 @@ function formatItemSummary(item, formatCents) {
       </div>
     </div>
 
-    <div v-else class="section-pad" style="padding-top: 24px;">
-      <div class="surface-panel" style="padding: 20px;">
-        <div class="mono" style="font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em;">
+    <div v-else class="section-pad pt-6">
+      <div class="surface-panel p-5">
+        <div class="section-label">
           No group selected
         </div>
-        <div style="font-size: 15px; line-height: 1.5; margin-top: 8px;">
+        <div class="mt-2 text-[15px] leading-[1.5]">
           Pick a group before opening the bill composer.
         </div>
       </div>
