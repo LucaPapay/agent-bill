@@ -2,7 +2,7 @@ function normalizeText(value: unknown) {
   return String(value || '').trim()
 }
 
-function normalizeMessageData(data: any, stripLargeFields = false) {
+function normalizeMessageData(data: any) {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     return {}
   }
@@ -21,7 +21,7 @@ function normalizeMessageData(data: any, stripLargeFields = false) {
     normalizedData.groupId = groupId
   }
 
-  if (imageBase64 && !stripLargeFields) {
+  if (imageBase64) {
     normalizedData.imageBase64 = imageBase64
   }
 
@@ -33,7 +33,7 @@ function normalizeMessageData(data: any, stripLargeFields = false) {
     normalizedData.people = people
   }
 
-  if (rawText && !stripLargeFields) {
+  if (rawText) {
     normalizedData.rawText = rawText
   }
 
@@ -44,14 +44,14 @@ function normalizeMessageData(data: any, stripLargeFields = false) {
   return normalizedData
 }
 
-function normalizeChatMessage(message: any, stripLargeFields = false) {
+function normalizeChatMessage(message: any) {
   if (!message || typeof message !== 'object' || Array.isArray(message)) {
     return null
   }
 
   const role = String(message.role || 'user').trim()
   const text = normalizeText(message.text)
-  const data = normalizeMessageData(message.data, stripLargeFields)
+  const data = normalizeMessageData(message.data)
 
   if ((role !== 'assistant' && role !== 'user') || (!text && !Object.keys(data).length)) {
     return null
@@ -64,38 +64,22 @@ function normalizeChatMessage(message: any, stripLargeFields = false) {
   }
 }
 
-function pushHistoryEntry(history: any[], who: 'log' | 'penny' | 'user', text: unknown) {
-  const normalizedText = normalizeText(text)
-
-  if (!normalizedText) {
-    return history
-  }
-
-  return [
-    ...history,
-    {
-      text: normalizedText,
-      who,
-    },
-  ].slice(-120)
-}
-
-export function normalizeBillChatMessages(messages: any[], stripLargeFields = false) {
+export function normalizeBillChatMessages(messages: any[]) {
   if (!Array.isArray(messages)) {
     return []
   }
 
   return messages
-    .map(message => normalizeChatMessage(message, stripLargeFields))
+    .map(normalizeChatMessage)
     .filter(Boolean)
     .slice(-120)
 }
 
-export function appendBillChatMessages(existingMessages: any[], nextMessages: any[], stripLargeFields = false) {
+export function appendBillChatMessages(existingMessages: any[], nextMessages: any[]) {
   return normalizeBillChatMessages([
-    ...normalizeBillChatMessages(existingMessages, stripLargeFields),
-    ...normalizeBillChatMessages(nextMessages, stripLargeFields),
-  ], stripLargeFields)
+    ...normalizeBillChatMessages(existingMessages),
+    ...normalizeBillChatMessages(nextMessages),
+  ])
 }
 
 export function appendBillChatAssistantMessage(messages: any[], text: string) {
@@ -115,25 +99,4 @@ export function appendBillChatAssistantMessage(messages: any[], text: string) {
     role: 'assistant',
     text: normalizedText,
   }])
-}
-
-export function buildBillChatHistory(messages: any[], errorMessage = '') {
-  const normalizedMessages = normalizeBillChatMessages(messages)
-  let history = normalizedMessages.reduce((nextHistory, message: any) => {
-    if (!message.text) {
-      return nextHistory
-    }
-
-    return pushHistoryEntry(
-      nextHistory,
-      message.role === 'assistant' ? 'penny' : 'user',
-      message.text,
-    )
-  }, [] as any[])
-
-  if (errorMessage) {
-    history = pushHistoryEntry(history, 'log', errorMessage)
-  }
-
-  return history
 }

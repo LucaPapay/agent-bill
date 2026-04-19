@@ -1,14 +1,7 @@
-import {
-  buildBillChatHistory,
-  normalizeBillChatMessages,
-} from './bill-chat-history'
+import { normalizeBillChatMessages } from './bill-chat-history'
 
 function parseJsonValue(value: unknown) {
-  if (typeof value !== 'string') {
-    return value
-  }
-
-  if (!value) {
+  if (typeof value !== 'string' || !value) {
     return value
   }
 
@@ -27,108 +20,98 @@ export function normalizePeople(value: unknown) {
   }
 
   return parsedValue
-    .map(entry => String(entry || '').trim())
+    .map(entry => normalizeText(entry))
     .filter(Boolean)
 }
 
-function normalizeMessages(value: unknown) {
-  const parsedValue = parseJsonValue(value)
+function normalizeSource(value: unknown) {
+  const source = normalizeText(value)
 
-  return normalizeBillChatMessages(Array.isArray(parsedValue) ? parsedValue : [])
-}
-
-function buildMessagesFromHistory(history: any[]) {
-  if (!Array.isArray(history)) {
-    return []
+  if (source === 'pi-agent-pending' || source === 'receipt-pending') {
+    return 'penny-pending'
   }
 
-  return history
-    .map((entry: any) => {
-      const who = String(entry?.who || '').trim()
-      const text = normalizeText(entry?.text)
-
-      if (!text || (who !== 'penny' && who !== 'user')) {
-        return null
-      }
-
-      return {
-        data: {},
-        role: who === 'penny' ? 'assistant' : 'user',
-        text,
-      }
-    })
-    .filter(Boolean)
-}
-
-function normalizeHistory(value: unknown) {
-  const parsedValue = parseJsonValue(value)
-
-  if (!Array.isArray(parsedValue)) {
-    return []
+  if (source === 'pi-agent-question') {
+    return 'penny-question'
   }
 
-  return parsedValue
-    .map((entry: any) => {
-      const who = String(entry?.who || '').trim()
-      const text = normalizeText(entry?.text)
+  if (source === 'pi-agent-split') {
+    return 'penny-split'
+  }
 
-      if (!text || (who !== 'log' && who !== 'penny' && who !== 'user')) {
-        return null
-      }
+  if (source === 'pi-agent-revision') {
+    return 'penny-revision'
+  }
 
-      return {
-        text,
-        who,
-      }
-    })
-    .filter(Boolean)
+  if (source === 'pi-agent-revision-error') {
+    return 'penny-revision-error'
+  }
+
+  if (source === 'openai-image+pi-agent') {
+    return 'openai-image+penny'
+  }
+
+  if (source === 'openai-text+pi-agent') {
+    return 'openai-text+penny'
+  }
+
+  return source
 }
 
-function resolveContextStatus(source: unknown) {
-  const normalizedSource = normalizeText(source)
+function normalizeStatus(status: unknown, source: string) {
+  const normalizedStatus = normalizeText(status)
 
-  if (normalizedSource === 'penny-pending') {
+  if (
+    normalizedStatus === 'error'
+    || normalizedStatus === 'needs_input'
+    || normalizedStatus === 'ready'
+    || normalizedStatus === 'running'
+  ) {
+    return normalizedStatus
+  }
+
+  if (source === 'penny-pending') {
     return 'running'
   }
 
-  if (
-    normalizedSource === 'penny-message'
-    || normalizedSource === 'penny-question'
-  ) {
+  if (source === 'penny-message' || source === 'penny-question') {
     return 'needs_input'
   }
 
-  if (normalizedSource.endsWith('-error')) {
+  if (source.endsWith('-error')) {
     return 'error'
   }
 
   return 'ready'
 }
 
-function buildContext(payload: any) {
-  const receipt = payload.receipt && typeof payload.receipt === 'object'
-    ? payload.receipt
-    : undefined
+function buildMessages(payload: any) {
+  const messages = normalizeBillChatMessages(payload?.messages)
 
-  return {
-    billDate: normalizeText(payload.billDate),
-    billItems: Array.isArray(payload.billItems) ? payload.billItems : [],
-    currency: normalizeText(payload.currency) || 'EUR',
-    groupId: normalizeText(payload.groupId) || undefined,
-    items: Array.isArray(payload.items) ? payload.items : Array.isArray(receipt?.items) ? receipt.items : [],
-    merchant: normalizeText(payload.merchant) || normalizeText(receipt?.merchant) || normalizeText(payload.title) || 'Untitled bill',
-    notes: Array.isArray(payload.notes) ? payload.notes : [],
-    people: normalizePeople(payload.people),
-    receipt,
-    source: normalizeText(payload.source),
-    split: Array.isArray(payload.split) ? payload.split : [],
-    status: resolveContextStatus(payload.source),
-    summary: normalizeText(payload.summary),
-    taxCents: Number(payload.taxCents || receipt?.taxCents || 0),
-    tipCents: Number(payload.tipCents || receipt?.tipCents || 0),
-    title: normalizeText(payload.title) || 'Untitled bill',
-    totalCents: Number(payload.totalCents || receipt?.totalCents || 0),
+  if (messages.length) {
+    return messages
   }
+
+  const history = parseJsonValue(payload?.history)
+
+  if (!Array.isArray(history)) {
+    return []
+  }
+
+  return normalizeBillChatMessages(history.map((entry: any) => {
+    const who = normalizeText(entry?.who)
+    const text = normalizeText(entry?.text)
+
+    if (!text || (who !== 'penny' && who !== 'user')) {
+      return null
+    }
+
+    return {
+      data: {},
+      role: who === 'penny' ? 'assistant' : 'user',
+      text,
+    }
+  }).filter(Boolean))
 }
 
 export function normalizeSavedRunPayload(value: unknown) {
@@ -136,74 +119,104 @@ export function normalizeSavedRunPayload(value: unknown) {
 
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return {
+      billDate: '',
       billItems: [],
+      currency: 'EUR',
+      items: [],
+      merchant: '',
+      messages: [],
+      notes: [],
+      openai: { model: null, used: false },
+      people: [],
+      penny: { model: null, used: false },
+      source: '',
+      split: [],
+      status: 'ready',
+      summary: '',
+      taxCents: 0,
+      tipCents: 0,
+      title: 'Untitled bill',
+      totalCents: 0,
     }
   }
 
-  const normalizedPayload: any = { ...payload }
-
-  if (!Array.isArray(normalizedPayload.billItems)) {
-    normalizedPayload.billItems = []
-  }
-
-  if (!normalizedPayload.penny && normalizedPayload.pi) {
-    normalizedPayload.penny = normalizedPayload.pi
-  }
-
-  if (normalizedPayload.source === 'pi-agent-pending' || normalizedPayload.source === 'receipt-pending') {
-    normalizedPayload.source = 'penny-pending'
-  }
-
-  if (normalizedPayload.source === 'pi-agent-question') {
-    normalizedPayload.source = 'penny-question'
-  }
-
-  if (normalizedPayload.source === 'pi-agent-split') {
-    normalizedPayload.source = 'penny-split'
-  }
-
-  if (normalizedPayload.source === 'pi-agent-revision') {
-    normalizedPayload.source = 'penny-revision'
-  }
-
-  if (normalizedPayload.source === 'pi-agent-revision-error') {
-    normalizedPayload.source = 'penny-revision-error'
-  }
-
-  if (normalizedPayload.source === 'openai-image+pi-agent') {
-    normalizedPayload.source = 'openai-image+penny'
-  }
-
-  if (normalizedPayload.source === 'openai-text+pi-agent') {
-    normalizedPayload.source = 'openai-text+penny'
+  const context = payload.context && typeof payload.context === 'object' && !Array.isArray(payload.context)
+    ? payload.context
+    : {}
+  const receipt = payload.receipt && typeof payload.receipt === 'object'
+    ? payload.receipt
+    : context.receipt && typeof context.receipt === 'object'
+      ? context.receipt
+      : undefined
+  const source = normalizeSource(payload.source || context.source)
+  const normalizedPayload: any = {
+    billDate: normalizeText(payload.billDate || context.billDate || receipt?.billDate),
+    billItems: Array.isArray(payload.billItems)
+      ? payload.billItems
+      : Array.isArray(context.billItems)
+        ? context.billItems
+        : [],
+    chatId: normalizeText(payload.chatId),
+    currency: normalizeText(payload.currency || context.currency || receipt?.currency) || 'EUR',
+    groupId: normalizeText(payload.groupId || context.groupId) || undefined,
+    items: Array.isArray(payload.items)
+      ? payload.items
+      : Array.isArray(context.items)
+        ? context.items
+        : Array.isArray(receipt?.items)
+          ? receipt.items
+          : [],
+    merchant: normalizeText(payload.merchant || context.merchant || receipt?.merchant || payload.title || context.title),
+    messages: buildMessages(payload),
+    notes: Array.isArray(payload.notes)
+      ? payload.notes
+      : Array.isArray(context.notes)
+        ? context.notes
+        : Array.isArray(receipt?.notes)
+          ? receipt.notes
+          : [],
+    openai: payload.openai && typeof payload.openai === 'object' && !Array.isArray(payload.openai)
+      ? payload.openai
+      : {
+      model: null,
+      used: false,
+    },
+    people: normalizePeople(Array.isArray(payload.people) && payload.people.length ? payload.people : context.people),
+    penny: payload.penny && typeof payload.penny === 'object' && !Array.isArray(payload.penny)
+      ? payload.penny
+      : payload.pi && typeof payload.pi === 'object' && !Array.isArray(payload.pi)
+        ? payload.pi
+        : {
+      model: null,
+      used: false,
+    },
+    source,
+    split: Array.isArray(payload.split)
+      ? payload.split
+      : Array.isArray(context.split)
+        ? context.split
+        : [],
+    status: normalizeStatus(payload.status || context.status, source),
+    summary: normalizeText(payload.summary || context.summary),
+    taxCents: Number(payload.taxCents || context.taxCents || receipt?.taxCents || 0),
+    tipCents: Number(payload.tipCents || context.tipCents || receipt?.tipCents || 0),
+    title: normalizeText(payload.title || context.title || receipt?.merchant) || 'Untitled bill',
+    totalCents: Number(payload.totalCents || context.totalCents || receipt?.totalCents || 0),
   }
 
   if ((payload as any).rawReceipt === null) {
     delete normalizedPayload.rawReceipt
+  } else if ((payload as any).rawReceipt || (context as any).rawReceipt) {
+    normalizedPayload.rawReceipt = (payload as any).rawReceipt || (context as any).rawReceipt
   }
 
-  if ((payload as any).receipt === null) {
-    delete normalizedPayload.receipt
+  if (receipt) {
+    normalizedPayload.receipt = receipt
   }
 
-  normalizedPayload.messages = normalizeMessages(normalizedPayload.messages)
-  const history = normalizeHistory(normalizedPayload.history)
-
-  if (!normalizedPayload.messages.length) {
-    normalizedPayload.messages = buildMessagesFromHistory(history)
+  if (!normalizedPayload.merchant) {
+    normalizedPayload.merchant = normalizedPayload.title
   }
-
-  normalizedPayload.history = [
-    ...buildBillChatHistory(normalizedPayload.messages),
-    ...history.filter((entry: any) => entry.who === 'log'),
-  ].slice(-120)
-
-  normalizedPayload.context = buildContext(normalizedPayload.context && typeof normalizedPayload.context === 'object'
-    ? {
-      ...normalizedPayload,
-      ...normalizedPayload.context,
-    }
-    : normalizedPayload)
 
   return normalizedPayload
 }

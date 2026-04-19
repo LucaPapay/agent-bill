@@ -15,7 +15,7 @@ import {
   getGroupMemberNames,
   saveBillRun,
 } from '../db'
-import { runPennySession } from './run'
+import { runPennySession } from './session'
 
 function normalizeText(value: unknown) {
   return String(value || '').trim()
@@ -46,6 +46,7 @@ function buildRunPayload({
   rawReceipt,
   receipt,
   source,
+  status,
   summary,
   title,
 }: {
@@ -57,6 +58,7 @@ function buildRunPayload({
   rawReceipt?: any
   receipt?: any
   source: string
+  status: 'error' | 'needs_input' | 'ready' | 'running'
   summary: string
   title: string
 }) {
@@ -88,6 +90,7 @@ function buildRunPayload({
     receipt: resolvedReceipt,
     source,
     split: Array.isArray(base?.split) ? base.split : [],
+    status,
     summary: normalizeText(summary || base?.summary),
     taxCents: Number(base?.taxCents || resolvedReceipt?.taxCents || 0),
     tipCents: Number(base?.tipCents || resolvedReceipt?.tipCents || 0),
@@ -102,19 +105,17 @@ function readChatRequest(input: any, current: any) {
   const latestMessageData = latestMessage?.data && typeof latestMessage.data === 'object' && !Array.isArray(latestMessage.data)
     ? latestMessage.data
     : {}
-  const requestedPeople = Array.isArray(input?.context?.people) && input.context.people.length
-    ? normalizePeople(input.context.people)
-    : Array.isArray(latestMessageData.people)
+  const requestedPeople = Array.isArray(latestMessageData.people)
       ? normalizePeople(latestMessageData.people)
       : []
 
   return {
-    groupId: normalizeText(input?.context?.groupId || latestMessageData.groupId || current?.groupId),
+    groupId: normalizeText(latestMessageData.groupId || current?.groupId),
     incomingMessages,
     latestMessage,
     latestMessageData,
     people: requestedPeople,
-    title: normalizeText(input?.context?.title || latestMessageData.title || current?.title) || 'Untitled bill',
+    title: normalizeText(latestMessageData.title || current?.title) || 'Untitled bill',
   }
 }
 
@@ -178,7 +179,7 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_pay
       title: request.title,
     })
   const chatId = current?.chatId || newChat!.id
-  let messages = appendBillChatMessages(current?.messages || [], request.incomingMessages, true)
+  let messages = appendBillChatMessages(current?.messages || [], request.incomingMessages)
   const receipt = current?.receipt
   const rawReceipt = current?.rawReceipt || receipt
 
@@ -194,6 +195,7 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_pay
       rawReceipt,
       receipt,
       source: 'penny-pending',
+      status: 'running',
       summary: buildPendingSummary(current, request.latestMessageData),
       title: request.title,
     }),
@@ -242,6 +244,7 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_pay
         rawReceipt: sessionResult.rawReceipt || rawReceipt,
         receipt: sessionResult.receipt || receipt,
         source: 'penny-message',
+        status: 'needs_input',
         summary,
         title: request.title,
       })
@@ -280,6 +283,7 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_pay
       rawReceipt: analysis.rawReceipt,
       receipt: analysis.receipt,
       source: currentSplit.length ? 'penny-revision' : 'penny-split',
+      status: 'ready',
       summary: analysis.summary,
       title: request.title,
     })
@@ -307,13 +311,10 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_pay
           rawReceipt,
           receipt,
           source: current ? 'penny-revision-error' : 'penny-chat-error',
+          status: 'error',
           summary: message,
           title: request.title,
         }),
-        history: [{
-          text: message,
-          who: 'log',
-        }],
       },
       personId,
     })

@@ -110,6 +110,10 @@ export function useScanScreenState(props: { chatId?: string }) {
   const visibleReceiptNotes = computed(() => buildVisibleReceiptNotes(parsedReceipt.value?.notes || []))
   const visibleAnalysisFeed = computed(() =>
     analysis.feed.value.filter((entry: any) => {
+      if (entry?.kind === 'tool') {
+        return true
+      }
+
       const text = String(entry?.text || '').trim()
       return text
         && text !== `Uploaded a receipt for ${selectedGroup.value?.name || ''} receipt.`
@@ -134,7 +138,7 @@ export function useScanScreenState(props: { chatId?: string }) {
   })
   const awaitingPennyReply = computed(() =>
     !splitRows.value.length
-    && (analysis.source.value === 'penny-message' || analysis.source.value === 'penny-question'),
+    && analysis.result.value?.status === 'needs_input',
   )
   const showGroupPickerPrompt = computed(() =>
     Boolean(
