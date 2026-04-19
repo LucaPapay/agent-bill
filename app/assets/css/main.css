@@ -112,8 +112,7 @@ body {
   color: var(--cream);
 }
 
-.screen::-webkit-scrollbar,
-.chat-stream::-webkit-scrollbar {
+.screen::-webkit-scrollbar {
   display: none;
 }
 
@@ -423,15 +422,6 @@ body {
 .drop-target.over {
   outline: 2px dashed var(--tomato);
   outline-offset: 2px;
-}
-
-.chat-stream {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 8px 20px 16px;
 }
 
 .scan-line {

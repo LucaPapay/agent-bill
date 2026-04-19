@@ -1,72 +1,55 @@
 <script setup>
-import { nextTick, ref, watch } from 'vue'
-import ScanChatMessageGroupSelect from './ScanChatMessageGroupSelect.vue'
-import ScanChatMessageLoading from './ScanChatMessageLoading.vue'
+import { computed } from 'vue'
 import ScanChatMessagePreview from './ScanChatMessagePreview.vue'
-import ScanChatMessageReceipt from './ScanChatMessageReceipt.vue'
 import ScanChatMessageText from './ScanChatMessageText.vue'
 import ScanToolCallRow from './ScanToolCallRow.vue'
 
 const props = defineProps({
+  context: {
+    type: Object,
+    default: null,
+  },
   messages: {
     type: Array,
     default: () => [],
   },
 })
 
-const emit = defineEmits(['pick-group'])
-const scrollRef = ref(null)
+const totalLabel = computed(() => {
+  if (!props.context?.receipt) {
+    return ''
+  }
 
-function scrollToBottom() {
-  nextTick(() => {
-    if (!scrollRef.value) {
-      return
-    }
-
-    scrollRef.value.scrollTop = scrollRef.value.scrollHeight
-  })
-}
-
-watch(() => props.messages, scrollToBottom, { deep: true })
+  return new Intl.NumberFormat('en-US', {
+    currency: props.context.receipt.currency || 'EUR',
+    style: 'currency',
+  }).format((props.context.receipt.totalCents || 0) / 100)
+})
 </script>
 
 <template>
   <div
-    ref="scrollRef"
-    class="chat-stream flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-5"
+    class="flex flex-col gap-3.5 p-5"
   >
-    <template v-for="message in messages" :key="message.id || `${message.kind}-${message.text}`">
+    <template v-for="(message, index) in messages" :key="message.id || `${index}-${message.role}-${message.text}`">
       <ScanChatMessageText
-        v-if="message.kind === 'text'"
+        v-if="!message?.data?.imageBase64 && !message?.data?.toolName"
         :message="message"
       />
 
       <ScanChatMessagePreview
-        v-else-if="message.kind === 'preview'"
+        v-else-if="message?.data?.imageBase64"
         :message="message"
+        :status="context?.status || ''"
+        :total-label="totalLabel"
       />
 
       <ScanToolCallRow
-        v-else-if="message.kind === 'tool'"
+        v-else-if="message?.data?.toolName"
         :state="message.data?.state || 'done'"
         :tool-name="message.data?.toolName || ''"
       />
 
-      <ScanChatMessageReceipt
-        v-else-if="message.kind === 'receipt'"
-        :message="message"
-      />
-
-      <ScanChatMessageGroupSelect
-        v-else-if="message.kind === 'group_select'"
-        :message="message"
-        @select-group="emit('pick-group', $event)"
-      />
-
-      <ScanChatMessageLoading
-        v-else-if="message.kind === 'loading'"
-        :message="message"
-      />
     </template>
   </div>
 </template>

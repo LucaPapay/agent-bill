@@ -1,6 +1,10 @@
 <script setup>
+import { computed, nextTick, ref, watch } from 'vue'
 import ScanChatComposer from '../scan/ScanChatComposer.vue'
+import ScanChatMessageGroupSelect from '../scan/ScanChatMessageGroupSelect.vue'
 import ScanChatTranscript from '../scan/ScanChatTranscript.vue'
+import PennyLoadingIndicator from '../scan/PennyLoadingIndicator.vue'
+import ScanReceiptCard from '../scan/ScanReceiptCard.vue'
 import { useScanScreenState } from '../../composables/useScanScreenState'
 
 const props = defineProps({
@@ -11,36 +15,168 @@ const props = defineProps({
 })
 
 const {
+  availableGroups,
   cameraInput,
-  billActionCopy,
-  billActionLabel,
-  canContinueToBill,
   canPickReceipt,
   canRecordVoice,
   canReset,
   canSend,
   clearGroup,
-  composerPlaceholder,
   composerText,
+  context,
   fileInput,
-  headerStatus,
   isRecordingVoice,
+  isRunning,
   isTranscribingVoice,
+  messages,
   onFileChange,
   onPickGroupId,
   onSend,
   openBillDestinationFromScan,
   openReceiptPicker,
+  parsedReceipt,
   resetScan,
   selectedGroup,
-  showCreateGroupsHint,
-  showShellTitle,
   showVoiceButton,
+  splitRows,
   toggleVoiceInput,
-  transcriptMessages,
-  uploadLabel,
   voiceStatusLabel,
 } = useScanScreenState(props)
+
+const bodyRef = ref(null)
+const showCreateGroupsHint = computed(() => !availableGroups.value.length)
+const showGroupPickerPrompt = computed(() =>
+  Boolean(
+    parsedReceipt.value
+    && !selectedGroup.value
+    && !isRunning.value
+    && availableGroups.value.length,
+  ),
+)
+const canOpenSavedBill = computed(() =>
+  Boolean(context.value?.linkedBillGroupId && context.value?.linkedBillId),
+)
+const canOpenBillComposer = computed(() =>
+  Boolean(parsedReceipt.value && selectedGroup.value),
+)
+const canContinueToBill = computed(() =>
+  Boolean(canOpenSavedBill.value || canOpenBillComposer.value),
+)
+const showShellTitle = computed(() =>
+  !context.value?.chatId
+  && !parsedReceipt.value
+  && !messages.value.some(entry => entry.role === 'user'),
+)
+const headerStatus = computed(() => {
+  if (context.value?.status === 'loading') {
+    return 'Loading'
+  }
+
+  if (context.value?.status === 'error') {
+    return 'Error'
+  }
+
+  if (isTranscribingVoice.value) {
+    return 'Transcribing'
+  }
+
+  if (isRecordingVoice.value) {
+    return 'Recording'
+  }
+
+  if (isRunning.value) {
+    return 'Parsing'
+  }
+
+  if (parsedReceipt.value) {
+    const parsedItemCount = Array.isArray(parsedReceipt.value.items) ? parsedReceipt.value.items.length : 0
+    return `${parsedItemCount} items`
+  }
+
+  if (selectedGroup.value) {
+    return 'Ready'
+  }
+
+  return 'Ready to scan'
+})
+const composerPlaceholder = computed(() => {
+  if (!availableGroups.value.length) {
+    return 'Create a group first'
+  }
+
+  if (!selectedGroup.value) {
+    return parsedReceipt.value ? 'Type the group name' : 'Reply in chat'
+  }
+
+  if (isRunning.value) {
+    return 'Receipt is parsing...'
+  }
+
+  if (isTranscribingVoice.value) {
+    return 'Transcribing voice note...'
+  }
+
+  if (isRecordingVoice.value) {
+    return 'Recording voice note...'
+  }
+
+  if (parsedReceipt.value) {
+    return splitRows.value.length
+      ? 'Tell Penny what to change about the split'
+      : 'Pick the group or keep chatting'
+  }
+
+  if (context.value?.chatId) {
+    return 'Reset to start a new receipt'
+  }
+
+  return 'Type another group name or upload a receipt'
+})
+const uploadLabel = computed(() => {
+  if (!availableGroups.value.length) {
+    return 'No groups'
+  }
+
+  if (!selectedGroup.value) {
+    return 'Upload'
+  }
+
+  if (isRunning.value) {
+    return 'Parsing...'
+  }
+
+  if (context.value?.chatId) {
+    return 'Saved chat'
+  }
+
+  return 'Upload'
+})
+const billActionCopy = computed(() =>
+  canOpenSavedBill.value
+    ? 'This chat already has a saved bill. Open it to review or edit the ledger entry.'
+    : 'The receipt is parsed. Continue into the bill composer when you are ready.',
+)
+const billActionLabel = computed(() =>
+  canOpenSavedBill.value ? 'Open saved bill' : 'Open bill composer',
+)
+function scrollBodyToBottom() {
+  nextTick(() => {
+    if (!bodyRef.value) {
+      return
+    }
+
+    bodyRef.value.scrollTop = bodyRef.value.scrollHeight
+  })
+}
+
+watch(() => [
+  messages.value.length,
+  context.value.status,
+  Boolean(parsedReceipt.value),
+  showGroupPickerPrompt.value,
+  canContinueToBill.value,
+  showCreateGroupsHint.value,
+], scrollBodyToBottom)
 </script>
 
 <template>
@@ -67,40 +203,79 @@ const {
           </div>
         </div>
 
-        <ScanChatTranscript
-          :messages="transcriptMessages"
-          @pick-group="onPickGroupId"
-        />
-
         <div
-          v-if="showCreateGroupsHint"
-          class="flex items-center justify-between gap-3 px-5 pb-4"
+          ref="bodyRef"
+          class="min-h-0 flex-1 overflow-y-auto"
         >
-          <div class="text-sm leading-6 text-[rgba(246,240,228,0.78)]">
-            Create a group first, then come back here to scan receipts.
-          </div>
-          <NuxtLink
-            class="inline-flex items-center rounded-full border border-white/12 bg-white/8 px-3.5 py-2.5 text-[13px] font-semibold text-[var(--cream)] transition hover:bg-white/12"
-            to="/groups"
-          >
-            Open groups
-          </NuxtLink>
-        </div>
+          <ScanChatTranscript
+            :context="context"
+            :messages="messages"
+          />
 
-        <div
-          v-else-if="canContinueToBill"
-          class="flex items-center justify-between gap-3 px-5 pb-4"
-        >
-          <div class="text-sm leading-6 text-[rgba(246,240,228,0.78)]">
-            {{ billActionCopy }}
-          </div>
-          <button
-            type="button"
-            class="inline-flex items-center justify-center rounded-full border border-[var(--marigold)] bg-[var(--marigold)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)]"
-            @click="openBillDestinationFromScan"
+          <div
+            v-if="parsedReceipt"
+            class="px-5 pb-4"
           >
-            {{ billActionLabel }}
-          </button>
+            <ScanReceiptCard
+              :linked-bill-group-id="context.linkedBillGroupId || ''"
+              :linked-bill-id="context.linkedBillId || ''"
+              :receipt="parsedReceipt"
+              :split-rows="splitRows"
+              :summary="context.summary || ''"
+            />
+          </div>
+
+          <div
+            v-if="context.status === 'loading' || isRunning"
+            class="px-5 pb-4"
+          >
+            <PennyLoadingIndicator
+              :loading-chat="context.status === 'loading'"
+              :status="context.status === 'running' ? 'agent' : (context.status || 'idle')"
+            />
+          </div>
+
+          <div
+            v-if="showGroupPickerPrompt"
+            class="px-5 pb-4"
+          >
+            <ScanChatMessageGroupSelect
+              :groups="availableGroups"
+              text="Pick the group for this receipt."
+              @select-group="onPickGroupId"
+            />
+          </div>
+
+          <div
+            v-if="showCreateGroupsHint"
+            class="flex items-center justify-between gap-3 px-5 pb-4"
+          >
+            <div class="text-sm leading-6 text-[rgba(246,240,228,0.78)]">
+              Create a group first, then come back here to scan receipts.
+            </div>
+            <NuxtLink
+              class="inline-flex items-center rounded-full border border-white/12 bg-white/8 px-3.5 py-2.5 text-[13px] font-semibold text-[var(--cream)] transition hover:bg-white/12"
+              to="/groups"
+            >
+              Open groups
+            </NuxtLink>
+          </div>
+
+          <div
+            v-else-if="canContinueToBill"
+            class="flex items-center justify-between gap-3 px-5 pb-4"
+          >
+            <div class="text-sm leading-6 text-[rgba(246,240,228,0.78)]">
+              {{ billActionCopy }}
+            </div>
+            <button
+              type="button"
+              class="inline-flex items-center justify-center rounded-full border border-[var(--marigold)] bg-[var(--marigold)] px-4 py-2.5 text-sm font-semibold text-[var(--ink)]"
+              @click="openBillDestinationFromScan"
+            >
+              {{ billActionLabel }}
+            </button>
+          </div>
         </div>
 
         <ScanChatComposer

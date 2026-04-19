@@ -1,7 +1,10 @@
 import {
   appendBillChatAssistantMessage,
   appendBillChatMessages,
+  appendBillChatToolMessage,
+  failRunningBillChatToolMessages,
   normalizeBillChatMessages,
+  updateBillChatToolMessage,
 } from '../bill-chat-messages'
 import {
   createAgentAnalysis,
@@ -179,28 +182,56 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_pay
       title: request.title,
     })
   const chatId = current?.chatId || newChat!.id
-  let messages = appendBillChatMessages(current?.messages || [], request.incomingMessages)
+  let messages = appendBillChatMessages(
+    failRunningBillChatToolMessages(current?.messages || []),
+    request.incomingMessages,
+  )
   const receipt = current?.receipt
   const rawReceipt = current?.rawReceipt || receipt
+  const sessionReceipt = { value: receipt || null }
+  let pendingSave = Promise.resolve()
+  const baseSummaryState = {
+    ...current,
+    receipt: sessionReceipt.value,
+  }
 
-  await saveBillRun({
-    agentSessionFile: currentState?.agentSessionFile || undefined,
-    chatId,
-    payload: buildRunPayload({
+  function buildRunningPayload(snapshotMessages: any[], snapshotReceipt: any) {
+    const summaryState = {
+      ...baseSummaryState,
+      receipt: snapshotReceipt,
+    }
+
+    return buildRunPayload({
       base: current,
       chatId,
       groupId: request.groupId,
-      messages,
+      messages: snapshotMessages,
       people,
       rawReceipt,
-      receipt,
+      receipt: snapshotReceipt,
       source: 'penny-pending',
       status: 'running',
-      summary: buildPendingSummary(current, request.latestMessageData),
+      summary: buildPendingSummary(summaryState, request.latestMessageData),
       title: request.title,
-    }),
-    personId,
-  })
+    })
+  }
+
+  function saveRunningSnapshot(snapshotMessages = messages, snapshotReceipt = sessionReceipt.value) {
+    const payload = buildRunningPayload(snapshotMessages, snapshotReceipt)
+
+    pendingSave = pendingSave.then(() =>
+      saveBillRun({
+        agentSessionFile: currentState?.agentSessionFile || undefined,
+        chatId,
+        payload,
+        personId,
+      }).then(() => {}),
+    )
+
+    return pendingSave
+  }
+
+  await saveRunningSnapshot()
 
   if (!current) {
     onEvent({
@@ -210,11 +241,30 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_pay
   }
 
   try {
+    const emitEvent = async (payload: any) => {
+      onEvent(payload)
+
+      if (payload?.type === 'receipt_extracted') {
+        sessionReceipt.value = payload.receipt || null
+        await saveRunningSnapshot(messages, sessionReceipt.value)
+      }
+
+      if (payload?.type === 'agent_tool_start') {
+        messages = appendBillChatToolMessage(messages, payload.toolName)
+        await saveRunningSnapshot(messages, sessionReceipt.value)
+      }
+
+      if (payload?.type === 'agent_tool_end') {
+        messages = updateBillChatToolMessage(messages, payload.toolName, payload.isError ? 'error' : 'done')
+        await saveRunningSnapshot(messages, sessionReceipt.value)
+      }
+    }
+
     const sessionResult = await runPennySession({
       current,
       groupId: request.groupId,
       latestMessage: request.latestMessage,
-      onEvent,
+      onEvent: emitEvent,
       people,
       personId,
       sessionFile: currentState?.agentSessionFile || '',
@@ -224,6 +274,7 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_pay
     if (!sessionResult.plan) {
       const summary = normalizeText(sessionResult.message) || 'Penny has an update.'
       messages = appendBillChatAssistantMessage(messages, summary)
+      await pendingSave
 
       const payload = buildRunPayload({
         base: {
@@ -242,7 +293,7 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_pay
         messages,
         people,
         rawReceipt: sessionResult.rawReceipt || rawReceipt,
-        receipt: sessionResult.receipt || receipt,
+        receipt: sessionResult.receipt || sessionReceipt.value,
         source: 'penny-message',
         status: 'needs_input',
         summary,
@@ -273,6 +324,7 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_pay
     })
 
     messages = appendBillChatAssistantMessage(messages, analysis.summary)
+    await pendingSave
 
     const payload = buildRunPayload({
       base: analysis,
@@ -297,6 +349,9 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_pay
     return toSavedResult(payload, run)
   } catch (error: any) {
     const message = normalizeText(error?.message) || 'Penny could not continue the chat.'
+    messages = appendBillChatAssistantMessage(messages, message)
+    messages = failRunningBillChatToolMessages(messages)
+    await pendingSave
 
     await saveBillRun({
       agentSessionFile: error?.sessionFile || currentState?.agentSessionFile || undefined,

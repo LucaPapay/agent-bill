@@ -1,10 +1,14 @@
 <script setup>
 import IconGlyph from '../app/IconGlyph.vue'
 
-const props = defineProps({
-  message: {
-    type: Object,
-    required: true,
+defineProps({
+  groups: {
+    type: Array,
+    default: () => [],
+  },
+  text: {
+    type: String,
+    default: 'Pick the group for this receipt.',
   },
 })
 
@@ -18,13 +22,13 @@ const emit = defineEmits(['select-group'])
     </div>
 
     <div class="max-w-[min(100%,680px)] rounded-[22px] bg-white/8 px-4 py-3.5 text-sm leading-6 text-[var(--cream)]">
-      <div v-if="message.text">
-        {{ message.text }}
+      <div v-if="text">
+        {{ text }}
       </div>
 
       <div class="mt-3 flex flex-wrap gap-2">
         <button
-          v-for="group in message.data?.groups || []"
+          v-for="group in groups"
           :key="group.id"
           type="button"
           class="rounded-full border border-white/12 bg-white/8 px-3.5 py-2.5 text-[13px] font-semibold text-[var(--cream)] transition hover:bg-white/12"

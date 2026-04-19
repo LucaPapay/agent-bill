@@ -1,18 +1,19 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import SavedChatCard from '../app/SavedChatCard.vue'
-import { useBillAnalysisStream } from '../../composables/useBillAnalysisStream'
 
-const analysis = useBillAnalysisStream()
+const api = useOrpc()
 const loading = ref(true)
-const chats = computed(() => analysis.recentChats.value || [])
+const chats = ref([])
 
 async function startNewSplit() {
   await navigateTo('/scan')
 }
 
 onMounted(() => {
-  analysis.loadChats().finally(() => {
+  api.listBillChats().then((value) => {
+    chats.value = Array.isArray(value) ? value : []
+  }).finally(() => {
     loading.value = false
   })
 })

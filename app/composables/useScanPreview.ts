@@ -3,7 +3,6 @@ import { ref } from 'vue'
 export function useScanPreview() {
   const cameraInput = ref<any>(null)
   const fileInput = ref<any>(null)
-  const previewUrl = ref('')
   const showCameraCapture = ref(false)
 
   function clearInputs() {
@@ -14,20 +13,6 @@ export function useScanPreview() {
     if (fileInput.value) {
       fileInput.value.value = ''
     }
-  }
-
-  function revokePreview() {
-    if (!previewUrl.value) {
-      return
-    }
-
-    URL.revokeObjectURL(previewUrl.value)
-    previewUrl.value = ''
-  }
-
-  function setFile(file: File) {
-    revokePreview()
-    previewUrl.value = URL.createObjectURL(file)
   }
 
   function openReceiptPicker(canPickReceipt: boolean) {
@@ -52,7 +37,6 @@ export function useScanPreview() {
       return
     }
 
-    setFile(file)
     void onFile(file)
   }
 
@@ -62,9 +46,7 @@ export function useScanPreview() {
       || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
   }
 
-  function teardown() {
-    revokePreview()
-  }
+  function teardown() {}
 
   return {
     cameraInput,
@@ -72,8 +54,6 @@ export function useScanPreview() {
     fileInput,
     onFileChange,
     openReceiptPicker,
-    previewUrl,
-    revokePreview,
     setup,
     teardown,
   }

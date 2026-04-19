@@ -1,13 +1,30 @@
 <script setup>
+import { computed } from 'vue'
 import IconGlyph from '../app/IconGlyph.vue'
 import ReceiptSplitPreview from './ReceiptSplitPreview.vue'
 
-defineProps({
+const props = defineProps({
   message: {
     type: Object,
     required: true,
   },
+  status: {
+    type: String,
+    default: '',
+  },
+  totalLabel: {
+    type: String,
+    default: '',
+  },
 })
+
+const imageBase64 = computed(() => String(props.message?.data?.imageBase64 || '').trim())
+const mimeType = computed(() => String(props.message?.data?.mimeType || '').trim() || 'image/jpeg')
+const imageSrc = computed(() =>
+  imageBase64.value
+    ? `data:${mimeType.value};base64,${imageBase64.value}`
+    : '',
+)
 </script>
 
 <template>
@@ -18,10 +35,10 @@ defineProps({
 
     <div class="w-[min(100%,720px)] overflow-hidden rounded-3xl shadow-[0_20px_38px_rgba(24,16,10,0.18)] [&_.receipt-split-stage]:min-h-[320px]">
       <ReceiptSplitPreview
-        :image-src="message.data?.imageSrc || ''"
-        :status="message.data?.status || ''"
+        :image-src="imageSrc"
+        :status="status"
         :title="message.data?.title || 'Receipt preview'"
-        :total-label="message.data?.totalLabel || ''"
+        :total-label="totalLabel"
       />
     </div>
   </div>

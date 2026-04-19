@@ -63,7 +63,7 @@ export const extractedReceiptSchema = z.object({
   totalCents: z.number().int().nonnegative(),
 })
 
-export const billChatMessageDataSchema = z.object({
+export const billChatMessageInputDataSchema = z.object({
   groupId: z.string().trim().optional(),
   imageBase64: z.string().optional(),
   mimeType: z.string().optional(),
@@ -72,8 +72,13 @@ export const billChatMessageDataSchema = z.object({
   title: z.string().trim().min(1).optional(),
 })
 
+export const billChatMessageDataSchema = billChatMessageInputDataSchema.extend({
+  state: z.enum(['done', 'error', 'running']).optional(),
+  toolName: z.string().trim().optional(),
+})
+
 export const billChatMessageInputSchema = z.object({
-  data: billChatMessageDataSchema.default({ people: [] }),
+  data: billChatMessageInputDataSchema.default({ people: [] }),
   role: z.literal('user'),
   text: z.string().default(''),
 })

@@ -15,7 +15,9 @@ function normalizeMessageData(data: any) {
     ? data.people.map((entry: any) => normalizeText(entry)).filter(Boolean)
     : []
   const rawText = normalizeText(data.rawText)
+  const state = normalizeText(data.state)
   const title = normalizeText(data.title)
+  const toolName = normalizeText(data.toolName)
 
   if (groupId) {
     normalizedData.groupId = groupId
@@ -37,8 +39,16 @@ function normalizeMessageData(data: any) {
     normalizedData.rawText = rawText
   }
 
+  if (state === 'done' || state === 'error' || state === 'running') {
+    normalizedData.state = state
+  }
+
   if (title) {
     normalizedData.title = title
+  }
+
+  if (toolName) {
+    normalizedData.toolName = toolName
   }
 
   return normalizedData
@@ -99,4 +109,75 @@ export function appendBillChatAssistantMessage(messages: any[], text: string) {
     role: 'assistant',
     text: normalizedText,
   }])
+}
+
+export function appendBillChatToolMessage(messages: any[], toolName: string) {
+  const normalizedToolName = normalizeText(toolName)
+
+  if (!normalizedToolName) {
+    return normalizeBillChatMessages(messages)
+  }
+
+  return appendBillChatMessages(messages, [{
+    data: {
+      state: 'running',
+      toolName: normalizedToolName,
+    },
+    role: 'assistant',
+    text: '',
+  }])
+}
+
+export function updateBillChatToolMessage(messages: any[], toolName: string, state: string) {
+  const normalizedToolName = normalizeText(toolName)
+  const normalizedMessages = normalizeBillChatMessages(messages)
+
+  if (!normalizedToolName) {
+    return normalizedMessages
+  }
+
+  for (let index = normalizedMessages.length - 1; index >= 0; index -= 1) {
+    const message = normalizedMessages[index]
+
+    if (message?.data?.toolName !== normalizedToolName || message?.data?.state !== 'running') {
+      continue
+    }
+
+    return normalizedMessages.map((entry: any, entryIndex: number) =>
+      entryIndex === index
+        ? {
+            ...entry,
+            data: {
+              ...entry.data,
+              state: state === 'error' ? 'error' : 'done',
+            },
+          }
+        : entry,
+    )
+  }
+
+  return appendBillChatMessages(normalizedMessages, [{
+    data: {
+      state: state === 'error' ? 'error' : 'done',
+      toolName: normalizedToolName,
+    },
+    role: 'assistant',
+    text: '',
+  }])
+}
+
+export function failRunningBillChatToolMessages(messages: any[]) {
+  const normalizedMessages = normalizeBillChatMessages(messages)
+
+  return normalizedMessages.map((entry: any) =>
+    entry?.data?.state === 'running'
+      ? {
+          ...entry,
+          data: {
+            ...entry.data,
+            state: 'error',
+          },
+        }
+      : entry,
+  )
 }

@@ -19,6 +19,13 @@ describe('readSavedRunPayload', () => {
     const result = readSavedRunPayload({
       chatId: 'chat-1',
       messages: [{
+        data: {
+          state: 'done',
+          toolName: 'extract_receipt',
+        },
+        role: 'assistant',
+        text: '',
+      }, {
         data: {},
         role: 'user',
         text: 'Please retry the split',
@@ -35,11 +42,21 @@ describe('readSavedRunPayload', () => {
     expect(result).toMatchObject({
       billItems: [],
       chatId: 'chat-1',
-      messages: [{
-        data: {},
-        role: 'user',
-        text: 'Please retry the split',
-      }],
+      messages: [
+        {
+          data: {
+            state: 'done',
+            toolName: 'extract_receipt',
+          },
+          role: 'assistant',
+          text: '',
+        },
+        {
+          data: {},
+          role: 'user',
+          text: 'Please retry the split',
+        },
+      ],
       people: ['Jojo', 'Sarah'],
       source: 'penny-pending',
       split: [],
