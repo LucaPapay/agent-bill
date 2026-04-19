@@ -52,9 +52,6 @@ watch(groupId, (value) => {
             </div>
 
             <div>
-              <NuxtLink class="mono text-[11px] text-muted no-underline" to="/groups">
-                ALL GROUPS
-              </NuxtLink>
               <h1 class="h-display mt-2.5 text-[40px] leading-none">
                 {{ group.name }}
               </h1>
