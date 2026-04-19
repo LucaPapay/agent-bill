@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   appendBillChatAssistantMessage,
   appendBillChatMessages,
-} from './bill-chat-history'
+} from './bill-chat-messages'
 
 describe('appendBillChatMessages', () => {
   it('normalizes and appends user messages', () => {
