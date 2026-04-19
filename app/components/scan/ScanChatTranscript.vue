@@ -1,29 +1,21 @@
 <script setup>
-import { computed } from 'vue'
 import ScanChatMessagePreview from './ScanChatMessagePreview.vue'
 import ScanChatMessageText from './ScanChatMessageText.vue'
 import ScanToolCallRow from './ScanToolCallRow.vue'
 
 const props = defineProps({
-  context: {
-    type: Object,
-    default: null,
-  },
   messages: {
     type: Array,
     default: () => [],
   },
-})
-
-const totalLabel = computed(() => {
-  if (!props.context?.receipt) {
-    return ''
-  }
-
-  return new Intl.NumberFormat('en-US', {
-    currency: props.context.receipt.currency || 'EUR',
-    style: 'currency',
-  }).format((props.context.receipt.totalCents || 0) / 100)
+  previewStatus: {
+    type: String,
+    default: '',
+  },
+  previewTotalLabel: {
+    type: String,
+    default: '',
+  },
 })
 </script>
 
@@ -40,8 +32,8 @@ const totalLabel = computed(() => {
       <ScanChatMessagePreview
         v-else-if="message?.data?.imageBase64"
         :message="message"
-        :status="context?.status || ''"
-        :total-label="totalLabel"
+        :status="previewStatus"
+        :total-label="previewTotalLabel"
       />
 
       <ScanToolCallRow

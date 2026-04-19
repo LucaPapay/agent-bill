@@ -67,11 +67,11 @@ function onInput(event) {
 </script>
 
 <template>
-  <div class="scan-chat-footer">
-    <form class="scan-composer" @submit.prevent="emit('send')">
+  <div class="grid gap-2.5 border-t border-white/8 px-5 pt-4 pb-5">
+    <form class="grid gap-2.5 md:grid-cols-[auto_minmax(0,1fr)_auto]" @submit.prevent="emit('send')">
       <button
         type="button"
-        class="scan-upload-trigger"
+        class="inline-flex min-w-[116px] items-center justify-center gap-2.5 rounded-full bg-[var(--marigold)] px-[18px] py-[13px] font-bold text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-55 max-md:w-full"
         :disabled="!canPickReceipt"
         @click="emit('pick-receipt')"
       >
@@ -79,12 +79,15 @@ function onInput(event) {
         <span>{{ uploadLabel }}</span>
       </button>
 
-      <div class="scan-composer-input-wrap" :class="{ 'has-voice-button': showVoiceButton }">
+      <div class="relative flex min-h-[52px] min-w-0 items-center gap-2 rounded-full border border-white/12 bg-white/8 py-[6px] pr-[14px] pl-2">
         <button
           v-if="showVoiceButton"
           type="button"
-          class="scan-voice-trigger scan-voice-trigger-inline"
-          :class="{ 'is-recording': isRecordingVoice, 'is-busy': isTranscribingVoice }"
+          class="relative inline-flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--tomato)] text-[var(--cream)] shadow-[0_8px_20px_rgba(255,84,54,0.28),inset_0_-2px_0_rgba(0,0,0,0.18)] disabled:cursor-not-allowed"
+          :class="{
+            'opacity-72': isTranscribingVoice,
+            'shadow-[0_0_0_3px_rgba(255,84,54,0.18),inset_0_-2px_0_rgba(0,0,0,0.18)]': isRecordingVoice,
+          }"
           :disabled="(!canRecordVoice && !isRecordingVoice) || isTranscribingVoice"
           :aria-label="isRecordingVoice ? 'Stop voice recording' : 'Start voice recording'"
           :aria-pressed="isRecordingVoice ? 'true' : 'false'"
@@ -97,7 +100,7 @@ function onInput(event) {
         <input
           :value="modelValue"
           type="text"
-          class="scan-composer-input"
+          class="min-w-0 flex-1 border-0 bg-transparent p-0 text-[var(--cream)] outline-none placeholder:text-[rgba(246,240,228,0.45)]"
           :placeholder="composerPlaceholder"
           @input="onInput"
         >
@@ -105,18 +108,18 @@ function onInput(event) {
 
       <button
         type="submit"
-        class="scan-send-button"
+        class="inline-flex min-w-[92px] items-center justify-center rounded-full bg-[var(--cream)] px-[18px] py-[13px] font-bold text-[var(--ink)] disabled:cursor-not-allowed disabled:opacity-55 max-md:w-full"
         :disabled="!canSend"
       >
         Send
       </button>
     </form>
 
-    <div class="scan-footer-actions">
+    <div class="flex flex-wrap items-center gap-3">
       <button
         v-if="selectedGroupName"
         type="button"
-        class="scan-footer-link"
+        class="text-[13px] font-semibold text-[rgba(246,240,228,0.72)]"
         @click="emit('clear-group')"
       >
         Change group
@@ -125,7 +128,7 @@ function onInput(event) {
       <button
         v-if="canReset"
         type="button"
-        class="scan-footer-link"
+        class="text-[13px] font-semibold text-[rgba(246,240,228,0.72)]"
         @click="emit('reset')"
       >
         Reset
@@ -133,8 +136,8 @@ function onInput(event) {
 
       <span
         v-if="voiceStatusLabel"
-        class="scan-voice-status"
-        :class="{ 'is-error': !isRecordingVoice && !isTranscribingVoice }"
+        class="text-[13px] font-semibold text-[rgba(246,240,228,0.72)]"
+        :class="{ 'text-[#ffd2ca]': !isRecordingVoice && !isTranscribingVoice }"
       >
         {{ voiceStatusLabel }}
       </span>

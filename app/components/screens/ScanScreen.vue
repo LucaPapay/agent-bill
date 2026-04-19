@@ -1,11 +1,15 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ScanChatComposer from '../scan/ScanChatComposer.vue'
 import ScanChatMessageGroupSelect from '../scan/ScanChatMessageGroupSelect.vue'
 import ScanChatTranscript from '../scan/ScanChatTranscript.vue'
 import PennyLoadingIndicator from '../scan/PennyLoadingIndicator.vue'
 import ScanReceiptCard from '../scan/ScanReceiptCard.vue'
-import { useScanScreenState } from '../../composables/useScanScreenState'
+import { buildScanBillComposerDraft } from '../../lib/scan-bill-draft'
+import { useLedgerState } from '../../composables/useLedgerState'
+import { usePennyChat } from '../../composables/usePennyChat'
+import { useScanPreview } from '../../composables/useScanPreview'
+import { useScanVoiceInput } from '../../composables/useScanVoiceInput'
 
 const props = defineProps({
   chatId: {
@@ -14,36 +18,88 @@ const props = defineProps({
   },
 })
 
-const {
-  availableGroups,
-  cameraInput,
-  canPickReceipt,
-  canRecordVoice,
-  canReset,
-  canSend,
-  clearGroup,
-  composerText,
-  context,
-  fileInput,
-  isRecordingVoice,
-  isRunning,
-  isTranscribingVoice,
-  messages,
-  onFileChange,
-  onPickGroupId,
-  onSend,
-  openBillDestinationFromScan,
-  openReceiptPicker,
-  parsedReceipt,
-  resetScan,
-  selectedGroup,
-  showVoiceButton,
-  splitRows,
-  toggleVoiceInput,
-  voiceStatusLabel,
-} = useScanScreenState(props)
+const route = useRoute()
+const ledger = useLedgerState()
+const chat = usePennyChat()
+const preview = useScanPreview()
+const composerText = ref('')
+const selectedGroupOverrideId = ref('')
 
 const bodyRef = ref(null)
+const context = chat.context
+const messages = chat.messages
+const availableGroups = computed(() => ledger.ledger.value.groups || [])
+const parsedReceipt = computed(() => context.value?.receipt || null)
+const splitRows = computed(() => Array.isArray(context.value?.split) ? context.value.split : [])
+const queryGroupId = computed(() => {
+  const groupId = String(route.query.groupId || '').trim()
+
+  if (!groupId) {
+    return ''
+  }
+
+  return availableGroups.value.some(group => group.id === groupId)
+    ? groupId
+    : ''
+})
+const selectedGroupId = computed(() =>
+  String(
+    selectedGroupOverrideId.value
+    || context.value?.groupId
+    || queryGroupId.value
+    || '',
+  ).trim(),
+)
+const selectedGroup = computed(() =>
+  availableGroups.value.find(group => group.id === selectedGroupId.value) || null,
+)
+const hasSavedChat = computed(() => Boolean(chat.chatId.value))
+const isRunning = computed(() =>
+  ['starting', 'queued', 'extracting', 'agent', 'running'].includes(String(context.value?.status || '').trim()),
+)
+const splitPeople = computed(() => getGroupPeople(selectedGroup.value))
+const canReset = computed(() =>
+  Boolean(chat.chatId.value || parsedReceipt.value || messages.value.length),
+)
+const canStartVoiceInput = computed(() =>
+  Boolean(
+    availableGroups.value.length
+    && String(context.value?.status || '').trim() !== 'loading'
+    && !isRunning.value
+    && (!hasSavedChat.value || parsedReceipt.value),
+  ),
+)
+const voice = useScanVoiceInput({
+  getAvailableGroups: () => availableGroups.value,
+  getCanRecordVoice: () => canStartVoiceInput.value,
+  getGroupName: () => selectedGroup.value?.name || '',
+  getPeople: () => splitPeople.value,
+  onTranscript: appendTranscriptToComposer,
+})
+const cameraInput = preview.cameraInput
+const fileInput = preview.fileInput
+const isRecordingVoice = voice.isRecordingVoice
+const isTranscribingVoice = voice.isTranscribingVoice
+const showVoiceButton = voice.showVoiceButton
+const toggleVoiceInput = voice.toggleVoiceInput
+const voiceStatusLabel = voice.voiceStatusLabel
+const canRecordVoice = voice.canRecordVoice
+const matchingGroupForComposer = computed(() => resolveGroupFromMessage(composerText.value))
+const canPickReceipt = computed(() =>
+  Boolean(
+    availableGroups.value.length
+    && !isRunning.value
+    && !hasSavedChat.value
+    && !isRecordingVoice.value
+    && !isTranscribingVoice.value,
+  ),
+)
+const canSend = computed(() => Boolean(
+  composerText.value.trim()
+  && !isRecordingVoice.value
+  && !isTranscribingVoice.value
+  && (parsedReceipt.value || matchingGroupForComposer.value),
+))
 const showCreateGroupsHint = computed(() => !availableGroups.value.length)
 const showGroupPickerPrompt = computed(() =>
   Boolean(
@@ -98,6 +154,16 @@ const headerStatus = computed(() => {
   }
 
   return 'Ready to scan'
+})
+const receiptTotalLabel = computed(() => {
+  if (!parsedReceipt.value) {
+    return ''
+  }
+
+  return new Intl.NumberFormat('en-US', {
+    currency: parsedReceipt.value.currency || 'EUR',
+    style: 'currency',
+  }).format((parsedReceipt.value.totalCents || 0) / 100)
 })
 const composerPlaceholder = computed(() => {
   if (!availableGroups.value.length) {
@@ -159,6 +225,232 @@ const billActionCopy = computed(() =>
 const billActionLabel = computed(() =>
   canOpenSavedBill.value ? 'Open saved bill' : 'Open bill composer',
 )
+
+function normalizeText(value) {
+  return String(value || '').trim()
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+
+    reader.onload = () => {
+      const value = String(reader.result || '')
+      resolve(value.includes(',') ? value.split(',')[1] || '' : value)
+    }
+
+    reader.onerror = () => resolve('')
+    reader.readAsDataURL(file)
+  })
+}
+
+function appendTranscriptToComposer(text) {
+  const normalizedText = normalizeText(text)
+
+  if (!normalizedText) {
+    return
+  }
+
+  composerText.value = composerText.value
+    ? `${composerText.value} ${normalizedText}`.trim()
+    : normalizedText
+}
+
+function getGroupPeople(group) {
+  if (!group?.memberships?.length) {
+    return []
+  }
+
+  return group.memberships
+    .map(membership => normalizeText(membership?.person?.name))
+    .filter(Boolean)
+}
+
+function resolveGroupFromMessage(message) {
+  const normalizedMessage = normalizeText(message).toLowerCase()
+
+  if (!normalizedMessage) {
+    return null
+  }
+
+  const exactMatch = availableGroups.value.find((group) =>
+    normalizeText(group.name).toLowerCase() === normalizedMessage,
+  )
+
+  if (exactMatch) {
+    return exactMatch
+  }
+
+  const partialMatches = availableGroups.value.filter((group) => {
+    const groupName = normalizeText(group.name).toLowerCase()
+    return groupName.includes(normalizedMessage) || normalizedMessage.includes(groupName)
+  })
+
+  return partialMatches.length === 1 ? partialMatches[0] : null
+}
+
+function buildUserMessage(text, data = {}) {
+  return {
+    data,
+    role: 'user',
+    text: normalizeText(text),
+  }
+}
+
+function clearLocalState() {
+  composerText.value = ''
+  selectedGroupOverrideId.value = ''
+  preview.clearInputs()
+  voice.teardown()
+}
+
+async function startFileAnalysis(file) {
+  const imageBase64 = await fileToBase64(file)
+
+  if (!imageBase64) {
+    return
+  }
+
+  await chat.sendMessages([buildUserMessage('', {
+    groupId: selectedGroup.value?.id || undefined,
+    imageBase64,
+    mimeType: file.type || 'image/jpeg',
+    people: splitPeople.value,
+    title: selectedGroup.value?.name
+      ? `${selectedGroup.value.name} receipt`
+      : 'Receipt scan',
+  })], {
+    resetChat: true,
+  })
+}
+
+function openReceiptPicker() {
+  preview.openReceiptPicker(canPickReceipt.value)
+}
+
+function onFileChange(event) {
+  preview.onFileChange(event, startFileAnalysis)
+}
+
+async function onPickGroupId(groupId) {
+  const group = availableGroups.value.find(entry => entry.id === groupId)
+
+  if (!group) {
+    return
+  }
+
+  selectedGroupOverrideId.value = group.id
+
+  if (!parsedReceipt.value) {
+    return
+  }
+
+  await chat.sendMessages([buildUserMessage(group.name, {
+    groupId: group.id,
+    people: getGroupPeople(group),
+  })])
+}
+
+async function onSend() {
+  const message = normalizeText(composerText.value)
+
+  if (!message) {
+    return
+  }
+
+  const matchingGroup = resolveGroupFromMessage(message)
+
+  if (!selectedGroup.value) {
+    if (!matchingGroup) {
+      return
+    }
+
+    composerText.value = ''
+    selectedGroupOverrideId.value = matchingGroup.id
+
+    if (!parsedReceipt.value) {
+      return
+    }
+
+    await chat.sendMessages([buildUserMessage(message, {
+      groupId: matchingGroup.id,
+      people: getGroupPeople(matchingGroup),
+    })])
+
+    return
+  }
+
+  if (!parsedReceipt.value) {
+    if (matchingGroup) {
+      composerText.value = ''
+      selectedGroupOverrideId.value = matchingGroup.id
+    }
+
+    return
+  }
+
+  const group = matchingGroup || selectedGroup.value
+
+  composerText.value = ''
+  selectedGroupOverrideId.value = group.id
+
+  await chat.sendMessages([buildUserMessage(message, {
+    groupId: group.id,
+    people: getGroupPeople(group),
+  })])
+}
+
+async function resetScan() {
+  chat.reset()
+  clearLocalState()
+
+  if (normalizeText(props.chatId)) {
+    await navigateTo('/scan')
+  }
+}
+
+function clearGroup() {
+  selectedGroupOverrideId.value = ''
+}
+
+async function openBillDestinationFromScan() {
+  if (canOpenSavedBill.value) {
+    await navigateTo(`/groups/${context.value.linkedBillGroupId}/bills/${context.value.linkedBillId}`)
+    return
+  }
+
+  const group = selectedGroup.value || ledger.selectedGroup.value
+
+  if (!group || !parsedReceipt.value) {
+    return
+  }
+
+  if (!selectedGroup.value) {
+    selectedGroupOverrideId.value = group.id
+  }
+
+  ledger.setSelectedGroup(group.id)
+
+  const nextDraft = buildScanBillComposerDraft({
+    chatId: chat.chatId.value,
+    group,
+    receipt: parsedReceipt.value,
+    result: context.value,
+  })
+
+  if (!nextDraft) {
+    return
+  }
+
+  ledger.stageBillComposerDraft(nextDraft.draft)
+
+  const chatQuery = chat.chatId.value
+    ? `?chatId=${encodeURIComponent(chat.chatId.value)}`
+    : ''
+
+  await navigateTo(`/groups/${group.id}/bills/new${chatQuery}`)
+}
+
 function scrollBodyToBottom() {
   nextTick(() => {
     if (!bodyRef.value) {
@@ -177,27 +469,65 @@ watch(() => [
   canContinueToBill.value,
   showCreateGroupsHint.value,
 ], scrollBodyToBottom)
+
+watch(() => normalizeText(props.chatId), async (nextChatId) => {
+  clearLocalState()
+
+  if (!nextChatId) {
+    if (chat.chatId.value || parsedReceipt.value || messages.value.length) {
+      chat.reset()
+    }
+
+    return
+  }
+
+  if (chat.chatId.value === nextChatId && normalizeText(context.value?.chatId) === nextChatId) {
+    return
+  }
+
+  await chat.loadChat(nextChatId)
+}, { immediate: true })
+
+watch(() => chat.chatId.value, (nextChatId) => {
+  if (!nextChatId || nextChatId === props.chatId) {
+    return
+  }
+
+  void navigateTo(`/scan/${nextChatId}`, { replace: true })
+})
+
+onMounted(() => {
+  void ledger.ensureLoaded()
+  preview.setup()
+  voice.setup()
+})
+
+onBeforeUnmount(() => {
+  voice.teardown()
+  preview.teardown()
+  chat.stop()
+})
 </script>
 
 <template>
-  <div class="screen scan-chat-screen">
-    <section class="section-pad scan-chat-wrap">
-      <div class="scan-chat-shell">
-        <div class="scan-chat-shell-head">
+  <div class="screen h-[100vh] min-h-[100vh] min-h-[100dvh] overflow-hidden pb-8 md:h-[calc(100dvh-120px)] md:min-h-[calc(100dvh-120px)] md:pb-4">
+    <section class="section-pad flex min-h-0 flex-1 flex-col pt-[18px]">
+      <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-[rgba(20,18,16,0.08)] bg-[radial-gradient(circle_at_top_right,rgba(246,181,51,0.14),transparent_28%),linear-gradient(180deg,#151311_0%,#231b16_100%)] shadow-[0_28px_60px_rgba(38,24,10,0.18)] md:rounded-[32px]">
+        <div class="flex flex-col items-start justify-between gap-4 px-5 pt-5 md:flex-row">
           <div>
-            <div class="scan-panel-kicker scan-panel-kicker-on-dark">
+            <div class="font-[var(--mono)] text-[10px] font-bold uppercase tracking-[0.1em] text-[rgba(246,240,228,0.6)]">
               Scan chat
             </div>
-            <div v-if="showShellTitle" class="scan-chat-shell-title">
+            <div v-if="showShellTitle" class="mt-2 max-w-[10ch] text-[clamp(28px,6vw,44px)] leading-[0.95] text-[var(--cream)]">
               Chat first. Receipt next.
             </div>
           </div>
 
-          <div class="scan-chat-shell-meta">
-            <div class="scan-shell-chip">
+          <div class="flex flex-wrap justify-start gap-2 md:justify-end">
+            <div class="rounded-full bg-white/8 px-3 py-2 text-xs font-semibold text-[var(--cream)]">
               {{ selectedGroup ? selectedGroup.name : 'No group' }}
             </div>
-            <div class="scan-shell-chip">
+            <div class="rounded-full bg-white/8 px-3 py-2 text-xs font-semibold text-[var(--cream)]">
               {{ headerStatus }}
             </div>
           </div>
@@ -208,8 +538,9 @@ watch(() => [
           class="min-h-0 flex-1 overflow-y-auto"
         >
           <ScanChatTranscript
-            :context="context"
             :messages="messages"
+            :preview-status="context.status || ''"
+            :preview-total-label="receiptTotalLabel"
           />
 
           <div
@@ -305,7 +636,7 @@ watch(() => [
       type="file"
       accept="image/*"
       capture="environment"
-      class="scan-hidden-input"
+      class="hidden"
       @change="onFileChange"
     >
 
@@ -313,254 +644,8 @@ watch(() => [
       ref="fileInput"
       type="file"
       accept="image/*"
-      class="scan-hidden-input"
+      class="hidden"
       @change="onFileChange"
     >
   </div>
 </template>
-
-<style>
-.scan-chat-screen {
-  min-height: 100vh;
-  min-height: 100dvh;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
-  padding-bottom: 32px;
-}
-
-.scan-chat-wrap {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  padding-top: 18px;
-}
-
-.scan-chat-shell {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  border-radius: 32px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at top right, rgba(246, 181, 51, 0.14), transparent 28%),
-    linear-gradient(180deg, #151311 0%, #231b16 100%);
-  border: 1px solid rgba(20, 18, 16, 0.08);
-  box-shadow: 0 28px 60px rgba(38, 24, 10, 0.18);
-}
-
-.scan-chat-shell-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
-  padding: 20px 20px 0;
-}
-
-.scan-panel-kicker {
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.scan-panel-kicker-on-dark {
-  color: rgba(246, 240, 228, 0.6);
-}
-
-.scan-chat-shell-title {
-  margin-top: 8px;
-  color: var(--cream);
-  font-size: clamp(28px, 6vw, 44px);
-  line-height: 0.95;
-  max-width: 10ch;
-}
-
-.scan-chat-shell-meta {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.scan-shell-chip {
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--cream);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.scan-chat-footer {
-  display: grid;
-  gap: 10px;
-  padding: 16px 20px 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.scan-composer {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 10px;
-}
-
-.scan-composer-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  position: relative;
-  min-width: 0;
-  min-height: 52px;
-  padding: 6px 14px 6px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.scan-upload-trigger,
-.scan-voice-trigger,
-.scan-send-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 13px 18px;
-  border: 0;
-  border-radius: 999px;
-  font-weight: 700;
-}
-
-.scan-upload-trigger {
-  min-width: 116px;
-  background: var(--marigold);
-  color: var(--ink);
-}
-
-.scan-voice-trigger {
-  position: relative;
-  overflow: hidden;
-  background: var(--tomato);
-  color: var(--cream);
-}
-
-.scan-voice-trigger-inline {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  padding: 0;
-  border: 0;
-  background: var(--tomato);
-  box-shadow: 0 8px 20px rgba(255, 84, 54, 0.28), inset 0 -2px 0 rgba(0, 0, 0, 0.18);
-  flex-shrink: 0;
-}
-
-.scan-voice-trigger.is-recording {
-  background: var(--tomato);
-  color: var(--cream);
-  box-shadow: 0 0 0 3px rgba(255, 84, 54, 0.18), inset 0 -2px 0 rgba(0, 0, 0, 0.18);
-}
-
-.scan-voice-trigger.is-busy {
-  background: var(--tomato);
-  color: var(--cream);
-  opacity: 0.72;
-}
-
-.scan-send-button {
-  min-width: 92px;
-  background: var(--cream);
-  color: var(--ink);
-}
-
-.scan-upload-trigger:disabled,
-.scan-voice-trigger:disabled,
-.scan-send-button:disabled {
-  opacity: 0.55;
-}
-
-.scan-composer-input {
-  flex: 1;
-  width: 100%;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  color: var(--cream);
-  padding: 0;
-  outline: none;
-}
-
-.scan-composer-input-wrap.has-voice-button .scan-composer-input {
-  padding-left: 0;
-}
-
-.scan-composer-input::placeholder {
-  color: rgba(246, 240, 228, 0.45);
-}
-
-.scan-footer-actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.scan-footer-link {
-  border: 0;
-  background: transparent;
-  color: rgba(246, 240, 228, 0.72);
-  padding: 0;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.scan-voice-status {
-  color: rgba(246, 240, 228, 0.72);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.scan-voice-status.is-error {
-  color: #ffd2ca;
-}
-
-.scan-hidden-input {
-  display: none;
-}
-
-@media (min-width: 768px) {
-  .scan-chat-screen {
-    min-height: calc(100vh - 120px);
-    min-height: calc(100dvh - 120px);
-    height: calc(100vh - 120px);
-    height: calc(100dvh - 120px);
-    padding-bottom: 16px;
-  }
-}
-
-@media (max-width: 720px) {
-  .scan-chat-shell {
-    border-radius: 24px;
-  }
-
-  .scan-chat-shell-head {
-    flex-direction: column;
-  }
-
-  .scan-chat-shell-meta {
-    justify-content: flex-start;
-  }
-
-  .scan-composer {
-    grid-template-columns: 1fr;
-  }
-
-  .scan-upload-trigger,
-  .scan-send-button {
-    width: 100%;
-  }
-}
-</style>
