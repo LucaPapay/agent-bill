@@ -17,6 +17,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@earendil-works/pi-agent-core": "^0.74.0",
+    "@earendil-works/pi-ai": "^0.74.0",
     "@mariozechner/pi-ai": "^0.67.68",
     "@mariozechner/pi-coding-agent": "^0.67.68",
     "@modelcontextprotocol/sdk": "^1.29.0",
