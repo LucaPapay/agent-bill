@@ -26,40 +26,44 @@ function readTextContent(content: any) {
     .trim()
 }
 
-function toChatMessages(messages: any[]) {
-  return messages.flatMap((message: any) => {
+function toChatMessages(messages: any[]): any[] {
+  const result: any[] = []
+
+  for (const message of messages) {
     if (message.role === 'user') {
-      return [{
+      result.push({
         data: {},
-        role: 'user',
+        role: 'user' as const,
         text: readTextContent(message.content),
-      }]
+      })
+      continue
     }
 
     if (message.role === 'assistant') {
       const text = readTextContent(message.content)
-      return text
-        ? [{
-            data: {},
-            role: 'assistant',
-            text,
-          }]
-        : []
+      if (text) {
+        result.push({
+          data: {},
+          role: 'assistant' as const,
+          text,
+        })
+      }
+      continue
     }
 
     if (message.role === 'toolResult') {
-      return [{
+      result.push({
         data: {
           state: message.isError ? 'error' : 'done',
           toolName: normalizeText(message.toolName),
         },
-        role: 'assistant',
+        role: 'assistant' as const,
         text: '',
-      }]
+      })
     }
+  }
 
-    return []
-  }).slice(-120)
+  return result.slice(-120)
 }
 
 function splitPlan(metadata: BillChatSessionMetadata) {

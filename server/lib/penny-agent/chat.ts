@@ -42,12 +42,16 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_eve
     groupId: request.groupId,
     personId,
   })
-  const chatId = current?.chatId || (await billSessionRepo.create({
-    groupId: request.groupId,
-    people,
-    personId,
-    title: request.title,
-  })).getMetadata().then((metadata) => metadata.id)
+  let chatId = current?.chatId
+  if (!chatId) {
+    const session = await billSessionRepo.create({
+      groupId: request.groupId,
+      people,
+      personId,
+      title: request.title,
+    })
+    chatId = (await session.getMetadata()).id
+  }
 
   if (!current) {
     onEvent({

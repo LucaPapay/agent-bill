@@ -233,7 +233,7 @@ export class BillSessionRepo implements SessionRepo<
 
     const id = options.id || randomUUID()
     const title = normalizeText(options.title) || 'Untitled bill'
-    const people = normalizePeople(options.people)
+    const people = normalizePeople(options.people || [])
 
     const sql = db()
     await sql`
@@ -291,8 +291,8 @@ export class BillSessionRepo implements SessionRepo<
     `
   }
 
-  async fork() {
-    throw new SessionError('invalid_argument', 'Bill chat forking is not implemented')
+  async fork(): Promise<Session<BillChatSessionMetadata>> {
+    throw new SessionError('invalid_fork_target', 'Bill chat forking is not implemented')
   }
 }
 
@@ -310,8 +310,8 @@ export async function updateBillChatMetadata(
     update bill_chats
     set
       bill_id = coalesce(${toNullableText(update.billId)}, bill_id),
-      current_split = coalesce(${update.currentSplit === undefined ? null : sql.json(update.currentSplit)}, current_split),
-      extracted_data = coalesce(${update.extractedData === undefined ? null : sql.json(update.extractedData)}, extracted_data),
+      current_split = coalesce(${update.currentSplit === undefined ? null : sql.json(update.currentSplit as any)}, current_split),
+      extracted_data = coalesce(${update.extractedData === undefined ? null : sql.json(update.extractedData as any)}, extracted_data),
       group_id = coalesce(${toNullableText(update.groupId)}, group_id),
       people = coalesce(${update.people === undefined ? null : sql.json(normalizePeople(update.people))}, people),
       status = coalesce(${update.status === undefined ? null : normalizeText(update.status)}, status),

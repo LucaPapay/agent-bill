@@ -215,7 +215,7 @@ export function createPennyTools({
       tipCents: Type.Optional(Type.Integer({ minimum: 0 })),
       totalCents: Type.Optional(Type.Integer({ minimum: 0 })),
     }),
-    execute: async (_toolCallId, params) => {
+    execute: async (_toolCallId, params: any) => {
       if (!currentReceipt.value) {
         return toolResponse({
           corrections: [],
@@ -258,7 +258,7 @@ export function createPennyTools({
       maxResults: Type.Optional(Type.Integer({ maximum: 5, minimum: 1 })),
       query: Type.Optional(Type.String({ description: 'Short search hint such as "same sushi group".' })),
     }),
-    execute: async (_toolCallId, params) => {
+    execute: async (_toolCallId, params: any) => {
       if (!currentReceipt.value) {
         return toolResponse({
           matches: [],
@@ -310,7 +310,7 @@ export function createPennyTools({
       })),
       summary: Type.String(),
     }),
-    execute: async (_toolCallId, params) => {
+    execute: async (_toolCallId, params: any) => {
       const error = getSplitPlanError({
         billItems: params.billItems,
         people,
