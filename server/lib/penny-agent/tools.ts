@@ -1,5 +1,5 @@
-import { Type } from '@mariozechner/pi-ai'
-import { defineTool } from '@mariozechner/pi-coding-agent'
+import { Type } from '@earendil-works/pi-ai'
+import type { AgentTool } from '@earendil-works/pi-agent-core'
 import {
   editExtractedReceipt,
   normalizeExtractedReceipt,
@@ -9,6 +9,10 @@ import {
 } from '../bill-analysis'
 import { extractReceiptWithOpenAI } from '../openai-receipt'
 import { searchPreviousSplits } from './previous-splits'
+
+function defineTool(tool: AgentTool): AgentTool {
+  return tool
+}
 
 function normalizeText(value: unknown) {
   return String(value || '').trim()

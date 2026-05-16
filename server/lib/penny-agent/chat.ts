@@ -132,6 +132,7 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_eve
 
   try {
     const sessionResult = await runPennySession({
+      chatId: state.chatId,
       current,
       groupId: state.groupId,
       latestMessage: request.latestMessage,
@@ -157,7 +158,6 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_eve
       },
       people: state.people,
       personId,
-      sessionFile: currentState?.agentSessionFile || '',
       title: state.title,
     })
 

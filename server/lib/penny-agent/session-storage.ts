@@ -33,6 +33,8 @@ export type CreateBillChatSessionOptions = {
   title?: string
 }
 
+export type BillChatMetadataUpdate = Partial<Omit<BillChatMetadata, 'personId'>>
+
 export type ListBillChatSessionsOptions = {
   personId: string
 }
@@ -295,3 +297,37 @@ export class BillSessionRepo implements SessionRepo<
 }
 
 export const billSessionRepo = new BillSessionRepo()
+
+export async function updateBillChatMetadata(
+  personId: string,
+  chatId: string,
+  update: BillChatMetadataUpdate,
+) {
+  await ensureSchema()
+
+  const sql = db()
+  const [row] = await sql`
+    update bill_chats
+    set
+      bill_id = coalesce(${toNullableText(update.billId)}, bill_id),
+      current_split = coalesce(${update.currentSplit === undefined ? null : sql.json(update.currentSplit)}, current_split),
+      extracted_data = coalesce(${update.extractedData === undefined ? null : sql.json(update.extractedData)}, extracted_data),
+      group_id = coalesce(${toNullableText(update.groupId)}, group_id),
+      people = coalesce(${update.people === undefined ? null : sql.json(normalizePeople(update.people))}, people),
+      status = coalesce(${update.status === undefined ? null : normalizeText(update.status)}, status),
+      summary = coalesce(${update.summary === undefined ? null : normalizeText(update.summary)}, summary),
+      title = coalesce(${update.title === undefined ? null : normalizeText(update.title)}, title),
+      total_cents = coalesce(${update.totalCents === undefined ? null : Number(update.totalCents || 0)}, total_cents),
+      updated_at = now()
+    where id = ${chatId}
+      and person_id = ${personId}
+    returning id, person_id, title, group_id, bill_id, people, extracted_data, current_split,
+      status, summary, total_cents, created_at
+  `
+
+  if (!row) {
+    throw new SessionError('not_found', `Bill chat not found: ${chatId}`)
+  }
+
+  return toMetadata(row)
+}

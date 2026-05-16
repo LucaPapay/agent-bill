@@ -17,10 +17,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.74.0",
-    "@earendil-works/pi-ai": "^0.74.0",
-    "@mariozechner/pi-ai": "^0.67.68",
-    "@mariozechner/pi-coding-agent": "^0.67.68",
+    "@earendil-works/pi-agent-core": "file:../pi-mono/packages/agent",
+    "@earendil-works/pi-ai": "file:../pi-mono/packages/ai",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@orpc/client": "^1.13.14",
     "@orpc/server": "^1.13.14",

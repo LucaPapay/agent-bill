@@ -1,12 +1,14 @@
-import { getModel } from '@mariozechner/pi-ai'
 import {
-  AuthStorage,
-  createAgentSession,
-  DefaultResourceLoader,
-  ModelRegistry,
-  SessionManager,
-} from '@mariozechner/pi-coding-agent'
+  AgentHarness,
+  Session,
+} from '@earendil-works/pi-agent-core'
+import { NodeExecutionEnv } from '@earendil-works/pi-agent-core/node'
+import { getModel } from '@earendil-works/pi-ai'
 import { splitPlanSchema } from '../receipt-contract'
+import {
+  BillSessionStorage,
+  type BillChatSessionMetadata,
+} from './session-storage'
 import {
   buildPennyContextMessage,
   buildPennySystemPrompt,
@@ -33,41 +35,30 @@ function getPennyModelName() {
   return 'gpt-4.1-mini'
 }
 
-async function createPennySession(customTools: any[], sessionFile = '') {
-  const authStorage = AuthStorage.create()
-  authStorage.setRuntimeApiKey('openai', process.env.OPENAI_API_KEY || '')
-
-  const modelRegistry = ModelRegistry.inMemory(authStorage)
+async function createPennyHarness({
+  chatId,
+  customTools,
+  personId,
+}: {
+  chatId: string
+  customTools: any[]
+  personId: string
+}) {
   const model = getModel('openai', getPennyModelName())
-  const resourceLoader = new DefaultResourceLoader({
-    cwd: process.cwd(),
-    noContextFiles: true,
-    noExtensions: true,
-    noPromptTemplates: true,
-    noSkills: true,
-    noThemes: true,
-    systemPrompt: buildPennySystemPrompt(),
-  })
-
-  await resourceLoader.reload()
-
-  const sessionManager = sessionFile
-    ? SessionManager.open(sessionFile)
-    : SessionManager.create(process.cwd())
-  const { session } = await createAgentSession({
-    authStorage,
-    customTools,
+  const session = new Session(new BillSessionStorage(personId, chatId))
+  const harness = new AgentHarness({
+    env: new NodeExecutionEnv({ cwd: process.cwd() }),
+    getApiKeyAndHeaders: async () => ({ apiKey: process.env.OPENAI_API_KEY || '' }),
     model,
-    modelRegistry,
-    resourceLoader,
-    sessionManager,
+    session,
+    systemPrompt: buildPennySystemPrompt(),
     thinkingLevel: 'low',
-    tools: [],
+    tools: customTools,
   })
 
   return {
+    harness,
     session,
-    sessionFile: session.sessionFile || sessionFile,
   }
 }
 
@@ -79,7 +70,7 @@ function subscribeToSession({
 }: {
   assistantReply: { value: string }
   onEvent: (payload: any) => void
-  session: any
+  session: AgentHarness
   statusMessage: string
 }) {
   return session.subscribe((event: any) => {
@@ -131,7 +122,7 @@ function buildStatusMessage(current: any) {
   return 'Penny is reading the receipt and building the split.'
 }
 
-function seedSessionContext({
+async function seedSessionContext({
   current,
   groupId,
   people,
@@ -141,14 +132,14 @@ function seedSessionContext({
   current?: any
   groupId?: string
   people: string[]
-  session: any
+  session: Session<BillChatSessionMetadata>
   title: string
 }) {
   if (!current) {
     return
   }
 
-  if (session.sessionManager.buildSessionContext().messages.length) {
+  if ((await session.buildContext()).messages.length) {
     return
   }
 
@@ -164,28 +155,28 @@ function seedSessionContext({
     return
   }
 
-  session.sessionManager.appendCustomMessageEntry('penny_context', contextMessage, false, {
+  await session.appendCustomMessageEntry('penny_context', contextMessage, false, {
     title,
   })
 }
 
 export async function runPennySession({
+  chatId,
   current,
   groupId,
   latestMessage,
   onEvent = () => {},
   people,
   personId,
-  sessionFile = '',
   title,
 }: {
+  chatId: string
   current?: any
   groupId?: string
   latestMessage?: any
   onEvent?: (payload: any) => void
   people: string[]
   personId?: string
-  sessionFile?: string
   title: string
 }) {
   if (!process.env.OPENAI_API_KEY) {
@@ -206,16 +197,20 @@ export async function runPennySession({
     receipt: current?.receipt,
     title,
   })
-  const sessionState = await createPennySession(toolState.tools, sessionFile)
+  const sessionState = await createPennyHarness({
+    chatId,
+    customTools: toolState.tools,
+    personId: personId || '',
+  })
   const assistantReply = { value: '' }
   const unsubscribe = subscribeToSession({
     assistantReply,
     onEvent,
-    session: sessionState.session,
+    session: sessionState.harness,
     statusMessage: buildStatusMessage(current),
   })
 
-  seedSessionContext({
+  await seedSessionContext({
     current,
     groupId,
     people,
@@ -224,17 +219,15 @@ export async function runPennySession({
   })
 
   try {
-    await sessionState.session.prompt(buildPennyUserMessage({
+    await sessionState.harness.prompt(buildPennyUserMessage({
       groupId,
       latestMessage,
       people,
     }))
   } catch (error: any) {
-    error.sessionFile = sessionState.sessionFile
     throw error
   } finally {
     unsubscribe()
-    sessionState.session.dispose()
   }
 
   if (!toolState.currentReceipt.value) {
@@ -246,7 +239,6 @@ export async function runPennySession({
       message: normalizeText(assistantReply.value) || 'Penny has an update.',
       rawReceipt: toolState.currentRawReceipt.value || current?.rawReceipt || current?.receipt,
       receipt: toolState.currentReceipt.value,
-      sessionFile: sessionState.sessionFile,
     }
   }
 
@@ -254,6 +246,5 @@ export async function runPennySession({
     plan: splitPlanSchema.parse(toolState.finalPlan.value),
     rawReceipt: toolState.currentRawReceipt.value || current?.rawReceipt || current?.receipt,
     receipt: toolState.currentReceipt.value,
-    sessionFile: sessionState.sessionFile,
   }
 }
