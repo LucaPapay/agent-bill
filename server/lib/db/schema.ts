@@ -1,14 +1,5 @@
 export async function createSchema(sql: any) {
   await sql`
-    create table if not exists bill_runs (
-      id text primary key,
-      title text not null,
-      payload jsonb not null,
-      created_at timestamptz not null default now()
-    )
-  `
-
-  await sql`
     create table if not exists people (
       id text primary key,
       name text not null,
@@ -26,16 +17,10 @@ export async function createSchema(sql: any) {
       id text primary key,
       person_id text not null references people(id) on delete cascade,
       title text not null,
-      agent_session_file text,
       people jsonb not null default '[]'::jsonb,
       created_at timestamptz not null default now(),
       updated_at timestamptz not null default now()
     )
-  `
-
-  await sql`
-    alter table bill_chats
-    add column if not exists agent_session_file text
   `
 
   await sql`
@@ -294,29 +279,4 @@ export async function createSchema(sql: any) {
     on people (created_by_person_id)
   `
 
-  await sql`
-    alter table bill_runs
-    add column if not exists person_id text references people(id) on delete cascade
-  `
-
-  await sql`
-    alter table bill_runs
-    add column if not exists chat_id text references bill_chats(id) on delete cascade
-  `
-
-  await sql`
-    update bill_runs
-    set payload = (payload #>> '{}')::jsonb
-    where jsonb_typeof(payload) = 'string'
-  `
-
-  await sql`
-    create index if not exists bill_runs_person_id_idx
-    on bill_runs (person_id, created_at desc)
-  `
-
-  await sql`
-    create index if not exists bill_runs_chat_id_idx
-    on bill_runs (chat_id, created_at desc)
-  `
 }

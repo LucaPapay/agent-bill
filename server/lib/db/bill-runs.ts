@@ -1,208 +1,154 @@
-import { randomUUID } from 'node:crypto'
+import { Session } from '@earendil-works/pi-agent-core'
+import { normalizePeople } from '../bill-analysis'
 import {
-  normalizePeople,
-  readSavedRunPayload,
-  withRunMetadata,
-} from '../bill-run-payload'
-import { db, ensureSchema } from './client'
+  BillSessionStorage,
+  billSessionRepo,
+  type BillChatSessionMetadata,
+} from '../penny-agent/session-storage'
 
-export async function createBillChat({
-  people,
-  personId,
-  title,
-}: {
-  people: string[]
-  personId: string
-  title: string
-}) {
-  await ensureSchema()
-
-  const sql = db()
-  const id = randomUUID()
-  const [insertedRow] = await sql`
-    insert into bill_chats (id, person_id, title, people)
-    values (${id}, ${personId}, ${title}, ${sql.json(people)})
-    returning id, created_at, updated_at
-  `
-
-  return {
-    createdAt: insertedRow!.created_at,
-    id: insertedRow!.id,
-    updatedAt: insertedRow!.updated_at,
-  }
+function normalizeText(value: unknown) {
+  return String(value || '').trim()
 }
 
-export async function saveBillRun({
-  agentSessionFile,
-  chatId,
-  payload,
-  personId,
-}: {
-  agentSessionFile?: string
-  chatId: string
-  payload: any
-  personId: string
-}) {
-  await ensureSchema()
+function readTextContent(content: any) {
+  if (typeof content === 'string') {
+    return content
+  }
 
-  const id = randomUUID()
-  const savedPayload = payload && typeof payload === 'object' && !Array.isArray(payload)
-    ? payload
-    : {}
-  const title = String(savedPayload.title || 'Untitled bill').trim() || 'Untitled bill'
-  const normalizedPeople = normalizePeople(savedPayload.people)
-  const insertedRow = await db().begin(async (sql: any) => {
-    const updatedChats = await sql`
-      update bill_chats
-      set
-        agent_session_file = coalesce(${agentSessionFile || null}, agent_session_file),
-        title = ${title},
-        people = ${sql.json(normalizedPeople)},
-        updated_at = now()
-      where id = ${chatId}
-        and person_id = ${personId}
-      returning id
-    `
+  if (!Array.isArray(content)) {
+    return ''
+  }
 
-    if (!updatedChats[0]) {
-      throw new Error('Scan chat not found.')
+  return content
+    .filter((part: any) => part?.type === 'text')
+    .map((part: any) => String(part.text || ''))
+    .join('')
+    .trim()
+}
+
+function toChatMessages(messages: any[]) {
+  return messages.flatMap((message: any) => {
+    if (message.role === 'user') {
+      return [{
+        data: {},
+        role: 'user',
+        text: readTextContent(message.content),
+      }]
     }
 
-    const insertedRuns = await sql`
-      insert into bill_runs (id, chat_id, person_id, title, payload)
-      values (${id}, ${chatId}, ${personId}, ${title}, ${sql.json(savedPayload)})
-      returning id, created_at
-    `
+    if (message.role === 'assistant') {
+      const text = readTextContent(message.content)
+      return text
+        ? [{
+            data: {},
+            role: 'assistant',
+            text,
+          }]
+        : []
+    }
 
-    return insertedRuns[0]!
-  })
+    if (message.role === 'toolResult') {
+      return [{
+        data: {
+          state: message.isError ? 'error' : 'done',
+          toolName: normalizeText(message.toolName),
+        },
+        role: 'assistant',
+        text: '',
+      }]
+    }
 
-  return {
-    createdAt: insertedRow.created_at,
-    id: insertedRow.id,
-  }
+    return []
+  }).slice(-120)
 }
 
-export async function getBillChatForAgent(personId: string, chatId: string) {
-  await ensureSchema()
+function splitPlan(metadata: BillChatSessionMetadata) {
+  const value = metadata.currentSplit
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as any
+    : { split: Array.isArray(value) ? value : [] }
+}
 
-  const [row] = await db()`
-    select
-      chats.agent_session_file,
-      linked_bills.group_id as linked_bill_group_id,
-      linked_bills.id as linked_bill_id,
-      runs.id,
-      runs.created_at,
-      runs.payload
-    from bill_chats chats
-    join lateral (
-      select id, created_at, payload
-      from bill_runs
-      where chat_id = chats.id
-      order by created_at desc
-      limit 1
-    ) runs on true
-    left join lateral (
-      select id, group_id
-      from bills
-      where source_chat_id = chats.id
-      order by created_at desc
-      limit 1
-    ) linked_bills on true
-    where chats.id = ${chatId}
-      and chats.person_id = ${personId}
-  `
-
-  if (!row) {
-    throw new Error('Scan chat not found.')
-  }
+async function buildChatResult(metadata: BillChatSessionMetadata) {
+  const session = new Session(new BillSessionStorage(metadata.personId, metadata.id))
+  const context = await session.buildContext()
+  const receipt = metadata.extractedData && typeof metadata.extractedData === 'object' && !Array.isArray(metadata.extractedData)
+    ? metadata.extractedData as any
+    : undefined
+  const plan = splitPlan(metadata)
+  const split = Array.isArray(plan.split) ? plan.split : []
+  const billItems = Array.isArray(plan.billItems) ? plan.billItems : []
+  const totalCents = Number(metadata.totalCents || receipt?.totalCents || 0)
+  const title = normalizeText(metadata.title) || normalizeText(receipt?.merchant) || 'Untitled bill'
 
   return {
-    agentSessionFile: String(row.agent_session_file || '').trim(),
-    chat: withRunMetadata(row),
+    billDate: normalizeText(receipt?.billDate),
+    billItems,
+    chatId: metadata.id,
+    currency: normalizeText(receipt?.currency) || 'EUR',
+    groupId: metadata.groupId || undefined,
+    items: Array.isArray(receipt?.items) ? receipt.items : [],
+    linkedBillGroupId: metadata.groupId || undefined,
+    linkedBillId: metadata.billId || undefined,
+    merchant: normalizeText(receipt?.merchant || title) || title,
+    messages: toChatMessages(context.messages),
+    notes: Array.isArray(plan.notes)
+      ? plan.notes
+      : Array.isArray(receipt?.notes)
+        ? receipt.notes
+        : [],
+    openai: {
+      model: process.env.OPENAI_RECEIPT_MODEL || 'gpt-4.1-mini',
+      used: Boolean(receipt),
+    },
+    people: normalizePeople(metadata.people),
+    penny: {
+      model: process.env.PENNY_AGENT_MODEL || process.env.PI_AGENT_MODEL || 'gpt-4.1-mini',
+      used: context.messages.length > 0,
+    },
+    receipt,
+    runId: metadata.id,
+    savedAt: metadata.createdAt,
+    source: split.length ? 'penny-split' : 'penny-message',
+    split,
+    status: metadata.status as 'error' | 'needs_input' | 'ready' | 'running',
+    summary: normalizeText(metadata.summary || plan.summary),
+    taxCents: Number(receipt?.taxCents || 0),
+    tipCents: Number(receipt?.tipCents || 0),
+    title,
+    totalCents,
   }
 }
 
 export async function getBillChat(personId: string, chatId: string) {
-  await ensureSchema()
-
-  const [row] = await db()`
-    select
-      linked_bills.group_id as linked_bill_group_id,
-      linked_bills.id as linked_bill_id,
-      runs.id,
-      runs.created_at,
-      runs.payload
-    from bill_chats chats
-    join lateral (
-      select id, created_at, payload
-      from bill_runs
-      where chat_id = chats.id
-      order by created_at desc
-      limit 1
-    ) runs on true
-    left join lateral (
-      select id, group_id
-      from bills
-      where source_chat_id = chats.id
-      order by created_at desc
-      limit 1
-    ) linked_bills on true
-    where chats.id = ${chatId}
-      and chats.person_id = ${personId}
-  `
-
-  if (!row) {
-    throw new Error('Scan chat not found.')
-  }
-
-  return withRunMetadata(row)
+  const session = await billSessionRepo.open({
+    billId: null,
+    createdAt: '',
+    currentSplit: null,
+    extractedData: null,
+    groupId: null,
+    id: chatId,
+    people: [],
+    personId,
+    status: 'running',
+    summary: '',
+    title: '',
+    totalCents: 0,
+  })
+  return await buildChatResult(await session.getMetadata())
 }
 
 export async function listBillChats(personId: string) {
-  await ensureSchema()
+  const metadata = await billSessionRepo.list({ personId })
 
-  const rows = await db()`
-    select
-      chats.id,
-      linked_bills.group_id as linked_bill_group_id,
-      linked_bills.id as linked_bill_id,
-      chats.title,
-      chats.people,
-      chats.updated_at,
-      runs.payload
-    from bill_chats chats
-    join lateral (
-      select payload
-      from bill_runs
-      where chat_id = chats.id
-      order by created_at desc
-      limit 1
-    ) runs on true
-    left join lateral (
-      select id, group_id
-      from bills
-      where source_chat_id = chats.id
-      order by created_at desc
-      limit 1
-    ) linked_bills on true
-    where chats.person_id = ${personId}
-    order by chats.updated_at desc
-    limit 24
-  `
-
-  return rows.map((row: any) => {
-    const payload = readSavedRunPayload(row.payload)
-
-    return {
-      chatId: row.id,
-      linkedBillGroupId: String(row.linked_bill_group_id || '').trim() || undefined,
-      linkedBillId: String(row.linked_bill_id || '').trim() || undefined,
-      people: normalizePeople(row.people),
-      summary: String(payload.summary || '').trim(),
-      title: String(row.title || payload.title || 'Untitled bill').trim() || 'Untitled bill',
-      totalCents: Number(payload.totalCents || 0),
-      updatedAt: row.updated_at,
-    }
-  })
+  return metadata.map((chat) => ({
+    chatId: chat.id,
+    linkedBillGroupId: chat.groupId || undefined,
+    linkedBillId: chat.billId || undefined,
+    people: normalizePeople(chat.people),
+    summary: normalizeText(chat.summary),
+    title: normalizeText(chat.title) || 'Untitled bill',
+    totalCents: Number(chat.totalCents || 0),
+    updatedAt: chat.createdAt,
+  }))
 }

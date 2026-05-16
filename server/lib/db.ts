@@ -1,9 +1,6 @@
 export {
-  createBillChat,
   getBillChat,
-  getBillChatForAgent,
   listBillChats,
-  saveBillRun,
 } from './db/bill-runs'
 export {
   createBillRecord,
