@@ -1,5 +1,4 @@
 import { normalizeExtractedReceipt, normalizePeople } from '../bill-analysis'
-import { readSavedRunPayload } from '../bill-run-payload'
 import { getLedgerSnapshot } from '../db'
 import { db, ensureSchema } from '../db/client'
 
@@ -109,46 +108,30 @@ async function loadSavedChatCandidates(personId: string, excludeChatId = '') {
   const normalizedChatId = String(excludeChatId || '').trim()
   const rows = normalizedChatId
     ? await db()`
-      select
-        chats.id as chat_id,
-        chats.updated_at,
-        runs.payload
+      select id as chat_id, group_id, title, people, extracted_data, current_split, total_cents, updated_at
       from bill_chats chats
-      join lateral (
-        select payload
-        from bill_runs
-        where chat_id = chats.id
-        order by created_at desc
-        limit 1
-      ) runs on true
       where chats.person_id = ${personId}
         and chats.id <> ${normalizedChatId}
+        and chats.current_split is not null
       order by chats.updated_at desc
       limit 80
     `
     : await db()`
-      select
-        chats.id as chat_id,
-        chats.updated_at,
-        runs.payload
+      select id as chat_id, group_id, title, people, extracted_data, current_split, total_cents, updated_at
       from bill_chats chats
-      join lateral (
-        select payload
-        from bill_runs
-        where chat_id = chats.id
-        order by created_at desc
-        limit 1
-      ) runs on true
       where chats.person_id = ${personId}
+        and chats.current_split is not null
       order by chats.updated_at desc
       limit 80
     `
 
   return rows
     .map((row: any) => {
-      const payload = readSavedRunPayload(row.payload)
-      const split = Array.isArray(payload?.split)
-        ? payload.split.map((entry: any) => ({
+      const plan = row.current_split && typeof row.current_split === 'object' && !Array.isArray(row.current_split)
+        ? row.current_split
+        : { split: Array.isArray(row.current_split) ? row.current_split : [] }
+      const split = Array.isArray(plan?.split)
+        ? plan.split.map((entry: any) => ({
           amountCents: Number(entry?.amountCents || 0),
           note: String(entry?.note || '').trim(),
           person: String(entry?.person || '').trim(),
@@ -159,31 +142,31 @@ async function loadSavedChatCandidates(personId: string, excludeChatId = '') {
         return null
       }
 
-      const receipt = payload?.receipt ? normalizeExtractedReceipt(payload.receipt) : null
+      const receipt = row.extracted_data ? normalizeExtractedReceipt(row.extracted_data) : null
 
       return {
-        billDate: String(payload?.billDate || receipt?.billDate || '').trim(),
-        billItems: Array.isArray(payload?.billItems)
-          ? payload.billItems.map((item: any) => ({
+        billDate: String(receipt?.billDate || '').trim(),
+        billItems: Array.isArray(plan?.billItems)
+          ? plan.billItems.map((item: any) => ({
             amountCents: Number(item?.amountCents || 0),
             assignedPeople: normalizePeople(item?.assignedPeople || []),
             name: String(item?.name || '').trim(),
           })).filter((item: any) => item.name)
           : [],
         createdAt: row.updated_at,
-        groupId: String(payload?.groupId || '').trim(),
+        groupId: String(row.group_id || '').trim(),
         groupName: '',
-        merchant: String(receipt?.merchant || payload?.merchant || payload?.title || '').trim(),
+        merchant: String(receipt?.merchant || row.title || '').trim(),
         people: normalizePeople(
-          Array.isArray(payload?.people) && payload.people.length
-            ? payload.people
+          Array.isArray(row.people) && row.people.length
+            ? row.people
             : split.map((entry: any) => entry.person),
         ),
         source: 'saved_chat',
         sourceId: String(row.chat_id || '').trim(),
         split,
-        title: String(payload?.title || receipt?.merchant || 'Untitled bill').trim() || 'Untitled bill',
-        totalCents: Number(payload?.totalCents || receipt?.totalCents || 0),
+        title: String(row.title || receipt?.merchant || 'Untitled bill').trim() || 'Untitled bill',
+        totalCents: Number(row.total_cents || receipt?.totalCents || 0),
       }
     })
     .filter(Boolean)

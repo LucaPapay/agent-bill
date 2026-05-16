@@ -1,7 +1,4 @@
-import {
-  normalizePeople,
-  readSavedRunPayload,
-} from '../bill-run-payload'
+import { normalizePeople } from '../bill-analysis'
 import { buildOpenGroupTransfers } from '../group-simplification'
 import { db, ensureSchema } from './client'
 
@@ -70,18 +67,12 @@ export async function getLedgerSnapshot(personId: string) {
         source_chats.people as source_chat_people,
         source_chats.person_id as source_chat_person_id,
         source_chats.title as source_chat_title,
-        source_chats.updated_at as source_chat_updated_at,
-        source_chat_runs.payload as source_chat_payload
+        source_chats.summary as source_chat_summary,
+        source_chats.total_cents as source_chat_total_cents,
+        source_chats.updated_at as source_chat_updated_at
       from bills
       left join bill_chats source_chats
         on source_chats.id = bills.source_chat_id
-      left join lateral (
-        select payload
-        from bill_runs
-        where chat_id = source_chats.id
-        order by created_at desc
-        limit 1
-      ) source_chat_runs on true
       where exists (
         select 1
         from group_memberships viewer
@@ -185,15 +176,14 @@ export async function getLedgerSnapshot(personId: string) {
 
   for (const row of billRows) {
     const sourceChatId = String(row.source_chat_id || '').trim()
-    const sourceChatPayload = readSavedRunPayload(row.source_chat_payload)
     const sourceChat = sourceChatId
       ? {
           canOpen: row.source_chat_person_id === personId,
           chatId: sourceChatId,
           people: normalizePeople(row.source_chat_people),
-          summary: String(sourceChatPayload.summary || '').trim(),
-          title: String(row.source_chat_title || sourceChatPayload.title || 'Untitled bill').trim() || 'Untitled bill',
-          totalCents: Number(sourceChatPayload.totalCents || 0),
+          summary: String(row.source_chat_summary || '').trim(),
+          title: String(row.source_chat_title || 'Untitled bill').trim() || 'Untitled bill',
+          totalCents: Number(row.source_chat_total_cents || 0),
           updatedAt: row.source_chat_updated_at,
         }
       : null

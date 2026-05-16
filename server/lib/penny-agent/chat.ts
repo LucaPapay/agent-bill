@@ -1,41 +1,36 @@
 import {
-  appendBillChatAssistantMessage,
-  appendBillChatToolMessage,
-  failRunningBillChatToolMessages,
-  updateBillChatToolMessage,
-} from '../bill-chat-messages'
-import {
   createAgentAnalysis,
   normalizePeople,
 } from '../bill-analysis'
 import {
-  createBillChat,
-  getBillChatForAgent,
-  saveBillRun,
+  getBillChat,
 } from '../db'
 import {
-  buildPennyPendingSummary,
-  buildPennyRunPayload,
-  createPennyChatState,
-  normalizeChatText,
   readPennyChatRequest,
   resolvePennyChatParticipants,
-  toSavedPennyChatResult,
 } from './chat-state'
+import {
+  billSessionRepo,
+  updateBillChatMetadata,
+} from './session-storage'
 import { runPennySession } from './run'
+
+function normalizeText(value: unknown) {
+  return String(value || '').trim()
+}
 
 export async function runPennyChat(input: any, personId: string, onEvent = (_event: any) => {}) {
   const currentState = input?.chatId
-    ? await getBillChatForAgent(personId, normalizeChatText(input.chatId))
+    ? await getBillChat(personId, normalizeText(input.chatId))
     : null
-  const current = currentState?.chat || null
+  const current = currentState || null
   const request = readPennyChatRequest(input, current)
 
   if (!request.incomingMessages.length) {
     throw new Error('At least one message is required to continue the Penny chat.')
   }
 
-  if (!current && !normalizeChatText(request.latestMessageData.imageBase64) && !normalizeChatText(request.latestMessageData.rawText)) {
+  if (!current && !normalizeText(request.latestMessageData.imageBase64) && !normalizeText(request.latestMessageData.rawText)) {
     throw new Error('Provide a receipt image or OCR text.')
   }
 
@@ -47,188 +42,83 @@ export async function runPennyChat(input: any, personId: string, onEvent = (_eve
     groupId: request.groupId,
     personId,
   })
-  const chatId = current?.chatId || (await createBillChat({
-    people,
-    personId,
-    title: request.title,
-  })).id
-  const state: any = createPennyChatState({
-    chatId,
-    current,
-    people,
-    request,
-  })
-  let snapshotSave = Promise.resolve()
-
-  function queueSnapshot({
-    agentSessionFile = currentState?.agentSessionFile || undefined,
-    base = state.current,
-    source,
-    status,
-    summary,
-  }: any) {
-    const payload = buildPennyRunPayload(state, base, {
-      source,
-      status,
-      summary,
-    })
-
-    snapshotSave = snapshotSave.then(() =>
-      saveBillRun({
-        agentSessionFile,
-        chatId: state.chatId,
-        payload,
-        personId,
-      }).then(() => {}),
-    )
-
-    return snapshotSave
-  }
-
-  async function saveResult({
-    agentSessionFile = currentState?.agentSessionFile || undefined,
-    base = state.current,
-    source,
-    status,
-    summary,
-  }: any) {
-    await snapshotSave
-
-    const payload = buildPennyRunPayload(state, base, {
-      source,
-      status,
-      summary,
-    })
-    const run = await saveBillRun({
-      agentSessionFile,
-      chatId: state.chatId,
-      payload,
+  let chatId = current?.chatId
+  if (!chatId) {
+    const session = await billSessionRepo.create({
+      groupId: request.groupId,
+      people,
       personId,
+      title: request.title,
     })
-
-    return toSavedPennyChatResult(payload, run)
+    chatId = (await session.getMetadata()).id
   }
-
-  function queueRunningSnapshot() {
-    return queueSnapshot({
-      source: 'penny-pending',
-      status: 'running',
-      summary: buildPennyPendingSummary({
-        latestMessageData: request.latestMessageData,
-        receipt: state.receipt,
-        split: currentSplit,
-      }),
-    })
-  }
-
-  await queueRunningSnapshot()
 
   if (!current) {
     onEvent({
       type: 'chat_started',
-      chatId: state.chatId,
+      chatId,
     })
   }
 
-  try {
-    const sessionResult = await runPennySession({
-      current,
-      groupId: state.groupId,
-      latestMessage: request.latestMessage,
-      onEvent: async (payload: any) => {
-        onEvent(payload)
+  await updateBillChatMetadata(personId, chatId, {
+    groupId: request.groupId,
+    people,
+    status: 'running',
+    summary: current?.receipt
+      ? 'Penny is revising the split.'
+      : 'Penny is reading the receipt and building the split.',
+    title: request.title,
+  })
 
-        if (payload?.type === 'receipt_extracted') {
-          state.receipt = payload.receipt || null
-          await queueRunningSnapshot()
-          return
-        }
+  const sessionResult = await runPennySession({
+    chatId,
+    current,
+    groupId: request.groupId,
+    latestMessage: request.latestMessage,
+    onEvent,
+    people,
+    personId,
+    title: request.title,
+  })
 
-        if (payload?.type === 'agent_tool_start') {
-          state.messages = appendBillChatToolMessage(state.messages, payload.toolName)
-          await queueRunningSnapshot()
-          return
-        }
+  if (!sessionResult.plan) {
+    const summary = normalizeText(sessionResult.message) || 'Penny has an update.'
 
-        if (payload?.type === 'agent_tool_end') {
-          state.messages = updateBillChatToolMessage(state.messages, payload.toolName, payload.isError ? 'error' : 'done')
-          await queueRunningSnapshot()
-        }
-      },
-      people: state.people,
-      personId,
-      sessionFile: currentState?.agentSessionFile || '',
-      title: state.title,
+    await updateBillChatMetadata(personId, chatId, {
+      extractedData: sessionResult.receipt || null,
+      people,
+      status: 'needs_input',
+      summary,
+      totalCents: Number(sessionResult.receipt?.totalCents || 0),
     })
 
-    state.rawReceipt = sessionResult.rawReceipt || state.rawReceipt
-    state.receipt = sessionResult.receipt || state.receipt
-
-    if (!sessionResult.plan) {
-      const summary = normalizeChatText(sessionResult.message) || 'Penny has an update.'
-
-      state.messages = appendBillChatAssistantMessage(state.messages, summary)
-
-      return await saveResult({
-        agentSessionFile: sessionResult.sessionFile || undefined,
-        base: {
-          ...state.current,
-          openai: {
-            model: process.env.OPENAI_RECEIPT_MODEL || 'gpt-4.1-mini',
-            used: Boolean(state.receipt),
-          },
-          penny: {
-            model: process.env.PENNY_AGENT_MODEL || process.env.PI_AGENT_MODEL || 'gpt-4.1-mini',
-            used: true,
-          },
-        },
-        source: 'penny-message',
-        status: 'needs_input',
-        summary,
-      })
-    }
-
-    state.people = normalizePeople(
-      Array.isArray(sessionResult.plan?.split)
-        ? sessionResult.plan.split.map((entry: any) => entry.person)
-        : state.people,
-    )
-
-    const analysis = createAgentAnalysis({
-      imageProvided: Boolean(normalizeChatText(request.latestMessageData.imageBase64)),
-      people: state.people,
-      plan: sessionResult.plan,
-      rawReceipt: state.rawReceipt,
-      receipt: state.receipt,
-      title: state.title,
-    })
-
-    state.rawReceipt = analysis.rawReceipt
-    state.receipt = analysis.receipt
-    state.messages = appendBillChatAssistantMessage(state.messages, analysis.summary)
-
-    return await saveResult({
-      agentSessionFile: sessionResult.sessionFile || undefined,
-      base: analysis,
-      source: currentSplit.length ? 'penny-revision' : 'penny-split',
-      status: 'ready',
-      summary: analysis.summary,
-    })
-  } catch (error: any) {
-    const message = normalizeChatText(error?.message) || 'Penny could not continue the chat.'
-
-    state.messages = appendBillChatAssistantMessage(
-      failRunningBillChatToolMessages(state.messages),
-      message,
-    )
-
-    await saveResult({
-      agentSessionFile: error?.sessionFile || currentState?.agentSessionFile || undefined,
-      source: current ? 'penny-revision-error' : 'penny-chat-error',
-      status: 'error',
-      summary: message,
-    })
-
-    throw error
+    return await getBillChat(personId, chatId)
   }
+
+  const nextPeople = normalizePeople(
+    Array.isArray(sessionResult.plan?.split)
+      ? sessionResult.plan.split.map((entry: any) => entry.person)
+      : people,
+  )
+  const analysis = createAgentAnalysis({
+    imageProvided: Boolean(normalizeText(request.latestMessageData.imageBase64)),
+    people: nextPeople,
+    plan: sessionResult.plan,
+    rawReceipt: sessionResult.rawReceipt,
+    receipt: sessionResult.receipt,
+    title: request.title,
+  })
+
+  await updateBillChatMetadata(personId, chatId, {
+    currentSplit: sessionResult.plan,
+    extractedData: analysis.receipt,
+    groupId: request.groupId,
+    people: nextPeople,
+    status: 'ready',
+    summary: analysis.summary,
+    title: analysis.title,
+    totalCents: analysis.totalCents,
+  })
+
+  return await getBillChat(personId, chatId)
 }

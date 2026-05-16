@@ -1,5 +1,5 @@
-import { Type } from '@mariozechner/pi-ai'
-import { defineTool } from '@mariozechner/pi-coding-agent'
+import { Type } from '@earendil-works/pi-ai'
+import type { AgentTool } from '@earendil-works/pi-agent-core'
 import {
   editExtractedReceipt,
   normalizeExtractedReceipt,
@@ -9,6 +9,10 @@ import {
 } from '../bill-analysis'
 import { extractReceiptWithOpenAI } from '../openai-receipt'
 import { searchPreviousSplits } from './previous-splits'
+
+function defineTool(tool: AgentTool): AgentTool {
+  return tool
+}
 
 function normalizeText(value: unknown) {
   return String(value || '').trim()
@@ -211,7 +215,7 @@ export function createPennyTools({
       tipCents: Type.Optional(Type.Integer({ minimum: 0 })),
       totalCents: Type.Optional(Type.Integer({ minimum: 0 })),
     }),
-    execute: async (_toolCallId, params) => {
+    execute: async (_toolCallId, params: any) => {
       if (!currentReceipt.value) {
         return toolResponse({
           corrections: [],
@@ -254,7 +258,7 @@ export function createPennyTools({
       maxResults: Type.Optional(Type.Integer({ maximum: 5, minimum: 1 })),
       query: Type.Optional(Type.String({ description: 'Short search hint such as "same sushi group".' })),
     }),
-    execute: async (_toolCallId, params) => {
+    execute: async (_toolCallId, params: any) => {
       if (!currentReceipt.value) {
         return toolResponse({
           matches: [],
@@ -306,7 +310,7 @@ export function createPennyTools({
       })),
       summary: Type.String(),
     }),
-    execute: async (_toolCallId, params) => {
+    execute: async (_toolCallId, params: any) => {
       const error = getSplitPlanError({
         billItems: params.billItems,
         people,
